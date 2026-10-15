@@ -1,0 +1,22 @@
+{
+  "id": "shield-catcher",
+  "name": "Bullet Catcher",
+  "rarity": "shieldmod",
+  "icon": "🧤",
+  "description": "Your bubble catches bullets, then fires them back at enemies.",
+  "modifiers": [
+    {
+      "stat": "blockDuration",
+      "op": "mul",
+      "value": 2.5
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.2
+    }
+  ],
+  "shieldMod": "catcher",
+  "noCursed": true,
+  "details": "Your bubble lasts longer and catches enemy bullets instead of reflecting them; they circle you while it's up. When it drops, every caught bullet flies at the nearest enemy you can see within 18 m, with +10% damage. If nobody is in range, the caught bullets fan out evenly in a ring around you."
+}

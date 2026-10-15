@@ -1,0 +1,20 @@
+{
+  "id": "mending-field",
+  "name": "Mending Field",
+  "rarity": "uncommon",
+  "icon": "💚",
+  "description": "Blocking drops a field that heals everyone on your side inside it after one second.",
+  "modifiers": [
+    {
+      "stat": "blockHeal",
+      "op": "add",
+      "value": 35
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.1
+    }
+  ],
+  "image": "art.png"
+}

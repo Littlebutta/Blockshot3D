@@ -1,0 +1,21 @@
+{
+  "id": "titan-frame",
+  "name": "Titan Frame",
+  "rarity": "uncommon",
+  "icon": "🗿",
+  "description": "Huge health, slower trigger.",
+  "modifiers": [
+    {
+      "stat": "health",
+      "op": "mul",
+      "value": 1.5
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 0.67
+    }
+  ],
+  "image": "art.png",
+  "holyDescription": "Huge health."
+}

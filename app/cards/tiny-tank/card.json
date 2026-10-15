@@ -1,0 +1,38 @@
+{
+  "id": "tiny-tank",
+  "name": "Tiny Tank",
+  "rarity": "mod",
+  "icon": "🚜",
+  "description": "Drive a tough tiny tank that fires explosive shells. No jumping.",
+  "modifiers": [
+    {
+      "stat": "tank",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "moveSpeed",
+      "op": "mul",
+      "value": 0.7
+    },
+    {
+      "stat": "health",
+      "op": "mul",
+      "value": 1.6
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 1.2
+    },
+    {
+      "stat": "explosive",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "weaponMod": "tank",
+  "noCursed": true,
+  "details": "You drive a tiny tank in your color and fire explosive shells from its barrel (they burst in a small radius). Slower, no jumping, but much tougher and harder-hitting. In first person the camera sits low over the tank's shoulder so you can see it.",
+  "image": "art.png"
+}

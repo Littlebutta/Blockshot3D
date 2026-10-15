@@ -1,0 +1,20 @@
+{
+  "id": "arc-rounds",
+  "name": "Arc Rounds",
+  "rarity": "rare",
+  "icon": "⚡",
+  "description": "Hits jump to another enemy within 6 m for 40% damage.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "chain",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.9
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "id": "wide-shells",
+  "name": "Wide Shells",
+  "rarity": "common",
+  "icon": "🟠",
+  "description": "Fat bullets that are hard to dodge.",
+  "modifiers": [
+    {
+      "stat": "bulletSize",
+      "op": "mul",
+      "value": 1.6
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 1.1
+    },
+    {
+      "stat": "bulletSpeed",
+      "op": "mul",
+      "value": 0.85
+    }
+  ],
+  "image": "art.png"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "quick-guard",
+  "name": "Quick Guard",
+  "rarity": "common",
+  "icon": "⚙️",
+  "description": "Shorter blocks that come back fast.",
+  "modifiers": [
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 0.7
+    },
+    {
+      "stat": "blockDuration",
+      "op": "mul",
+      "value": 0.75
+    }
+  ],
+  "image": "art.png",
+  "holyDescription": "Blocks come back fast."
+}

@@ -1,0 +1,20 @@
+{
+  "id": "my-card",
+  "name": "My Card",
+  "rarity": "common",
+  "icon": "⭐",
+  "description": "What the card does, in one sentence.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 1.25
+    },
+    {
+      "stat": "ammo",
+      "op": "add",
+      "value": 1
+    }
+  ]
+}

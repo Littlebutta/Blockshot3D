@@ -1,0 +1,33 @@
+{
+  "id": "trick-shot",
+  "name": "Trick Shot",
+  "rarity": "combo",
+  "icon": "🎱",
+  "description": "Every bounce finds a target and hits harder.",
+  "modifiers": [
+    {
+      "stat": "bounces",
+      "op": "add",
+      "value": 3
+    },
+    {
+      "stat": "bounceTarget",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "bounceBoost",
+      "op": "add",
+      "value": 0.2
+    },
+    {
+      "stat": "bulletSpeed",
+      "op": "mul",
+      "value": 1.1
+    }
+  ],
+  "combo": [
+    "bank-shot",
+    "ricochet-rounds"
+  ]
+}

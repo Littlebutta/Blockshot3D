@@ -1,0 +1,17 @@
+{
+  "id": "big-iron",
+  "name": "Combine",
+  "rarity": "uncommon",
+  "icon": "🚜",
+  "description": "Half the magazine. Every bullet you lose is harvested into the ones you keep: they hit that much harder.",
+  "modifiers": [
+    {
+      "stat": "ammo",
+      "op": "convert",
+      "value": 0.5,
+      "to": "damage"
+    }
+  ],
+  "image": "art.png",
+  "details": "Ammo is multiplied by 0.5 (rounded, at least 1) and Damage goes up to match, so the magazine's total damage stays the same. With the default 3 ammo you keep 2 bullets and each hits +50% harder: +50% damage per bullet removed. With 6 ammo you keep 3 and each hits +100% (+33% per bullet removed)."
+}

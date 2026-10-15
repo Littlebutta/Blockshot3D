@@ -1,0 +1,20 @@
+{
+  "id": "thruster",
+  "name": "Thruster",
+  "rarity": "uncommon",
+  "icon": "🚀",
+  "description": "Your bullets push whoever they hit for about 2 seconds. Harder hits push longer; lots of small hits add up, but only so far.",
+  "modifiers": [
+    {
+      "stat": "knockback",
+      "op": "add",
+      "value": 6
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.8
+    }
+  ],
+  "image": "art.png"
+}

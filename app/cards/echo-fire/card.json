@@ -1,0 +1,16 @@
+{
+  "id": "echo-fire",
+  "name": "Echo Fire",
+  "rarity": "common",
+  "icon": "🔁",
+  "description": "Shots have a 30% chance to fire a free automatic second shot right after (it uses no ammo).",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "encore",
+      "op": "add",
+      "value": 0.3
+    }
+  ],
+  "details": "The echo shot is a full copy of your shot (same bullets, effects and damage) a moment later. It's free: it uses no ammo and still fires if the shot before it emptied your mag. It doesn't trigger more echoes. Copies stack: every full point is a guaranteed echo."
+}

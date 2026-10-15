@@ -1,0 +1,26 @@
+{
+  "id": "bastion-wall",
+  "name": "Bastion Wall",
+  "rarity": "rare",
+  "icon": "\ud83d\udee1\ufe0f",
+  "description": "Block plants a standing shield wall in front of you instead of the bubble. It reflects bullets and stops beams for several seconds, and up to 5 walls can stand at once. Recharges slowly.",
+  "modifiers": [
+    {
+      "stat": "blockDeploy",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.6
+    },
+    {
+      "stat": "blockSize",
+      "op": "mul",
+      "value": 1.1
+    }
+  ],
+  "image": "art.png",
+  "holyDescription": "Block plants a standing shield wall in front of you instead of the bubble. It reflects bullets and stops beams for several seconds, and up to 5 walls can stand at once."
+}

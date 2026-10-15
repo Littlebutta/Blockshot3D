@@ -1,0 +1,29 @@
+{
+  "id": "hydra-swarm",
+  "name": "Hydra Swarm",
+  "rarity": "combo",
+  "icon": "🐍",
+  "description": "A cloud of ricochets.",
+  "combo": [
+    "hydra-rounds",
+    "ricochet-rounds"
+  ],
+  "modifiers": [
+    {
+      "stat": "projectiles",
+      "op": "add",
+      "value": 3
+    },
+    {
+      "stat": "bounces",
+      "op": "add",
+      "value": 3
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.65
+    }
+  ],
+  "image": "art.png"
+}

@@ -1,0 +1,24 @@
+{
+  "id": "thick-hide",
+  "name": "Thick Hide",
+  "rarity": "combo",
+  "icon": "🧌",
+  "description": "Tough skin that knits itself shut.",
+  "combo": [
+    "padded-vest",
+    "troll-blood"
+  ],
+  "modifiers": [
+    {
+      "stat": "health",
+      "op": "add",
+      "value": 40
+    },
+    {
+      "stat": "regen",
+      "op": "add",
+      "value": 14
+    }
+  ],
+  "image": "art.png"
+}

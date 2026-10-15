@@ -1,0 +1,34 @@
+{
+  "id": "battering-ram",
+  "name": "Battering Ram",
+  "rarity": "combo",
+  "icon": "🐏",
+  "description": "Huge slugs that send people flying.",
+  "combo": [
+    "thruster",
+    "heavy-slugs"
+  ],
+  "modifiers": [
+    {
+      "stat": "knockback",
+      "op": "add",
+      "value": 12
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 1.35
+    },
+    {
+      "stat": "bulletSize",
+      "op": "mul",
+      "value": 1.5
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 0.8
+    }
+  ],
+  "image": "art.png"
+}

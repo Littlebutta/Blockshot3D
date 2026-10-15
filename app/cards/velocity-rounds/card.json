@@ -1,0 +1,20 @@
+{
+  "id": "velocity-rounds",
+  "name": "Velocity Rounds",
+  "rarity": "common",
+  "icon": "💨",
+  "description": "Lighter, faster bullets.",
+  "modifiers": [
+    {
+      "stat": "bulletSpeed",
+      "op": "mul",
+      "value": 1.35
+    },
+    {
+      "stat": "bulletSize",
+      "op": "mul",
+      "value": 0.85
+    }
+  ],
+  "holyDescription": "Faster bullets."
+}

@@ -1,0 +1,21 @@
+{
+  "id": "iron-lung",
+  "name": "Iron Lung",
+  "rarity": "common",
+  "icon": "🫁",
+  "description": "More health, slower reloads.",
+  "modifiers": [
+    {
+      "stat": "health",
+      "op": "add",
+      "value": 40
+    },
+    {
+      "stat": "reloadTime",
+      "op": "mul",
+      "value": 1.4
+    }
+  ],
+  "image": "art.png",
+  "holyDescription": "More health."
+}

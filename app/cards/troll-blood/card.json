@@ -1,0 +1,21 @@
+{
+  "id": "troll-blood",
+  "name": "Troll Blood",
+  "rarity": "uncommon",
+  "icon": "🧌",
+  "description": "Fast healing on a smaller health pool.",
+  "modifiers": [
+    {
+      "stat": "regen",
+      "op": "add",
+      "value": 12
+    },
+    {
+      "stat": "health",
+      "op": "mul",
+      "value": 0.7
+    }
+  ],
+  "image": "art.png",
+  "holyDescription": "Fast healing."
+}

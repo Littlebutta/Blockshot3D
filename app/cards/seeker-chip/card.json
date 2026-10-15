@@ -1,0 +1,26 @@
+{
+  "id": "seeker-chip",
+  "name": "Seeker Chip",
+  "rarity": "uncommon",
+  "icon": "🧲",
+  "description": "Bullets lock on and curve hard toward the nearest enemy. Reliable, but light.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "homing",
+      "op": "add",
+      "value": 5
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.5
+    },
+    {
+      "stat": "bulletSpeed",
+      "op": "mul",
+      "value": 0.9
+    }
+  ],
+  "holyDescription": "Bullets lock on and curve hard toward the nearest enemy."
+}

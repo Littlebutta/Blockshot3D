@@ -1,0 +1,33 @@
+{
+  "id": "mod-flamethrower",
+  "name": "Flamethrower",
+  "rarity": "mod",
+  "icon": "🔥",
+  "description": "A short-range flamethrower that sets everything on fire.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 3.2
+    },
+    {
+      "stat": "ammo",
+      "op": "mul",
+      "value": 3
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.35
+    },
+    {
+      "stat": "reloadTime",
+      "op": "mul",
+      "value": 1.2
+    }
+  ],
+  "weaponMod": "flamethrower",
+  "noCursed": true,
+  "details": "Your gun becomes a short-range flamethrower. Bullet speed adds range. Weak hits, but everything you touch burns for 3 seconds."
+}

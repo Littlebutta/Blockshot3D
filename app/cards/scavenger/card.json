@@ -1,0 +1,21 @@
+{
+  "id": "scavenger",
+  "name": "Scavenger",
+  "rarity": "legendary",
+  "icon": "🦴",
+  "description": "Whenever your bullets or their effects hurt an enemy's health, your gun reloads to full.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "scavenge",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "reloadTime",
+      "op": "mul",
+      "value": 1.25
+    }
+  ],
+  "details": "Works on players, bots, clones, critters and other spawned creatures, including damage from burns, poison and explosions. Hitting a shield, block bubble, Super Saiyan hair, sandbags, walls or turrets does not count."
+}

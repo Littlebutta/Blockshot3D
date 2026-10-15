@@ -1,0 +1,29 @@
+{
+  "id": "minefield",
+  "name": "Minefield",
+  "rarity": "combo",
+  "icon": "💥",
+  "description": "Blocking carpets the ground with explosive mines.",
+  "combo": [
+    "mine-layer",
+    "volatile-payload"
+  ],
+  "modifiers": [
+    {
+      "stat": "blockMines",
+      "op": "add",
+      "value": 3
+    },
+    {
+      "stat": "explosive",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.1
+    }
+  ],
+  "image": "art.png"
+}

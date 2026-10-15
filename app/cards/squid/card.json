@@ -1,0 +1,21 @@
+{
+  "id": "squid",
+  "name": "Squid",
+  "rarity": "legendary",
+  "icon": "🦑",
+  "description": "Your bullets swim toward enemies in slow pulses, steering around walls. Each one hits softer.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "squid",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.7
+    }
+  ],
+  "details": "Each bullet re-picks the nearest enemy it can see a few times a second and swims at it with a quick stroke then a long glide, so it arrives in bursts. Top speed is capped (13 m/s in a stroke, far slower on average) so you can still run from them. Lives 6.5 s. No bullet drop. Blocking works on them: a blocked squid bullet turns around and hunts its shooter."
+}

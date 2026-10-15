@@ -1,0 +1,21 @@
+{
+  "id": "second-wind",
+  "name": "Second Wind",
+  "rarity": "uncommon",
+  "icon": "🌬️",
+  "description": "Strong healing, slower blocks.",
+  "modifiers": [
+    {
+      "stat": "regen",
+      "op": "add",
+      "value": 8
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.4
+    }
+  ],
+  "image": "art.png",
+  "holyDescription": "Strong healing."
+}

@@ -1,0 +1,21 @@
+{
+  "id": "reinforced-plating",
+  "name": "Reinforced Plating",
+  "rarity": "common",
+  "icon": "🛡️",
+  "description": "Tougher hull, a bit heavier.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "health",
+      "op": "mul",
+      "value": 1.5
+    },
+    {
+      "stat": "moveSpeed",
+      "op": "mul",
+      "value": 0.92
+    }
+  ],
+  "holyDescription": "A tougher hull."
+}

@@ -1,0 +1,21 @@
+{
+  "id": "echo-shield",
+  "name": "Echo Shield",
+  "rarity": "uncommon",
+  "icon": "🔁",
+  "description": "Every block triggers a second, free block one second later. Blocks come back slower.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "blockEcho",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.35
+    }
+  ],
+  "holyDescription": "Every block triggers a second, free block one second later."
+}

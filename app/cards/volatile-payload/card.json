@@ -1,0 +1,20 @@
+{
+  "id": "volatile-payload",
+  "name": "Volatile Payload",
+  "rarity": "uncommon",
+  "icon": "💥",
+  "description": "Bullets explode on impact; bigger hits make bigger blasts. Extra copies add another blast one second later.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "explosive",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 0.87
+    }
+  ]
+}

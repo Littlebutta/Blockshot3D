@@ -1,0 +1,26 @@
+{
+  "id": "second-thought",
+  "name": "Second Thought",
+  "rarity": "common",
+  "icon": "💭",
+  "description": "One more round in the mag and a chance of a free Encore shot (no ammo used) after each shot. Slightly slower bullets.",
+  "modifiers": [
+    {
+      "stat": "encore",
+      "op": "add",
+      "value": 0.2
+    },
+    {
+      "stat": "ammo",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "bulletSpeed",
+      "op": "mul",
+      "value": 0.9
+    }
+  ],
+  "holyDescription": "One more round in the mag and a chance of a free Encore shot (no ammo used) after each shot.",
+  "image": "art.png"
+}

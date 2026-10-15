@@ -1,0 +1,26 @@
+{
+  "id": "standing-ovation",
+  "name": "Standing Ovation",
+  "rarity": "legendary",
+  "icon": "🎭",
+  "description": "Every shot fires a free Encore, often two (they use no ammo). Two more rounds per mag, but reloads take longer.",
+  "modifiers": [
+    {
+      "stat": "encore",
+      "op": "add",
+      "value": 1.5
+    },
+    {
+      "stat": "ammo",
+      "op": "add",
+      "value": 2
+    },
+    {
+      "stat": "reloadTime",
+      "op": "mul",
+      "value": 1.25
+    }
+  ],
+  "holyDescription": "Every shot fires a free Encore, often two (they use no ammo). More rounds per mag.",
+  "image": "art.png"
+}

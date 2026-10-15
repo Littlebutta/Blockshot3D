@@ -1,0 +1,29 @@
+{
+  "id": "iron-curtain",
+  "name": "Iron Curtain",
+  "rarity": "combo",
+  "icon": "🧱",
+  "description": "An enormous shield wall.",
+  "combo": [
+    "bastion-wall",
+    "big-bubble"
+  ],
+  "modifiers": [
+    {
+      "stat": "blockDeploy",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "blockSize",
+      "op": "mul",
+      "value": 2.2
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.3
+    }
+  ],
+  "image": "art.png"
+}

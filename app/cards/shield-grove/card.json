@@ -1,0 +1,40 @@
+{
+  "id": "shield-grove",
+  "name": "Sacred Grove",
+  "rarity": "shieldmod",
+  "icon": "🌼",
+  "description": "Hold block to grow a blessed circle of grass that grants holy gifts.",
+  "displayLines": [
+    {
+      "text": "Shield",
+      "label": "Level 1: a 10 s holy shield",
+      "good": true
+    },
+    {
+      "text": "Cross",
+      "label": "Level 2: robe and a healing cross",
+      "good": true
+    },
+    {
+      "text": "Angel",
+      "label": "Level 3: a guardian angel",
+      "good": true
+    },
+    {
+      "text": "Hold",
+      "label": "Block to grow and charge",
+      "good": true
+    }
+  ],
+  "modifiers": [
+    {
+      "stat": "blockSize",
+      "op": "mul",
+      "value": 1.1
+    }
+  ],
+  "shieldMod": "grove",
+  "noCursed": true,
+  "details": "Hold block to grow a circle of grass under you (about 8 seconds at base stats; you can't move or shoot while charging). Flowers bloom when the circle is complete, and it stays until the blessing is done. Keep charging inside it for 3 levels; the circle glows brighter with each one.\n\nLet go and the charge drains back quickly, but not at once: step back in and hold block to carry on.\n\nLevel 1: a holy shield surrounds you for 10 seconds, soaking damage worth half your max health.\nLevel 2: you're dressed in a priest's robe and a cross falls from the sky into the circle. Standing near it heals you steadily for 30 seconds.\nLevel 3: an angel comes down and circles you for the rest of the round, healing you all the time. It has its own shield bubble like the Turret's; if it's destroyed, it flies up to heaven.\n\nA soft choir hums while you charge. Charging speed comes from Block cooldown and Block duration; Block size makes the circle bigger. No block bubble.",
+  "image": "art.png"
+}

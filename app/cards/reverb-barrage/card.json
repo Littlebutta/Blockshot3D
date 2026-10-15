@@ -1,0 +1,29 @@
+{
+  "id": "reverb-barrage",
+  "name": "Reverb Barrage",
+  "rarity": "combo",
+  "icon": "📢",
+  "description": "Every block fires twice as a wide barrage.",
+  "combo": [
+    "echo-shield",
+    "counter-pulse"
+  ],
+  "modifiers": [
+    {
+      "stat": "counterShots",
+      "op": "add",
+      "value": 8
+    },
+    {
+      "stat": "blockEcho",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.15
+    }
+  ],
+  "image": "art.png"
+}

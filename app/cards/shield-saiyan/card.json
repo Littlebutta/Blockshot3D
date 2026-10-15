@@ -1,0 +1,45 @@
+{
+  "id": "shield-saiyan",
+  "name": "Super Saiyan Hair",
+  "rarity": "shieldmod",
+  "icon": "⚡",
+  "description": "Hold block to grow towering hair that soaks up damage. Full hair: double speed and damage.",
+  "image": "art.png",
+  "displayLines": [
+    {
+      "text": "2×",
+      "label": "Max health as a hair shield",
+      "good": true
+    },
+    {
+      "text": "2×",
+      "label": "Move speed and damage while the hair is full",
+      "good": true
+    },
+    {
+      "text": "Hold",
+      "label": "Block to charge (no moving or shooting)",
+      "good": true
+    },
+    {
+      "text": "-15%",
+      "label": "Block cooldown (faster charging)",
+      "good": true
+    },
+    {
+      "text": "✕",
+      "label": "Block bubble",
+      "good": false
+    }
+  ],
+  "modifiers": [
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 0.85
+    }
+  ],
+  "shieldMod": "hair",
+  "noCursed": true,
+  "details": "Your hat turns into towering spiky hair, and your block bubble is gone. Hold block to power up: you can't move or shoot while charging, but the hair fills a health pool worth 2× your max health that soaks damage before you do. While the hair is completely full you move twice as fast and deal twice the damage; the first hit you take ends it until you charge back up. Full hair is huge, golden and glowing; drained hair shrinks to a dull grey tuft. Faster with Block cooldown and Block duration cards. Starts empty every round."
+}

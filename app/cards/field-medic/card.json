@@ -1,0 +1,18 @@
+{
+  "id": "field-medic",
+  "name": "Field Medic Rounds",
+  "rarity": "uncommon",
+  "icon": "🩹",
+  "description": "Co-op waves: damage you deal heals nearby allies.",
+  "modifiers": [
+    {
+      "stat": "healAllies",
+      "op": "add",
+      "value": 0.35
+    }
+  ],
+  "modes": [
+    "waves"
+  ],
+  "image": "art.png"
+}

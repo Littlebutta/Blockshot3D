@@ -1,0 +1,26 @@
+{
+  "id": "railgun-coil",
+  "name": "Railgun Coil",
+  "rarity": "rare",
+  "icon": "⚡",
+  "description": "Faster, harder-hitting bullets.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "bulletSpeed",
+      "op": "mul",
+      "value": 1.7
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 1.15
+    },
+    {
+      "stat": "reloadTime",
+      "op": "mul",
+      "value": 1.2
+    }
+  ],
+  "holyDescription": "Faster, harder-hitting bullets."
+}

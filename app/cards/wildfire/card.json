@@ -1,0 +1,30 @@
+{
+  "id": "wildfire",
+  "name": "Wildfire",
+  "rarity": "combo",
+  "icon": "🔥",
+  "description": "Bullets burst into burning shrapnel.",
+  "combo": [
+    "incendiary-rounds",
+    "shrapnel-rounds"
+  ],
+  "modifiers": [
+    {
+      "stat": "ignite",
+      "op": "add",
+      "value": 2
+    },
+    {
+      "stat": "shrapnel",
+      "op": "add",
+      "value": 1.5
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.9
+    }
+  ],
+  "image": "art.png",
+  "details": "When a bullet hits a wall or runs out of bounces it bursts into six fragments. Every fragment carries your fire, so each one it hits starts burning, and burns stack with every hit."
+}

@@ -1,0 +1,20 @@
+{
+  "id": "phase-step",
+  "name": "Phase Step",
+  "rarity": "uncommon",
+  "icon": "⚡",
+  "description": "Blocking dashes you in the direction you're moving.",
+  "modifiers": [
+    {
+      "stat": "blockDash",
+      "op": "add",
+      "value": 18
+    },
+    {
+      "stat": "blockDuration",
+      "op": "mul",
+      "value": 0.8
+    }
+  ],
+  "image": "art.png"
+}

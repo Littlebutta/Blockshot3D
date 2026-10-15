@@ -1,0 +1,34 @@
+{
+  "id": "blink-runner",
+  "name": "Blink Runner",
+  "rarity": "combo",
+  "icon": "💫",
+  "description": "Fast feet and a long blink on every block.",
+  "combo": [
+    "overclocked-legs",
+    "phase-step"
+  ],
+  "modifiers": [
+    {
+      "stat": "moveSpeed",
+      "op": "mul",
+      "value": 1.3
+    },
+    {
+      "stat": "jump",
+      "op": "mul",
+      "value": 1.2
+    },
+    {
+      "stat": "blockDash",
+      "op": "add",
+      "value": 24
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 0.85
+    }
+  ],
+  "image": "art.png"
+}

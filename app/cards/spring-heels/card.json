@@ -1,0 +1,26 @@
+{
+  "id": "spring-heels",
+  "name": "Spring Heels",
+  "rarity": "common",
+  "icon": "🦘",
+  "description": "Springs in your boots. Jump higher, land lighter.",
+  "modifiers": [
+    {
+      "stat": "jump",
+      "op": "mul",
+      "value": 1.25
+    },
+    {
+      "stat": "moveSpeed",
+      "op": "mul",
+      "value": 1.05
+    },
+    {
+      "stat": "health",
+      "op": "mul",
+      "value": 0.95
+    }
+  ],
+  "holyDescription": "Springs in your boots. Jump higher, move quicker.",
+  "image": "art.png"
+}

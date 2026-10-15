@@ -1,0 +1,17 @@
+{
+  "id": "shield-slam",
+  "name": "Ground Slam",
+  "rarity": "shieldmod",
+  "icon": "🦶",
+  "description": "Blocking launches you up; landing sends out a shockwave.",
+  "modifiers": [
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.2
+    }
+  ],
+  "shieldMod": "slam",
+  "noCursed": true,
+  "details": "Blocking launches you into the air, and you move much faster while airborne so you can steer onto enemies. When you land, a heavy shockwave hurts and throws back every enemy nearby (bigger with Block size, harder with Block shove)."
+}

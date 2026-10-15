@@ -1,0 +1,20 @@
+{
+  "id": "sandbag-barricade",
+  "name": "Sandbag Barricade",
+  "rarity": "uncommon",
+  "icon": "🧱",
+  "description": "Blocking also drops a sandbag wall a fixed distance ahead of you, long side facing you. It stays until enemies shoot it down. Your own bullets pass through it. No limit, and walls stack. Each copy multiplies the wall's health and makes it bigger.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "blockBarricade",
+      "op": "add",
+      "value": 150
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.2
+    }
+  ]
+}

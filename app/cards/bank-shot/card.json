@@ -1,0 +1,24 @@
+{
+  "id": "bank-shot",
+  "name": "Bank Shot",
+  "rarity": "rare",
+  "icon": "🎯",
+  "description": "After a bullet bounces, it re-aims at the nearest enemy it can see.",
+  "modifiers": [
+    {
+      "stat": "bounceTarget",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "bounces",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.9
+    }
+  ]
+}

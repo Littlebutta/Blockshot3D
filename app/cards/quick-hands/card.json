@@ -1,0 +1,15 @@
+{
+  "id": "quick-hands",
+  "name": "Quick Hands",
+  "rarity": "common",
+  "icon": "✋",
+  "description": "Reload in a blink.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "reloadTime",
+      "op": "mul",
+      "value": 0.55
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "id": "mod-riot-shield",
+  "name": "Riot Shield",
+  "rarity": "mod",
+  "icon": "🛡️",
+  "description": "A held shield that bounces bullets back and fires waves of shots.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "ammo",
+      "op": "add",
+      "value": 3
+    },
+    {
+      "stat": "reloadTime",
+      "op": "mul",
+      "value": 0.8
+    }
+  ],
+  "weaponMod": "shield",
+  "noCursed": true,
+  "details": "Your gun becomes a shield held in front of you that bounces enemy bullets back like your block. It takes 4 hits, then turns red and recharges for 3 s (an intact shield regains a hit every 2.5 s). Fire sends a wave of your normal bullets (your bullets per shot, with all your bullet effects); hold to add a bullet every 0.35 s, up to 5 more. Each wave costs 1 ammo."
+}

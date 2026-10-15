@@ -1,0 +1,29 @@
+{
+  "id": "vampiric-nanites",
+  "name": "Vampiric Nanites",
+  "rarity": "combo",
+  "icon": "🦇",
+  "description": "Machines that feed.",
+  "combo": [
+    "leech-rounds",
+    "nanite-repair"
+  ],
+  "modifiers": [
+    {
+      "stat": "lifesteal",
+      "op": "add",
+      "value": 0.45
+    },
+    {
+      "stat": "regen",
+      "op": "add",
+      "value": 8
+    },
+    {
+      "stat": "health",
+      "op": "mul",
+      "value": 1.1
+    }
+  ],
+  "image": "art.png"
+}

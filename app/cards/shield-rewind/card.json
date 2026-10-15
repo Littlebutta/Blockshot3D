@@ -1,0 +1,17 @@
+{
+  "id": "shield-rewind",
+  "name": "Rewind Blink",
+  "rarity": "shieldmod",
+  "icon": "⏪",
+  "description": "Blocking blinks you back in time, healing what you lost.",
+  "modifiers": [
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.15
+    }
+  ],
+  "shieldMod": "rewind",
+  "noCursed": true,
+  "details": "Blocking blinks you back to where you were 3.5 seconds ago, with a short shield when you land. Any health you've lost since then comes back, up to the health you had at that moment (it never lowers your health). Replaces block dashes."
+}

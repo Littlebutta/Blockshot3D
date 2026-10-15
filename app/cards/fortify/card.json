@@ -1,0 +1,24 @@
+{
+  "id": "fortify",
+  "name": "Fortify",
+  "rarity": "combo",
+  "icon": "🏯",
+  "description": "Thick sandbag walls, fast.",
+  "combo": [
+    "sandbag-barricade",
+    "bulwark"
+  ],
+  "modifiers": [
+    {
+      "stat": "blockBarricade",
+      "op": "add",
+      "value": 300
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 0.65
+    }
+  ],
+  "image": "art.png"
+}

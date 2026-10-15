@@ -1,0 +1,15 @@
+{
+  "id": "scp",
+  "name": "SCP",
+  "rarity": "rare",
+  "icon": "🛡️",
+  "description": "Secure. Contain. Protect. Your own bullets and explosions can't hurt you.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "noSelfDamage",
+      "op": "add",
+      "value": 1
+    }
+  ]
+}

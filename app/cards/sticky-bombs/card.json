@@ -1,0 +1,20 @@
+{
+  "id": "sticky-bombs",
+  "name": "Sticky Bombs",
+  "rarity": "rare",
+  "icon": "💣",
+  "description": "Bullets stick to whoever they hit and explode a second later.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "limpet",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 0.8
+    }
+  ]
+}

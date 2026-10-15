@@ -1,0 +1,26 @@
+{
+  "id": "rapid-cycler",
+  "name": "Rapid Cycler",
+  "rarity": "common",
+  "icon": "⚙️",
+  "description": "Spin the action faster.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 1.6
+    },
+    {
+      "stat": "ammo",
+      "op": "add",
+      "value": 2
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.8
+    }
+  ],
+  "holyDescription": "Spin the action faster, with a few more rounds per mag."
+}

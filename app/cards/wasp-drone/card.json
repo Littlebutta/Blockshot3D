@@ -1,0 +1,18 @@
+{
+  "id": "wasp-drone",
+  "name": "Wasp Drones",
+  "rarity": "uncommon",
+  "icon": "🐝",
+  "description": "Commander mode: two fragile drones fly above the tallest pillars, pecking at enemies.",
+  "modifiers": [
+    {
+      "stat": "summonDrone",
+      "op": "add",
+      "value": 2
+    }
+  ],
+  "modes": [
+    "commander"
+  ],
+  "image": "art.png"
+}

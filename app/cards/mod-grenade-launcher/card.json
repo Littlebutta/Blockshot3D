@@ -1,0 +1,23 @@
+{
+  "id": "mod-grenade-launcher",
+  "name": "Grenade Launcher",
+  "rarity": "mod",
+  "icon": "🧨",
+  "description": "Lob bouncing grenades that hit hard.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 0.5
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 1.43
+    }
+  ],
+  "weaponMod": "grenade",
+  "noCursed": true,
+  "details": "Lob bouncing grenades that explode after a short fuse or on contact. Hits hard."
+}

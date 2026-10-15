@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Blockshot 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div id="hud" class="hidden">
+  <div id="bossBar" class="hidden"><div class="bossHead"><span id="bossName">The Warden</span><span id="bossPhase"></span></div><div class="bossTrack"><div id="bossFill"></div></div></div>
+  <div id="scoreboard"></div>
+  <div id="killfeed"></div>
+  <div id="betBox" class="betbox panel hidden"></div>
+  <div id="owCompass" class="hidden" style="position:absolute;top:38px;left:50%;transform:translateX(-50%);width:300px;height:20px;overflow:hidden;pointer-events:none;border-bottom:1px solid #ffffff40;background:linear-gradient(90deg,transparent,#0004 20%,#0004 80%,transparent);font:600 11px sans-serif;color:#fffc;opacity:0.85"></div>
+  <div id="owHud" class="hidden" style="position:absolute;top:64px;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none;font-weight:600;text-shadow:0 1px 3px #000c;line-height:1.5"></div>
+  <div id="me" class="panel">
+    <div class="hpline"><div class="bar big"><s id="myHpGhost"></s><i id="myHp"></i></div><span id="myHpText"></span></div>
+    <div id="ammo"></div>
+    <div class="blk"><span>Block</span><div class="bar"><i id="blk"></i></div></div>
+    <div class="blk hidden" id="shRow"><span id="shLabel">Shield</span><div class="bar"><i id="shBar"></i></div></div>
+    <div class="blk hidden" id="critRow"><span>Critters</span><b id="critText">0</b></div>
+    <div class="blk hidden" id="hairRow"><span>Hair</span><div class="bar"><i id="hairBar"></i></div><b id="hairText"></b></div>
+    <div class="blk hidden" id="kRow"><span>Slash</span><div class="bar"><i id="kBar"></i></div></div>
+    <div class="blk hidden" id="ritRow"><span>Ritual</span><div class="bar"><i id="ritBar"></i></div><b id="ritText"></b></div>
+    <div id="mycards" class="chips"></div>
+  </div>
+  <div id="legend" class="panel">
+    <div>Platform edge color = height</div>
+    <div class="sw"><i data-tier="0"></i>1 jump up</div>
+    <div class="sw"><i data-tier="1"></i>2 jumps (needs a step)</div>
+    <div class="sw"><i data-tier="2"></i>3 jumps (needs steps)</div>
+    <div class="note">Each stripe on a block's side is one jump tall.</div>
+  </div>
+  <div id="lootPick" class="lootpick hidden"><div class="lphead">Choose a card <small>(press 1, 2 or 3)</small></div><div id="lootCards" class="lpcards"></div></div>
+  <div id="crosshair" class="hidden"></div>
+  <div id="hitMark"><svg viewBox="-20 -20 40 40" aria-hidden="true"><path d="M-13-13l6 6M13-13l-6 6M-13 13l6-6M13 13l-6-6"/></svg></div>
+  <div id="curAmmo" class="curammo hidden"><span id="curAmmoN"></span><div class="rl"><i id="curAmmoBar"></i></div></div>
+  <div id="blockHaze"></div>
+  <div id="dotVignette"></div>
+  <div id="spectate" class="hidden">You're out. Watching the rest of the round.</div>
+  <div id="waiting" class="hidden"></div>
+  <div id="lockHint" class="hidden">Click to aim</div>
+  <div id="hoverTip" class="hovertip hidden"></div>
+  <div id="practice" class="practice panel hidden">
+    <div class="phead"><h3>Practice range</h3><button class="btn ghost small" id="prHide">Hide (P)</button></div>
+    <div class="dps"><div><span>DPS (5 s)</span><b id="prDps">0</b></div><div><span>Total damage</span><b id="prTotal">0</b></div><div><span>Biggest hit</span><b id="prBig">0</b></div><button class="btn ghost small" id="prResetDps">Reset</button></div>
+    <h4>Your cards <span id="prCount"></span></h4>
+    <div id="prMine" class="prmine"></div>
+    <div class="row left"><button class="btn ghost small" id="prClear">Remove all</button><button class="btn ghost small" id="prRandom">Add random</button></div>
+    <h4>Add cards</h4>
+    <input id="prSearch" placeholder="Search cards">
+    <div id="prRarity" class="row left"></div>
+    <div id="prAll" class="prall"></div>
+    <h4>Range</h4>
+    <div class="prgrid">
+      <label class="field">Target dummies <select id="prDummies"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>6</option></select></label>
+      <label class="field">Dummies <select id="prDummyMode"><option value="idle">Stand still</option><option value="move">Walk around</option><option value="fight">Fight back</option></select></label>
+      <label class="field">Dummy health <select id="prDummyHp"><option value="100">100</option><option value="250">250</option><option value="500">500</option><option value="1000">1000</option></select></label>
+      <label class="check"><input type="checkbox" id="prGod" checked> You can't die</label>
+    </div>
+    <div class="row left"><button class="btn ghost small" id="prNewArena">New arena</button></div>
+  </div>
+</div>
+<div id="statsWin" class="statswin panel hidden"></div>
+<div id="slopLayer" aria-hidden="true"></div>
+<div id="modeTip" class="panel hidden"></div>
+<div id="hurt"></div>
+<div id="banner"></div>
+<div id="wipe" class="hidden" aria-hidden="true"></div>
+<div id="roundSplash" class="hidden" aria-live="polite"><div class="rsBand"><div class="rsSmall"></div><div class="rsBig"></div><div class="rsPips"></div></div></div>
+<div id="toast"></div>
+
+<section id="title" class="screen">
+  <div id="titleCash" class="cashbadge" title="Cash: earn it by playing matches, spend it in the shop"></div>
+  <h1>Blockshot <em>3D</em></h1>
+  <p class="lede">Arena duels. Lose a round, pick an upgrade card. First to the target score wins.</p>
+  <nav class="stack">
+    <button class="btn" data-go="solo">Play</button>
+    <button class="btn ghost" data-go="practice">Practice range</button>
+    <button class="btn ghost" data-go="browser">Multiplayer</button>
+    <button class="btn ghost" data-go="customize">Shop &amp; Customize</button>
+    <button class="btn ghost" data-go="gallery">The Wiki</button>
+    <button class="btn ghost" data-go="settings">Settings</button>
+    <button class="btn ghost" id="quitBtn">Quit</button>
+  </nav>
+  <div id="versionTag" class="versiontag">v1.2.10</div>
+  <div id="updLine" class="updline hidden"></div>
+  <label class="langcorner" title="Language"><span aria-hidden="true">🌐</span><select id="langCorner"></select></label>
+</section>
+
+<section id="browser" class="screen hidden">
+  <h2>Multiplayer</h2>
+  <label class="field">Your name <input id="mpName" maxlength="20"></label>
+  <div id="steamSection" class="panel mpsection hidden">
+    <h3>Steam</h3>
+    <p id="steamStatus">Host a game, then invite friends from your Steam friends list. They join by accepting the invite.</p>
+    <div class="row"><button class="btn" id="steamHostBtn">Host for Steam friends</button></div>
+    <h4>Friends' games with a free spot</h4>
+    <div id="friendList" class="rooms"><div class="empty">Looking for friends' games…</div></div>
+    <div class="row"><button class="btn ghost small" id="refreshFriends">Refresh</button></div>
+  </div>
+  <div class="panel mpsection">
+  <h3 id="lanHeading">Local network / testing</h3>
+  <p id="lanText">Everyone opens the same server address in their browser. One person hosts, the others join with the room code.</p>
+  <div class="row"><button class="btn ghost" id="hostBtn">Host a game</button><button class="btn ghost hidden" id="testWinBtn">Open a test window</button></div>
+  <div class="row"><input id="joinCode" maxlength="20" placeholder="Room code" class="code"><button class="btn ghost" id="joinBtn">Join</button></div>
+  <h3>Open rooms on this server</h3>
+  <div id="roomList" class="rooms"></div>
+  <div class="row"><button class="btn ghost small" id="refreshRooms">Refresh</button></div>
+  </div>
+  <div class="row"><button class="btn ghost" data-go="title">Back</button></div>
+  <p id="mpError" class="error"></p>
+</section>
+
+<section id="lobby" class="screen hidden">
+  <h2 id="lobbyTitle">Lobby</h2>
+  <p id="lobbyInfo"></p>
+  <div class="lobbygrid">
+    <div class="panel lobbyside">
+      <div id="colorPick" class="colorpick"><h4>Your color</h4><div id="colorStrip" class="colorstrip"></div><p id="colorNote" class="hint"></p></div>
+      <div class="row left" id="botRow">
+        <select id="botDiff"><option value="easy">Easy bot</option><option value="normal" selected>Normal bot</option><option value="hard">Hard bot</option></select>
+        <button class="btn ghost small" id="addBot">Add bot</button>
+      </div>
+      <p class="hint">Host: click a bot's swatch to change its color. Picking a color a bot has swaps colors with that bot.</p>
+    </div>
+    <div class="panel">
+      <h3>Players <span id="playerCount"></span></h3>
+      <div id="playerList"></div>
+      <div id="colorPop" class="colorpop hidden"></div>
+    </div>
+    <div class="panel matchpanel">
+      <h3>Mode</h3>
+      <div id="modeBtns" class="modebtns">
+        <button type="button" data-mode="ffa"><b>Deathmatch</b><small>Free for all, or turn on teams (up to 8)</small></button>
+        <button type="button" data-mode="waves"><b>Co-op waves</b><small>Survive the raiders together</small></button>
+        <button type="button" data-mode="core"><b>Core defense</b><small>Build a fort and protect the core</small></button>
+        <button type="button" data-mode="open"><b>Open world</b><small>Drop from the bus: battle royale or extraction</small></button>
+        <button type="button" data-mode="brawl"><b>Brawl</b><small>Smash-style fighter: knock rivals off the stage</small></button>
+        <button type="button" data-mode="amon"><b>AMON</b><small>Autobattler: build a 5x5 army, survive 20 waves</small></button>
+      </div>
+      <div class="modecols">
+        <div class="modeleft">
+          <div class="modeopts">
+          <label class="field" data-modes="ffa tdm"><span>Teams</span>
+            <select id="setTeams"><option value="ffa">Off: free for all</option><option value="tdm">On: team deathmatch</option></select></label>
+          <label class="field" data-modes="ffa tdm waves core open brawl"><span id="roundsText">Rounds to win</span>
+            <select id="setRounds"><option>3</option><option selected>5</option><option>7</option><option>10</option></select></label>
+          </div>
+          <details class="arena gensettings">
+            <summary>General settings</summary>
+            <div class="modeopts">
+            <label class="field" data-modes="open">Open world type
+              <select id="setOwType" title="Battle royale: last one (or last squad) standing while a red wall closes in. Extraction: the whole lobby is one squad and has to reach the extraction point"><option value="br">Battle royale</option><option value="extract">Co-op extraction</option></select></label>
+            <label class="field" data-modes="open">Roaming bots
+              <select id="setOwBots" title="World bots that roam the map and hunt players"><option value="off">None</option><option value="some">Some</option><option value="lots">Lots</option></select></label>
+            <label class="check" data-modes="open"><input type="checkbox" id="setOwSquads"> Battle royale squads (play in the lobby teams)</label>
+            <label class="field" data-modes="waves core open amon">Co-op difficulty
+              <select id="setWaveDiff" title="Sets the Game Master's wave budget, enemy toughness, how often Elites appear and how hard the final boss hits"><option value="easy">Easy</option><option value="normal">Normal</option><option value="hard">Hard</option><option value="nightmare">Nightmare</option></select></label>
+            <label class="field" data-modes="waves core">Scale to squad size
+              <select id="setCoopScale" title="How much tougher the waves and boss get for each extra player or bot on your side"><option value="off">Off (sized for one)</option><option value="standard">Standard</option><option value="strong">Strong</option></select></label>
+            <label class="field" data-modes="waves">Game Master spawning
+              <select id="setGmSpawn" title="Whether enemies arrive in groups or all at once. Auto lets the Game Master choose each wave, but critters and turrets always trickle in"><option value="auto">Game Master decides</option><option value="waves">In groups</option><option value="all">All at once</option></select></label>
+            <label class="field" data-modes="amon">AMON mode
+              <select id="setAmonVs" title="Versus: players fight each other's armies every round instead of the raider waves (teams fight together)"><option value="0">Co-op vs raider waves</option><option value="1">AMON Versus (players fight each other)</option></select></label>
+            <label class="field" data-modes="amon">Store timer
+              <select id="setAmonTimer" title="Seconds to shop before the battle starts anyway"><option value="0">Wait for Ready</option><option value="1">75 seconds</option></select></label>
+            <label class="check" data-modes="tdm waves open"><input type="checkbox" id="setFF"> Friendly fire (bullets can hurt teammates)</label>
+            <div class="row left" data-modes="tdm"><button class="btn ghost small" id="shuffleTeams" type="button">Shuffle teams</button></div>
+            <label class="check" data-modes="ffa tdm waves practice"><input type="checkbox" id="setSide"> 🎬 2D side view (flat camera, ROUNDS-style maps with drop-through platforms, swinging platforms and a damaging edge all around)</label>
+            <label class="field" data-modes="brawl">Stocks (lives per round)
+              <select id="setStocks"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option></select></label>
+            <label class="check" data-modes="brawl"><input type="checkbox" id="setBrawlFlat"> Flat, wide stages only</label>
+            <label class="check speedopt" data-modes="ffa tdm waves"><input type="checkbox" id="setSpeed"> ⚡ Speed mode: two card picks per pick phase</label>
+            <label class="field" data-modes="practice">Target dummies
+              <select id="setDummies"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>6</option></select></label>
+            <label class="field" data-modes="practice">Dummies
+              <select id="setDummyMode"><option value="idle">Stand still</option><option value="move">Walk around</option><option value="fight">Fight back</option></select></label>
+            <label class="field" data-modes="practice">Dummy health
+              <select id="setDummyHp"><option value="100">100</option><option value="250">250</option><option value="500">500</option><option value="1000">1000</option></select></label>
+            <label class="check" data-modes="practice"><input type="checkbox" id="setGod"> You can't die</label>
+            </div>
+          </details>
+          <details class="arena" data-modes="ffa tdm waves">
+            <summary>Cards</summary>
+            <div class="twocol">
+              <label class="field">Rerolls per match
+                <select id="setRerolls"><option value="0">Off</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option></select></label>
+              <label class="field">Card pick time
+                <select id="setPickTime"><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">60 seconds</option><option value="120">2 minutes</option><option value="0">No time limit</option></select></label>
+            </div>
+            <label class="check"><input type="checkbox" id="setCombos"> Combo cards (matching pairs merge into something new)</label>
+            <p class="hint">Cursed cards and weapon mods are always in the deck (both very rare).</p>
+          </details>
+          <details class="arena">
+            <summary>Arena</summary>
+            <div class="twocol">
+              <label class="field">Maps
+                <select id="setMaps"><option value="mixed">Mixed</option><option value="generated">Random generated</option><option value="classic">Classic layouts</option><option value="lava">Lava Lake only</option><option value="ice">Ice Sheets only</option></select></label>
+              <label class="field">Map themes
+                <select id="setThemes"><option value="standard">Standard</option><option value="experimental" title="Castle, western, candy, forest, tundra, neon, sakura, tropical, lunar, volcano">Experimental</option><option value="all">All</option>
+                  <optgroup label="Only one"><option value="forest">Forest</option><option value="tundra">Tundra</option><option value="neon">Neon</option><option value="castle">Castle</option><option value="western">Western</option><option value="candy">Candy</option><option value="sakura">Sakura</option><option value="tropical">Tropical</option><option value="lunar">Lunar</option><option value="volcano">Volcano</option></optgroup></select></label>
+            </div>
+            <label class="check" data-maps="mixed"><input type="checkbox" id="setMapLava"> Lava Lake maps (floating platforms over a lava floor)</label>
+            <label class="check" data-maps="mixed"><input type="checkbox" id="setMapIce"> Ice Sheets maps (ice floes on freezing water; small floes sink, medium ones tip)</label>
+            <label class="check" data-modes="ffa tdm waves"><input type="checkbox" id="setCommander"> Commander map: you pick the cards, a bot fights for you (unlocks unit cards)</label>
+            <label class="check" data-modes="ffa tdm waves"><input type="checkbox" id="setHazards"> Map hazards (random rounds get a laser, saws or a rogue turret)</label>
+            <p class="hint">Arena size grows with the number of players. Generated maps come in rectangles, hexagons, octagons, triangles, trapezoids and pentagons.</p>
+          </details>
+        </div>
+        <div class="modedesc">
+          <p class="hint" data-modes="ffa">Free for all: everyone fights everyone. Lose a round and you pick an upgrade card; first to the target score wins.</p>
+          <p class="hint" data-modes="tdm">Teams on: up to 8 teams. Set each player's team in the list. The losing team picks cards.</p>
+          <p class="hint" data-modes="open">A huge map of themed zones. Space jumps out of the flying bus and opens your parachute. Colored items give a card of that rarity. E gets on or off a scooter, bike or car. Tab switches first / third person.</p>
+          <p class="hint" data-modes="waves">The final wave brings a boss. You get one free retry (loss token) per run, not on the boss wave. Beat the boss to keep going with harder waves. Co-op never uses Lava Lake.</p>
+          <p class="hint" data-modes="core">A flat battlefield with a core block in the middle. Enemies from every mode walk in from the edges and go for the core; aggressive ones (and any that get a player or turret in reach) come for you first. Blocking works as usual. Press E (use) to pick up and put down the blocks, cubes and turrets that parachute in; you can't shoot while carrying one. Each wave starts with 60 seconds to build. Every 3rd wave drops an upgrade: grab it and everyone picks a card after the wave. You respawn after a timer that grows with each death that wave. If the core falls, retry the wave or start over.</p>
+          <p class="hint" data-modes="amon">Autobattler. In the store, buy unit groups and tactic cards (same price for every offer) and arrange them on your 5x5 board: tactic cards boost the squares they reach, chess style. Upgrade the store for more offers and better tiers; its price drops every battle. Each player's board fights its own copy of the wave and survivors move on to other fields. Enemies left standing cost team health. Round 20: Amon. Bots in the lobby play their own boards.</p>
+          <p class="hint sidehint" data-modes="ffa tdm waves practice">2D: A / D move, W or Space jumps, the mouse aims anywhere. The arena edges hurt: block as you touch one to bounce off it. Falling into a pit is a knockout.</p>
+          <p class="hint" data-modes="brawl">Smash style on 3D floating stages. Hits raise your damage %, and the higher it is the farther you fly. Get knocked past the edge of the screen and you lose a stock. A / D move, W or Space jumps (jump again in the air), the mouse aims. No card picks: your Character cosmetic is your fighter, each with its own fixed build. Bots take the other fighters.</p>
+          <p class="hint" data-modes="practice">Add and remove any card during play from the practice panel (P).</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p id="lobbyError" class="error"></p>
+  <div class="row"><button class="btn ghost hidden" id="inviteBtn">Invite Steam friends</button><button class="btn" id="startBtn">Start match</button><button class="btn ghost" data-go="settings">Settings</button><button class="btn ghost" id="leaveLobby">Leave</button></div>
+</section>
+
+<section id="directory" class="screen hidden">
+  <h2>The Wiki · card tools</h2>
+  <div class="row">
+    <button class="btn" id="newCard">Create a card</button>
+    <button class="btn ghost" id="reloadCards">Reload cards</button>
+    <button class="btn ghost" id="cardHelpBtn">How to add cards</button>
+    <button class="btn ghost" data-go="gallery">Back to the Wiki</button>
+  </div>
+  <div class="row" id="rarityFilter"></div>
+  <div id="cardHelp" class="panel help hidden">
+    <p>Every card is a folder inside <code>cards/</code> holding a <code>card.json</code> and an optional picture (<code>art.png</code>, 700×500 works well). Copy <code>cards/_TEMPLATE</code>, rename the folder, edit the JSON, then press Reload cards. Folders starting with <code>_</code> are ignored.</p>
+    <pre>{
+  "id": "my-card",            // unique, lowercase-with-dashes
+  "name": "My Card",
+  "rarity": "common",         // common | uncommon | rare
+  "icon": "⭐",               // shown if there's no picture
+  "description": "One sentence about what it does.",
+  "image": "art.png",
+  "modifiers": [
+    { "stat": "damage", "op": "mul", "value": 1.25 },  // ×1.25 = +25%
+    { "stat": "ammo",   "op": "add", "value": 1 }      // +1
+  ]
+}</pre>
+    <p>Stats you can change: <span id="statList"></span>. The full reference is in README.md.</p>
+  </div>
+  <p id="rarityOdds" class="hint"></p>
+  <div id="cardErrors"></div>
+  <div id="cardGrid" class="cardgrid"></div>
+</section>
+
+<section id="gallery" class="screen hidden">
+  <h2>The Wiki</h2>
+  <div id="wikiTop"><button class="btn ghost" data-go="title">Back</button><button class="btn" data-half="cards">🃏 Cards</button><button class="btn" data-half="amon">⚔ AMON</button><input id="wikiSearch" type="search" placeholder="Search names, effects, abilities…" autocomplete="off"><button class="btn ghost small" data-go="directory" id="wikiTools" title="Create, reload and test cards (the old card directory)">🛠 Card tools</button></div>
+  <div id="galTabs"></div>
+  <div id="galCount"></div>
+  <div id="galGrid"></div>
+  <div id="galView" class="hidden"><button class="nav x" title="Close (Esc)">✕</button><button class="nav" data-gnav="-1" title="Previous (←)">‹</button><div class="box"></div><button class="nav" data-gnav="1" title="Next (→)">›</button></div>
+</section>
+
+<section id="creator" class="screen hidden">
+  <h2>Create a card</h2>
+  <div class="creatorgrid">
+    <div class="panel">
+      <label class="field">Name <input id="cName" maxlength="32" value="New Card"></label>
+      <label class="field">Folder id <input id="cId" maxlength="48"></label>
+      <label class="field">Rarity <select id="cRarity"><option value="common">Common</option><option value="uncommon">Uncommon</option><option value="rare">Rare</option></select></label>
+      <label class="field">Icon (used if there's no picture) <input id="cIcon" maxlength="4" value="⭐"></label>
+      <label class="field">Description <input id="cDesc" maxlength="140"></label>
+      <label class="field">Picture (png, jpg or webp) <input id="cImage" type="file" accept="image/png,image/jpeg,image/webp"></label>
+      <h3>Stat changes</h3>
+      <div id="cMods"></div>
+      <button class="btn ghost small" id="cAddMod">Add stat change</button>
+    </div>
+    <div class="previewcol">
+      <div id="cPreview"></div>
+      <p class="hint">Saving writes <code>cards/&lt;id&gt;/card.json</code> and the picture on the computer running the server.</p>
+    </div>
+  </div>
+  <p id="cError" class="error"></p>
+  <div class="row"><button class="btn" id="cSave">Save card</button><button class="btn ghost" id="cDownload">Download card.json</button><button class="btn ghost" data-go="directory">Back</button></div>
+</section>
+
+<section id="customize" class="screen hidden">
+  <h2>Shop &amp; Customize <span id="cosCash" class="cashbadge inline"></span></h2>
+  <p>Earn cash by playing matches and spend it here. Locked items (🔒) can be tried on before you buy. Accessories keep their own colors, so they look the same on any team.</p>
+  <div class="cosgrid">
+    <canvas id="cosPreview" width="260" height="300"></canvas>
+    <div><div class="panel" id="cosFields"></div><div id="cosBuy" class="panel cosbuy hidden"></div></div>
+  </div>
+  <p class="hint">Drag the preview to turn your character. Pick several locked items to try a whole set on, then buy them one by one or all at once.</p>
+  <div class="row"><button class="btn ghost" id="cosSpin">Spin: off</button><button class="btn ghost" id="cosRandom">Randomize</button><button class="btn ghost" id="cosLoot">🎁 Open lootbox (0)</button><button class="btn" data-go="title">Done</button></div>
+</section>
+
+<section id="settings" class="screen hidden">
+  <h2>Settings</h2>
+  <div class="tabs" id="settingsTabs"><button type="button" class="tab sel" data-tab="general">General</button><button type="button" class="tab" data-tab="graphics">Graphics</button><button type="button" class="tab" data-tab="controls">Controls</button></div>
+  <div class="panel settingsform" id="setGeneral">
+    <label class="field">Name <input id="sName" maxlength="20"></label>
+    <div class="field"><span>Preferred color <small class="hint">(you get it in the lobby whenever no other player has it)</small></span><div class="colorstrip" id="sColor"></div></div>
+    <label class="field">Language <select id="sLang"></select></label>
+    <label class="field">Camera
+      <select id="sView"><option value="third">Third person (top-down)</option><option value="first">First person</option><option value="shoulder">Over the shoulder (turn with the mouse)</option></select></label>
+    <label class="field">Field of view <span class="val" id="sFovV"></span><input type="range" id="sFov" min="50" max="105" step="1"></label>
+    <label class="field">Mouse sensitivity (first person) <span class="val" id="sSensV"></span><input type="range" id="sSens" min="0.3" max="3" step="0.05"></label>
+    <label class="field">Master volume <span class="val" id="sMasterV"></span><input type="range" id="sMaster" min="0" max="1" step="0.05"></label>
+    <label class="field">Music volume <span class="val" id="sMusicV"></span><input type="range" id="sMusic" min="0" max="1" step="0.05"></label>
+    <label class="field">Effects volume <span class="val" id="sSfxV"></span><input type="range" id="sSfx" min="0" max="1" step="0.05"></label>
+    <label class="field">Particle effects
+      <select id="sEffects"><option value="high">High</option><option value="low">Low</option><option value="off">Off</option></select></label>
+    <label class="check"><input type="checkbox" id="sShake"> Screen shake</label>
+    <label class="check"><input type="checkbox" id="sFeel"> Hit-stop and slow motion on kills</label>
+    <label class="check"><input type="checkbox" id="sProps"> Grass and pebbles (applies next round)</label>
+    <label class="field">Color-blind mode
+      <select id="sCB"><option value="off">Off</option><option value="protan">Protanopia (red-weak)</option><option value="deutan">Deuteranopia (green-weak)</option><option value="tritan">Tritanopia (blue-yellow)</option></select></label>
+    <label class="check"><input type="checkbox" id="sRecommend"> Card tips: point out cards that fit your build</label>
+    <label class="check"><input type="checkbox" id="sCurAmmo"> Ammo pips (or count) and reload bar next to the cursor</label>
+    <label class="check"><input type="checkbox" id="sHaze"> White screen-edge glow when your block is ready again</label>
+    <label class="check"><input type="checkbox" id="sSlop"> AI slop filter ✨ (only changes what you see)</label>
+    <label class="check"><input type="checkbox" id="sPillow"> Anime mode 💕 (every player becomes a body pillow; only you see it)</label>
+  </div>
+  <div class="panel settingsform hidden" id="setGraphics">
+    <label class="field">Preset
+      <select id="sPreset"><option value="low">Low (older PCs)</option><option value="medium">Medium</option><option value="high">High</option><option value="ultra">Ultra</option><option value="raytraced">Ultra + ray tracing</option><option value="custom">Custom</option></select></label>
+    <label class="field">Lighting
+      <select id="sLighting" title="Vivid: warm sun, cool rim light and cleaner shadows"><option value="classic">Classic</option><option value="vivid">Vivid</option></select></label>
+    <label class="check"><input type="checkbox" id="sShadows"> Shadows</label>
+    <label class="field">Shadow quality
+      <select id="sShadowQ"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
+    <label class="check" title="Soft darkening where objects meet (screen-space ambient occlusion)"><input type="checkbox" id="sAO"> Ambient occlusion (contact shadows)</label>
+    <label class="field">Glow (bloom)
+      <select id="sBloom"><option value="off">Off</option><option value="low">Low</option><option value="high">High</option></select></label>
+    <label class="field">Reflections
+      <select id="sRefl" title="Reflection probe: a capture of each level gives surfaces soft reflections and colored bounce light. Ray-traced floors add screen-space reflections of players and blocks on the ground"><option value="off">Off</option><option value="probe">Reflection probe + bounce light</option><option value="ssr">Ray-traced floors (screen-space)</option></select></label>
+    <label class="field">Ray tracing
+      <select id="sRT" title="Hybrid ray tracing: rays are traced through the screen every frame for reflections on every surface (strongest at glancing angles) and sharp traced sun shadows where things touch. Ultra traces twice as far and adds a second reflection bounce. Heavy on older PCs"><option value="off">Off</option><option value="on">On</option><option value="ultra">Ultra (2 bounces)</option></select></label>
+    <label class="field">Upscaler
+      <select id="sUpscale" title="Renders at a lower resolution, then an FSR 1-style upscaler (edge-aware upscale + contrast-adaptive sharpening) fills the screen. Pairs well with ray tracing. Replaces Render scale while on"><option value="off">Off</option><option value="quality">Quality (77%)</option><option value="balanced">Balanced (67%)</option><option value="performance">Performance (50%)</option></select></label>
+    <label class="field">Anti-aliasing
+      <select id="sAA"><option value="off">Off</option><option value="fxaa">FXAA (fastest)</option><option value="smaa">SMAA</option><option value="msaa">MSAA 4× (sharpest)</option></select></label>
+    <label class="field">Render scale <span class="val" id="sScaleV"></span><input type="range" id="sScale" min="0.5" max="1" step="0.05"></label>
+    <label class="check"><input type="checkbox" id="sVsync"> V-sync</label>
+    <label class="field">Frame rate limit
+      <select id="sFpsCap"><option value="0">No limit</option><option value="30">30 FPS</option><option value="60">60 FPS</option><option value="120">120 FPS</option><option value="144">144 FPS</option><option value="240">240 FPS</option></select></label>
+    <label class="check"><input type="checkbox" id="sHiModels"> High model details (e.g. squid bullet tentacles)</label>
+    <label class="check"><input type="checkbox" id="sShowFps"> Show FPS counter (top right)</label>
+    <div class="row left"><button type="button" id="recheckGfxBtn" class="small">Re-check my graphics</button></div>
+    <label class="check"><input type="checkbox" id="sShowPing"> Multiplayer: show ping and connection warnings (N opens the network window)</label>
+    <label class="check"><input type="checkbox" id="sNetPredict"> Multiplayer: instant movement when joining a game (prediction)</label>
+    <p class="hint" id="gfxHint">Turning off MSAA fully, or turning v-sync off, takes effect after restarting the game. Browsers always use v-sync.</p>
+  </div>
+  <div class="panel settingsform controlsform hidden" id="setControls">
+    <p class="hint">Click a slot, then press a key or mouse button. Esc cancels, Backspace clears the slot. Esc (pause) and 1 to 5 (pick a card) can't be changed.</p>
+    <div id="bindList" class="bindlist"></div>
+    <div class="row left"><button type="button" class="btn ghost small" id="bindReset">Reset to defaults</button></div>
+  </div>
+  <aside class="panel keysside"><h4>Controls</h4><div class="keys" id="keysHelp"></div></aside>
+  <aside class="gfxlive hidden" id="gfxLive"><div class="gfxhead">Live view <small>changes show here as you make them</small></div><div class="gfxframe"></div>
+    <div class="gfxstats"><div><b id="gfxFps">–</b><small>FPS</small></div><div><b id="gfxAvg">–</b><small>avg frame (ms)</small></div><div><b id="gfxLow">–</b><small>1% low FPS</small></div><div><b id="gfxDrops">–</b><small>frame drops (10 s)</small></div></div>
+    <canvas id="gfxGraph" width="400" height="56"></canvas><p class="hint">Bars are frame times; red ones are dropped frames (over 1.5× the average).</p></aside>
+  <div class="row"><button class="btn" id="settingsBack">Done</button></div>
+</section>
+
+<section id="pick" class="screen hidden">
+  <div id="peekL" class="peekcol left"></div><div id="peekR" class="peekcol right"></div>
+  <h2 id="pickTitle">You lost the round</h2>
+  <div id="pickBar" class="pickbar"><i></i></div>
+  <p><span id="pickSub">Pick one upgrade. Press 1 to 5, or click a card.</span> <span id="pickTimer"></span></p>
+  <p id="pickNote" class="picknote hidden"></p>
+  <div id="pickCards" class="pickrow"></div>
+  <div class="row"><button class="btn ghost" id="rerollBtn">Reroll</button></div>
+  <div id="pickBet" class="panel betbox inpause hidden"></div>
+</section>
+
+<section id="fighterPick" class="screen hidden">
+  <h2>Choose your fighter</h2>
+  <p>Click a fighter to lock it in. Right-click for its moves and cards (only you see that). <span id="fselTimer"></span></p>
+  <div id="fselGrid" class="fselgrid"></div>
+  <div id="fselWho" class="fselwho"></div>
+  <div class="row"><button class="btn ghost" id="fselLeave">Leave to lobby</button></div>
+</section>
+
+<section id="comboAsk" class="screen hidden">
+  <h2>Combo available!</h2>
+  <p>You have both pieces. Combine them now, or keep them separate. You'll only be asked again if you pick another copy of one of these cards.</p>
+  <div id="comboCards" class="pickrow combo-row"></div>
+  <div class="row"><button class="btn" id="comboYes">Combine</button><button class="btn ghost" id="comboNo">Keep separate</button></div>
+</section>
+
+<section id="breakAsk" class="screen hidden">
+  <h2>Scrap It</h2>
+  <p>Click the mod to destroy. Once it's gone, new mods of that kind can be dealt to you again.</p>
+  <div id="breakCards" class="pickrow combo-row"></div>
+  <div class="row"><button class="btn ghost" id="breakNone">Keep both</button></div>
+</section>
+
+<section id="over" class="screen hidden">
+  <div id="overPeekL" class="peekcol left"></div><div id="overPeekR" class="peekcol right"></div>
+  <h1 id="overTitle">Victory</h1>
+  <canvas id="overShow" class="overshow hidden" width="520" height="300"></canvas>
+  <div id="overScores" class="finalscores"></div>
+  <table id="overTally" class="tally"></table>
+  <p id="overCash" class="overcash hidden"></p>
+  <p id="overLoot" class="overcash hidden">🎁 +1 lootbox (open it in Shop &amp; Customize)</p>
+  <div id="overHostRow">
+    <div class="row" id="extendRow"><label class="inline">Keep this match going:
+      <select id="extendN"><option value="1">+1 round</option><option value="3" selected>+3 rounds</option><option value="5">+5 rounds</option></select></label>
+      <button class="btn" id="extendBtn">Keep playing</button></div>
+    <div class="row hidden" id="retryRow"><button class="btn" id="retryBtn">Retry this wave</button></div>
+    <div class="row"><button class="btn ghost" id="rematchBtn">New match</button><button class="btn ghost" id="toLobbyBtn">Back to lobby</button></div>
+  </div>
+  <p id="overPeerNote" class="hint hidden">Waiting for the host to start a rematch or return to the lobby.</p>
+  <div class="row"><button class="btn ghost" id="overLeave">Main menu</button></div>
+</section>
+
+<section id="pause" class="screen hidden">
+  <h2>Paused</h2>
+  <p id="pauseNote" class="hint"></p>
+  <div id="pauseJoin" class="panel joinbox hidden"></div>
+  <div id="pauseBet" class="panel betbox inpause hidden"></div>
+  <div id="pausePeek" class="panel pausepeek hidden"></div>
+  <div class="row"><button class="btn" id="resumeBtn">Resume</button><button class="btn ghost" id="pauseSettings">Settings</button><button class="btn ghost" id="leaveMatchBtn">Leave to lobby</button></div>
+</section>
+
+<div id="peekWin" class="peekwin hidden"></div>
+<div id="cardDetail" class="cdetail hidden" aria-modal="true" role="dialog">
+  <div class="cdbox">
+    <div class="cdcard" id="cdCard"></div>
+    <div class="cdinfo panel" id="cdInfo"></div>
+  </div>
+  <p class="cdhint">Hover a stat to learn what it does. Right-click or press Esc to close.</p>
+</div>
+<div id="statTip" class="stattip hidden"></div>
+
+<script>
+// PC only: phones and touch-only tablets get a notice instead of the game.
+(function () {
+  var phoneUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var touchOnly = matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches;
+  if (!window.steamBridge && (phoneUA || touchOnly)) {
+    window.BLOCKSHOT_NO_PHONE = true;
+    document.addEventListener('DOMContentLoaded', function () {
+      var d = document.createElement('div'); d.id = 'noPhone';
+      d.innerHTML = '<b>Blockshot 3D is a PC game</b><span>Phones and tablets aren\'t supported. Play on a computer with a keyboard and mouse.</span>';
+      document.body.appendChild(d);
+    });
+  }
+})();
+</script>
+<script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js" } }</script>
+<script type="module" src="/js/main.js"></script>
+<div id="lootOverlay" class="lootoverlay hidden"></div>
+<div id="fpsMeter" class="hidden"></div>
+<div id="netHud" class="hidden"><div id="netPing"></div><div id="netWarn" class="hidden"></div></div>
+<div id="netWin" class="hidden"></div>
+</body>
+</html>

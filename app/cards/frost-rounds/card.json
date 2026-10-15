@@ -1,0 +1,20 @@
+{
+  "id": "frost-rounds",
+  "name": "Frost Rounds",
+  "rarity": "common",
+  "icon": "❄️",
+  "description": "Hits slow targets for 1.5 seconds.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "chill",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.9
+    }
+  ]
+}

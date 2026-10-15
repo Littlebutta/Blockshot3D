@@ -1,0 +1,20 @@
+{
+  "id": "drill-rounds",
+  "name": "Drill Rounds",
+  "rarity": "rare",
+  "icon": "🌀",
+  "description": "Bullets tunnel through walls and objects, pausing as they bore out the far side. Shields still bounce them.",
+  "modifiers": [
+    {
+      "stat": "drill",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "bulletSpeed",
+      "op": "mul",
+      "value": 0.9
+    }
+  ],
+  "image": "art.png"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "field-rations",
+  "name": "Field Rations",
+  "rarity": "common",
+  "icon": "🥫",
+  "description": "Steady healing, lighter hits.",
+  "modifiers": [
+    {
+      "stat": "regen",
+      "op": "add",
+      "value": 5
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.85
+    }
+  ],
+  "image": "art.png",
+  "holyDescription": "Steady healing."
+}

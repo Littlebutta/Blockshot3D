@@ -1,0 +1,40 @@
+{
+  "id": "shield-pentagram",
+  "name": "Cursed Sacrifice",
+  "rarity": "shieldmod",
+  "icon": "⛧",
+  "description": "Hold block to bleed into a ritual circle that summons horrors.",
+  "image": "art.png",
+  "displayLines": [
+    {
+      "text": "Swarm",
+      "label": "Level 1: a mass of critters",
+      "good": true
+    },
+    {
+      "text": "Brute",
+      "label": "Level 2: a huge melee beast",
+      "good": true
+    },
+    {
+      "text": "Meteors",
+      "label": "Level 3: a meteor storm",
+      "good": true
+    },
+    {
+      "text": "60%",
+      "label": "Max health spent on a full charge",
+      "good": false
+    }
+  ],
+  "modifiers": [
+    {
+      "stat": "blockSize",
+      "op": "mul",
+      "value": 1.1
+    }
+  ],
+  "shieldMod": "ritual",
+  "noCursed": true,
+  "details": "Hold block to draw a pentagram under you (you can't move or shoot while charging). Charging is a blood sacrifice: a full charge to level 3 costs 60% of your max health in total, paid as you go, and it's never given back. It can't take you below 1 health.\n\nLet go and the charge drains back quickly, but not at once: step back in and hold block to pick it up where it is. A finished pentagram stays on the floor until the ritual is done.\n\nLevel 1: a swarm of critters pours out and hunts enemies.\nLevel 2: a huge brute with a big health pool climbs out and runs down enemies.\nLevel 3: meteors rain across the whole map (many near enemies). Each one is marked on the ground a moment before it lands, hits everyone in the blast, you included, and leaves a wide patch of fire.\n\nEveryone nearby can hear a low hum while you charge. Charging speed comes from Block cooldown and Block duration; Block size makes the circle, swarm and meteors bigger. No block bubble."
+}

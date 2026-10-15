@@ -1,0 +1,17 @@
+{
+  "id": "shield-clone",
+  "name": "Clone",
+  "rarity": "shieldmod",
+  "icon": "👥",
+  "description": "Blocking splits off a clone of you, sharing your strength.",
+  "modifiers": [
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 3.2
+    }
+  ],
+  "shieldMod": "clone",
+  "noCursed": true,
+  "details": "Your block no longer blocks (no bubble, no block effects). Instead it splits you in two: your health, damage and block stats (not the cooldown) are halved, and a clone appears with the same halved stats and all your gun effects. Each new clone halves you again (up to 2 clones at once), until the round ends.\n\nWhen a clone dies, its share isn't lost: the nearest of your remaining bodies (you or another clone) gets back 80% of what that clone took. Example: you split to 50% / 50%; your clone dies; you go back up to 90%.\n\nIf you die while a clone is up, you take over the clone instead. Phoenix Protocol only saves your last body."
+}

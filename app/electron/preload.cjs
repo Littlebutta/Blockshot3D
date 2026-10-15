@@ -1,0 +1,16 @@
+// Safe bridge between the game page and the desktop app (Steam + test windows).
+const { contextBridge, ipcRenderer } = require('electron');
+contextBridge.exposeInMainWorld('steamBridge', {
+  isDesktop: true,
+  info: () => ipcRenderer.invoke('steam:info'),
+  send: m => ipcRenderer.send('steam:send', m),
+  onEvent: cb => { const f = (_e, m) => { if (m && m.t === '_batch') for (const x of m.l) cb(x); else cb(m); }; ipcRenderer.on('steam:event', f); return () => ipcRenderer.removeListener('steam:event', f); },   // v1.2.9: _batch = everything one poll read, in one message
+  newTestWindow: () => ipcRenderer.send('app:newWindow'),
+  quit: () => ipcRenderer.send('app:quit'),
+  setGfx: g => ipcRenderer.send('app:gfx', g),
+  updateState: () => ipcRenderer.invoke('app:updateState'),   // v1.2.10: automatic updates from GitHub
+  updateCheck: () => ipcRenderer.send('app:updateCheck'),
+  updateRestart: () => ipcRenderer.send('app:updateRestart'),
+  onUpdate: cb => { const f = (_e, m) => cb(m); ipcRenderer.on('app:update', f); return () => ipcRenderer.removeListener('app:update', f); },
+  saveLog: (name, text) => ipcRenderer.invoke('app:saveLog', name, text),   // v1.2.10: network log (F3) -> Documents/Blockshot3D/netlogs   // launch-time graphics options (v-sync)
+});

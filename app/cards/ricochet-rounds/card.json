@@ -1,0 +1,20 @@
+{
+  "id": "ricochet-rounds",
+  "name": "Ricochet Rounds",
+  "rarity": "uncommon",
+  "icon": "↩️",
+  "description": "Bullets bounce off walls and floors.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "bounces",
+      "op": "add",
+      "value": 2
+    },
+    {
+      "stat": "bulletSpeed",
+      "op": "mul",
+      "value": 1.1
+    }
+  ]
+}

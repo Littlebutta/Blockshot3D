@@ -1,0 +1,27 @@
+{
+  "id": "bullet-time",
+  "name": "Bullet Time",
+  "rarity": "legendary",
+  "icon": "⏳",
+  "description": "A field around you slows every bullet that could hurt you to a quarter of its speed, so they're easier to dodge. A soft pulse on the floor shows its edge to everyone. More copies make the field bigger, not slower.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "slowField",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "displayLines": [
+    {
+      "text": "-75%",
+      "label": "Enemy bullet speed near you",
+      "good": true
+    },
+    {
+      "text": "4 m",
+      "label": "Field radius (+2.5 m per copy)",
+      "good": true
+    }
+  ]
+}

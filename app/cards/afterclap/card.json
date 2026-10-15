@@ -1,0 +1,21 @@
+{
+  "id": "afterclap",
+  "name": "Afterclap",
+  "rarity": "common",
+  "icon": "👏",
+  "description": "Shots are often followed by a free Encore shot (no ammo used). Reloading takes a little longer.",
+  "modifiers": [
+    {
+      "stat": "encore",
+      "op": "add",
+      "value": 0.3
+    },
+    {
+      "stat": "reloadTime",
+      "op": "mul",
+      "value": 1.1
+    }
+  ],
+  "holyDescription": "Shots are often followed by a free Encore shot (no ammo used).",
+  "image": "art.png"
+}

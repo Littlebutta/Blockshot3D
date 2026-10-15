@@ -1,0 +1,19 @@
+{
+  "id": "mod-breaker",
+  "name": "Scrap It",
+  "rarity": "uncommon",
+  "icon": "🔨",
+  "description": "Destroy your weapon mod or your shield mod. You choose which one, then new mods of that kind can be dealt to you again.",
+  "modifiers": [],
+  "special": "modBreaker",
+  "noCursed": true,
+  "noHoly": true,
+  "displayLines": [
+    {
+      "text": "✕",
+      "label": "Destroy a weapon or shield mod (you choose)",
+      "good": true
+    }
+  ],
+  "image": "art.png"
+}

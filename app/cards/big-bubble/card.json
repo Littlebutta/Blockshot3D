@@ -1,0 +1,20 @@
+{
+  "id": "big-bubble",
+  "name": "Big Bubble",
+  "rarity": "uncommon",
+  "icon": "🫧",
+  "description": "A bigger block bubble that also covers teammates standing next to you.",
+  "modifiers": [
+    {
+      "stat": "blockSize",
+      "op": "mul",
+      "value": 1.6
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.1
+    }
+  ],
+  "image": "art.png"
+}

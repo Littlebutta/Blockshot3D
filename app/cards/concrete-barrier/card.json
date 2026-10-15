@@ -1,0 +1,19 @@
+{
+  "id": "concrete-barrier",
+  "name": "Concrete Barrier",
+  "rarity": "rare",
+  "icon": "🏗️",
+  "description": "Blocking pours a tall concrete slab a fixed distance ahead of you, long side facing you. Four times as tough as sandbags and tall enough to hide behind. No limit, and walls stack. Each copy multiplies the slab's health and makes it bigger.",
+  "modifiers": [
+    {
+      "stat": "blockConcrete",
+      "op": "add",
+      "value": 600
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.25
+    }
+  ]
+}

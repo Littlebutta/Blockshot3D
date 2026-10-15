@@ -1,0 +1,15 @@
+{
+  "id": "shrapnel-rounds",
+  "name": "Shrapnel Rounds",
+  "rarity": "uncommon",
+  "icon": "✴️",
+  "description": "Bullets burst into three fragments whenever they hit something: a player, a shield, a wall or the floor.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "shrapnel",
+      "op": "add",
+      "value": 1
+    }
+  ]
+}

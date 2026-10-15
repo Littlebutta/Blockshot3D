@@ -1,0 +1,26 @@
+{
+  "id": "fortress-stance",
+  "name": "Fortress Stance",
+  "rarity": "uncommon",
+  "icon": "🏰",
+  "description": "Much longer blocks, slower recharge, slightly slower feet.",
+  "modifiers": [
+    {
+      "stat": "blockDuration",
+      "op": "mul",
+      "value": 2.2
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.5
+    },
+    {
+      "stat": "moveSpeed",
+      "op": "mul",
+      "value": 0.92
+    }
+  ],
+  "image": "art.png",
+  "holyDescription": "Much longer blocks."
+}

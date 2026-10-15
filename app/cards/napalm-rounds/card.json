@@ -1,0 +1,15 @@
+{
+  "id": "napalm-rounds",
+  "name": "Napalm Rounds",
+  "rarity": "legendary",
+  "icon": "🧨",
+  "description": "Every bullet impact splatters sticky fire onto the floor or wall it hits. Bigger hits make bigger splats. The fire burns for 5 seconds and sets any enemy who touches it alight.",
+  "image": "art.png",
+  "modifiers": [
+    { "stat": "napalm", "op": "add", "value": 1 }
+  ],
+  "displayLines": [
+    { "text": "5 s", "label": "Fire splats on impact", "good": true },
+    { "text": "Size", "label": "grows with damage", "good": true }
+  ]
+}

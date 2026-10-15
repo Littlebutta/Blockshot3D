@@ -1,0 +1,24 @@
+{
+  "id": "speed-loader",
+  "name": "Speed Loader",
+  "rarity": "combo",
+  "icon": "🔄",
+  "description": "Bigger mags, near-instant reloads.",
+  "combo": [
+    "quick-hands",
+    "extended-mag"
+  ],
+  "modifiers": [
+    {
+      "stat": "ammo",
+      "op": "add",
+      "value": 5
+    },
+    {
+      "stat": "reloadTime",
+      "op": "mul",
+      "value": 0.45
+    }
+  ],
+  "image": "art.png"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "leech-rounds",
+  "name": "Leech Rounds",
+  "rarity": "uncommon",
+  "icon": "🩸",
+  "description": "Damage you deal to enemies heals you.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "lifesteal",
+      "op": "add",
+      "value": 0.35
+    }
+  ]
+}

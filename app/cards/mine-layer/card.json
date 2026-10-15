@@ -1,0 +1,20 @@
+{
+  "id": "mine-layer",
+  "name": "Mine Layer",
+  "rarity": "rare",
+  "icon": "\ud83d\udca3",
+  "description": "Blocking lays a row of mines ahead of you (two, plus one per extra bullet you fire), past any turret or wall the block also places. They deal your gun's damage, keep its effects, and can hurt you too.",
+  "modifiers": [
+    {
+      "stat": "blockMines",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.15
+    }
+  ],
+  "image": "art.png"
+}

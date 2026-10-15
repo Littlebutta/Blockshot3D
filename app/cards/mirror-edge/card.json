@@ -1,0 +1,15 @@
+{
+  "id": "mirror-edge",
+  "name": "Mirror Edge",
+  "rarity": "uncommon",
+  "icon": "🪞",
+  "description": "Bullets you reflect come back harder.",
+  "modifiers": [
+    {
+      "stat": "reflectBoost",
+      "op": "add",
+      "value": 0.6
+    }
+  ],
+  "image": "art.png"
+}

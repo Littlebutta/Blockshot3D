@@ -1,0 +1,20 @@
+{
+  "id": "counter-pulse",
+  "name": "Counter Pulse",
+  "rarity": "uncommon",
+  "icon": "🌀",
+  "description": "Blocking fires a free fan of bullets where you aim.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "counterShots",
+      "op": "add",
+      "value": 5
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.1
+    }
+  ]
+}

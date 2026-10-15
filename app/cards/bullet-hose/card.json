@@ -1,0 +1,35 @@
+{
+  "id": "bullet-hose",
+  "name": "Bullet Hose",
+  "rarity": "combo",
+  "icon": "🚿",
+  "description": "Quantity has a quality of its own. Keeps Twin Barrel's multiplied bullets in every shot, with a much faster trigger.",
+  "combo": [
+    "twin-barrel",
+    "rapid-cycler"
+  ],
+  "modifiers": [
+    {
+      "stat": "projMul",
+      "op": "mul",
+      "value": 2
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 1.8
+    },
+    {
+      "stat": "ammo",
+      "op": "add",
+      "value": 5
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.6
+    }
+  ],
+  "image": "art.png",
+  "details": "Formed from Twin Barrel and Rapid Cycler. It keeps Twin Barrel's doubling (1 bullet becomes 2, 2 become 4, after all your other cards) and adds a much faster trigger and a bigger magazine. Each bullet hits softer."
+}

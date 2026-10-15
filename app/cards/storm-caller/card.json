@@ -1,0 +1,30 @@
+{
+  "id": "storm-caller",
+  "name": "Storm Caller",
+  "rarity": "combo",
+  "icon": "⛈️",
+  "description": "Lightning that chills everything it jumps to.",
+  "combo": [
+    "arc-rounds",
+    "frost-rounds"
+  ],
+  "modifiers": [
+    {
+      "stat": "chain",
+      "op": "add",
+      "value": 1.5
+    },
+    {
+      "stat": "chill",
+      "op": "add",
+      "value": 1.5
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.95
+    }
+  ],
+  "image": "art.png",
+  "details": "When you hit someone, a bolt jumps to the nearest other enemy for part of the damage. The bolt carries your chill, so both targets slow down."
+}

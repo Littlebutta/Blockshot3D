@@ -1,0 +1,20 @@
+{
+  "id": "overclocked-legs",
+  "name": "Overclocked Legs",
+  "rarity": "common",
+  "icon": "🦿",
+  "description": "Run faster, jump higher.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "moveSpeed",
+      "op": "mul",
+      "value": 1.25
+    },
+    {
+      "stat": "jump",
+      "op": "mul",
+      "value": 1.15
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "id": "curse-eater",
+  "name": "Curse Eater",
+  "rarity": "combo",
+  "icon": "🦷",
+  "description": "Hex them, then feed on the bigger hits.",
+  "combo": [
+    "hex-rounds",
+    "leech-rounds"
+  ],
+  "modifiers": [
+    {
+      "stat": "hex",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "lifesteal",
+      "op": "add",
+      "value": 0.45
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 0.92
+    }
+  ],
+  "image": "art.png",
+  "details": "A hexed target takes 25% more damage from everything for a few seconds. Lifesteal heals you from the damage you actually deal, so hexed targets heal you more."
+}

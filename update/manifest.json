@@ -1,0 +1,2015 @@
+{
+ "version": "1.2.10",
+ "built": "2026-10-15T02:07:48.009Z",
+ "files": {
+  "README.md": [
+   "093714591df80a725b8f8ed50b1914d19f7ae06f20854c059bf8906ceedd6226",
+   53070
+  ],
+  "art/README.md": [
+   "62dddadae724f0c6a7ffb1aceb5ff01586a71e6467c84e2721bfe97eae823c66",
+   951
+  ],
+  "art/amon/a-amp.png": [
+   "6a19000434871335ed4c37b36db490bed9fdec8b37a9617b3b53934e69910345",
+   42206
+  ],
+  "art/amon/a-banner.png": [
+   "c0efb7c98294327bb2f580a9cac9a6271bc62965d948633c79d51e1c405d5c9a",
+   13009
+  ],
+  "art/amon/a-beacon.png": [
+   "d15234428a386a9f09699cee64b6da750884e62bf9a65c3bea23fea385c37cba",
+   14728
+  ],
+  "art/amon/a-bishop.png": [
+   "fcba7a65ba8c3cfefeb796fabe105d56baf1e86b08b2cbd91b9c3b796bb22f8b",
+   15531
+  ],
+  "art/amon/a-chest.png": [
+   "33193f5c8aeb7c586a717a375c31da40e690d99c4a1e1882959459b09ec480d0",
+   16861
+  ],
+  "art/amon/a-drill.png": [
+   "ef9157a94c1f4cfe6cd1da19452cb5860003582a641434d39996ea9deba0c553",
+   21381
+  ],
+  "art/amon/a-echo.png": [
+   "4d510098e4a0edb8473c6d4418197c4609cefd8c425604f1cdb38d9e06d1ce35",
+   19304
+  ],
+  "art/amon/a-fortress.png": [
+   "6a2f452ccc5e35405dac0a89634a2084fba9d5598bd9b477b2280e88c31ea683",
+   18571
+  ],
+  "art/amon/a-gambit.png": [
+   "7cff91876c18e3a6ff01ebd2eb94fd155f9ecf739cb3dc2126f63c724deae501",
+   15504
+  ],
+  "art/amon/a-glass.png": [
+   "332da94f8b393e368a4ef4037284b2743935c5c7ad46b990b60d226f790901b8",
+   25536
+  ],
+  "art/amon/a-interest.png": [
+   "f757601e0f0b396566b7f4b01c3432f42f26be675c3675cf384165f07e3cd75b",
+   25423
+  ],
+  "art/amon/a-mirror.png": [
+   "06b8b2d1316103be080fe6b078fe367a1ab61a6e9398897a3883713acf58d7a5",
+   19410
+  ],
+  "art/amon/a-overcharge.png": [
+   "fdefa3a022d313637f271e8b2a8d4095e9ea0ba740d33960f93ee0828897cf6d",
+   14189
+  ],
+  "art/amon/a-overwatch.png": [
+   "8a0c4a66e63a28ba40a310429f45e0c11e837ce0bf87344aea9a94af3136ed5f",
+   24533
+  ],
+  "art/amon/a-pens.png": [
+   "7ac3e87b6161fa951692b67732d0fc6419fbc344a4b2d02a93da7e277c367670",
+   21861
+  ],
+  "art/amon/a-promote.png": [
+   "a36ba5ac33d2c5c5cc7c3ffe4ead1d8719cbf3e6b8324c097cbd447885086489",
+   20896
+  ],
+  "art/amon/a-rearguard.png": [
+   "eb41733be36506b3ba3c7822cf4ff6842f450e365802d783bbc05dd84d989c6e",
+   18265
+  ],
+  "art/amon/a-recruit.png": [
+   "ae061133d1b97be9c4264ec368f057cbbc14376038af192797c4873c2529eb2e",
+   16939
+  ],
+  "art/amon/a-rookfort.png": [
+   "0cc5374abb97fd00d02ea8ce0ca50bb3ae5b21fdfd39c89f1366f2defeb0971f",
+   20587
+  ],
+  "art/amon/a-sanctum.png": [
+   "4046c81a36771aa17e8be4a4dae73b79a3958407a8e0b4e3076c2fd815bc8af6",
+   14282
+  ],
+  "art/amon/a-supply.png": [
+   "cfd9ed643dbd77b059f18f0158b3df5b1af9fe5716fcec84f4e5583926753d4b",
+   16171
+  ],
+  "art/amon/a-swarmdoc.png": [
+   "e9a71b3676dc22171f7350a370f420c3382949bc880907ce0279044484c5aa81",
+   21511
+  ],
+  "art/amon/a-uplink.png": [
+   "f8e63aa545e8da517ea55e177d5e873834ebaaae2a8b11659700f114b026d5a1",
+   22858
+  ],
+  "art/amon/a-vanguard.png": [
+   "82124f8506a7670d447c5607de8480e065b0b3a2fecc5727afbe3a2d7be19311",
+   13959
+  ],
+  "art/amon/a-wall.png": [
+   "dc55a1a88ab0e3a45ce0448dec671c4864451ef955df15d12060a3af5734acc8",
+   9831
+  ],
+  "art/amon/faction-artillery.png": [
+   "35494e69b4b2f543368398a1aa34e524330ffa971e910c084800a6c59c9f06f1",
+   37721
+  ],
+  "art/amon/faction-beast.png": [
+   "2492a9ca02e86ccf7c5d1b4cb0328251a398653c4c9b4f776dc8e7413f3bb674",
+   36273
+  ],
+  "art/amon/faction-bone.png": [
+   "bc99c14c5ba9c385c3dccc16c78395616c671bb1f6dade19d42ddb7f8b31d0f4",
+   38281
+  ],
+  "art/amon/faction-chaos.png": [
+   "cf88c82d064cd62edd178cb5da7c432c56a860e987fe8ad7e0c56f5f48032a0d",
+   40675
+  ],
+  "art/amon/faction-counter.png": [
+   "606291a2f721b6e346272d1414b180eb4133532acc9ff3c1d122b48e1ae1acb7",
+   34222
+  ],
+  "art/amon/faction-crusade.png": [
+   "05d9b443ffd89d202abc7945d2f432c4393c82e725361c85cc04279e2a071f36",
+   31280
+  ],
+  "art/amon/faction-frost.png": [
+   "b39b3f0138f4c41f0b89d5c6d12e45b2a0696ea4b4f11b670823903f28079d62",
+   51034
+  ],
+  "art/amon/faction-iron.png": [
+   "a64b02667264d12cf205f7a263270b5097785c08b7588e3a396ca81b29957cad",
+   37975
+  ],
+  "art/amon/faction-machine.png": [
+   "9b33a224bcca15685e03f56f7933a7d6ca796a28a65e2c39fb8ece1edcc5f8dc",
+   34315
+  ],
+  "art/amon/faction-plague.png": [
+   "8f9557a84524144ca68264b319b1b0a346bdd39f373447c7b769452d717a8a29",
+   38700
+  ],
+  "art/amon/faction-pyro.png": [
+   "c4e0cfb44b6e7446caa1a829678cacd74adc4f68db85b6fc7fabee75c28cbae4",
+   29492
+  ],
+  "art/amon/faction-raider.png": [
+   "00fa2f109241a7b1a150dec772b35289f11051d923eb3a066fc7d02255ac1ac3",
+   35011
+  ],
+  "art/amon/faction-shadow.png": [
+   "44c6a09b703f98ad7e3f13b1a4ea8d6e0667689f9943882f1f6a5c25532e4056",
+   30278
+  ],
+  "art/amon/faction-sky.png": [
+   "a3b112164e6e91e9be740602c0f765023d260bb6de9b75afa1ba82ddcab28a9a",
+   37344
+  ],
+  "art/amon/faction-storm.png": [
+   "049b0186a743b266a9a1a5ab656ac9c18fc6bf0a2184366412f46dcf192c51fa",
+   36128
+  ],
+  "art/amon/faction-swarm.png": [
+   "543b1f52076071d25d75f5198a00ddeb7ff4a05246910c46196e80799b82501f",
+   38882
+  ],
+  "art/amon/faction-tank.png": [
+   "64415609bc0a040f89e7ff3baca791aa500408fcd34051e8465849ade4928672",
+   33275
+  ],
+  "art/amon/faction-void.png": [
+   "84e71c3dc5f03ec932e7ecddd42f815c85fcf19f515a6fea5afbacc717c01561",
+   52895
+  ],
+  "cards/_TEMPLATE/README.md": [
+   "89b7dba1b0c613ef9081bfc3dd96a38f1aff03661edd8ecf617e5fd78a351ed5",
+   226
+  ],
+  "cards/_TEMPLATE/card.json": [
+   "a8e674485093f544f4db76252553183b1effd7b50ad197ba9adf1e5a221cebe0",
+   328
+  ],
+  "cards/afterclap/art.png": [
+   "85364b33116961482ea48803deb5be5b98157603476af1f892257528e30944cf",
+   11562
+  ],
+  "cards/afterclap/card.json": [
+   "016e5f0793306a0b55a3236830e87b557457ac6e36eff7a4506a54d2ead59c6c",
+   487
+  ],
+  "cards/arc-rounds/art.png": [
+   "9addf2dc690f109a22c517204199c4aaa3f170911898c8ec87f51614405acab2",
+   10374
+  ],
+  "cards/arc-rounds/card.json": [
+   "d45788e918ced50c6a12fef04b1f6d8fcd3f899f289bce8a81f07fcbd91a860b",
+   349
+  ],
+  "cards/bank-shot/art.png": [
+   "fc45f127f4ac4d6e3f95563586a18c44da8f80e205e3641685a28285566a6b3b",
+   23374
+  ],
+  "cards/bank-shot/card.json": [
+   "6e057c2ab2b4deb5f272aa20b7a98b311748b1a9907bea5bc751c6f9627169b6",
+   422
+  ],
+  "cards/bastion-wall/art.png": [
+   "0543dcabe416a6d84b428491474e179ea50f4b7c95a1960ed1922e67588d4793",
+   6838
+  ],
+  "cards/bastion-wall/card.json": [
+   "e2ee768fe0f5800aa2a6bcf2bd10c3128782cf6ea00d0b9237a860ebe1536790",
+   786
+  ],
+  "cards/battering-ram/art.png": [
+   "4f97fe18543c805d8fd244773f2e240ca1d04b0e2b2462979317fbea3b30fd5c",
+   10084
+  ],
+  "cards/battering-ram/card.json": [
+   "1527cd348e6fa742aead0bf5a431022b28e50a3f5a2ea0f635c83b72bf04b8ad",
+   553
+  ],
+  "cards/bees/art.png": [
+   "4f1620f32922c5859c6f60afac30c28c81d979e64962ea38ca23e9dd48694716",
+   38546
+  ],
+  "cards/bees/card.json": [
+   "39ea2d587b4cb7e00d586add2d21778ec0095b55f7b26e1f9497e8cbc1d0bd63",
+   966
+  ],
+  "cards/big-bubble/art.png": [
+   "ed3dd4b45fedc7e61cfc53107247c1213296440c352bca7e85a4fc947e3afd0b",
+   35871
+  ],
+  "cards/big-bubble/card.json": [
+   "074e4385b9a0253d20bb73b8121b9d2769a8215a032bfe74860ad7519404ee95",
+   384
+  ],
+  "cards/big-iron/art.png": [
+   "7a9833fb53931f9420bef610ca74bd389671c00449ed87eb9ac836f907d97115",
+   26673
+  ],
+  "cards/big-iron/card.json": [
+   "630b0f6c74bd653ae03ce39c96509429a70ebbaf65cb74786e58c1a62fb94404",
+   664
+  ],
+  "cards/blink-runner/art.png": [
+   "ea7f313673258a667c5594eab62d0495253f309986f7ba7e50df5ef943bff14c",
+   10699
+  ],
+  "cards/blink-runner/card.json": [
+   "d70e82b0b4459736875052a1376737f2f5f982c39530bb7af1fcb943464e26d3",
+   567
+  ],
+  "cards/bloodforge/art.png": [
+   "1a1b81c8ecca8a32368c171df5ffec6585a7d0a563969320888d0755679e6272",
+   14638
+  ],
+  "cards/bloodforge/card.json": [
+   "aed82801a63f8eac392917fe49df43047f4dd89e27c0644a1b0a1c25a5959e5e",
+   371
+  ],
+  "cards/bulk-up/art.png": [
+   "6266259a032db02229eaafb1f000bf34612e2bbba4b9ede3b73bf8cd9fab8f3e",
+   8963
+  ],
+  "cards/bulk-up/card.json": [
+   "3a4358c80a68586c3339eb0275b96b1283790c37b7b6a228ea3b8426befb77a6",
+   368
+  ],
+  "cards/bullet-hose/art.png": [
+   "3513030a3141e5a08fb82707e83f5ac7b7b382e1143e879773394f259642a13b",
+   20595
+  ],
+  "cards/bullet-hose/card.json": [
+   "a79828018ce8468932ba9b8e4a8f302e522b969d63172cc433151688777eac79",
+   853
+  ],
+  "cards/bullet-time/art.png": [
+   "cd8b903f7fbe69e41d62e4bf4dcc695eb6bc1f0bbcd303209d52ac14b32d0864",
+   42098
+  ],
+  "cards/bullet-time/card.json": [
+   "0af93fb4e5c0a5dc7627c4ebec968a7d61824ef6f87d43d7bf70cae7ad0b430d",
+   671
+  ],
+  "cards/bulwark/art.png": [
+   "483ac6378508e30a1725123e7873fed89eaae4300b7fb2c6f9d11c79922a6428",
+   16545
+  ],
+  "cards/bulwark/card.json": [
+   "2a86b41def57a1078e5c04a86a09130a0274d31006e634435af231f0d71645c7",
+   252
+  ],
+  "cards/call-and-response/art.png": [
+   "35197509915e7856738f46c45535a73154f66efc20105e65776bdd3cd2c787f7",
+   22395
+  ],
+  "cards/call-and-response/card.json": [
+   "9df301c3e6f4d500644dc4efe5dedc5acceca8fff9c0c4f6586ab0363e687f87",
+   608
+  ],
+  "cards/concrete-barrier/art.png": [
+   "9e6b22bedbe44ade5410bc1ee09571b856a1069803040a8199e8bd8b6deb293a",
+   7626
+  ],
+  "cards/concrete-barrier/card.json": [
+   "3db451fe32bb4656e46b4a8ad77c70c55868e7b62b07b907f05e57c27632aeea",
+   547
+  ],
+  "cards/counter-pulse/art.png": [
+   "b1b1932401c0afba78ab5e305cdc94bf2e88f7c57d76c2753ed8da01ff97e420",
+   32565
+  ],
+  "cards/counter-pulse/card.json": [
+   "067d9abc10c9523d16db5a6787e1607e5ee60c9c79d283aaf44c4990705a7576",
+   372
+  ],
+  "cards/curse-eater/art.png": [
+   "22ed9b349e722832423c64464fcd6d6eed8384d9294c6e0253ac569c6690154e",
+   25492
+  ],
+  "cards/curse-eater/card.json": [
+   "a678ffd4a0d293fa69e1ad4d7fead41bf5f79eb1ca5cfc8c89b4084fcde2fd6c",
+   649
+  ],
+  "cards/demolition/art.png": [
+   "aebccaf96cfcf4b3fd20192d71d238a5ea2e802cb106e901e29377fc94637ed0",
+   51231
+  ],
+  "cards/demolition/card.json": [
+   "ef92de254d63c86750b05d3592aee7d8cb556f0d50e3bb93f567d64b07809f7f",
+   613
+  ],
+  "cards/drain-life/art.png": [
+   "316501987e312d30920f6a6c7603fff7c113401a646f102a7eb38bbbc26fb818",
+   17580
+  ],
+  "cards/drain-life/card.json": [
+   "9b882e78a1776105071f49914b14da130d39ecd4b996a36a69f275cf3226156f",
+   644
+  ],
+  "cards/drill-rounds/art.png": [
+   "7c3e122b9cc9609e76ccd8532e3d4fa61a618c4fe476ebbf2bbdbc575919579f",
+   10811
+  ],
+  "cards/drill-rounds/card.json": [
+   "4b0bab82eb93f3d6bdb8463a97f44e6f2fa9894f044d64ce8297f26e5dfc7648",
+   413
+  ],
+  "cards/echo-fire/art.png": [
+   "594161412248a40af4b1504af6d29d0bb0101d652ca9dedd48e7948d32248ede",
+   13849
+  ],
+  "cards/echo-fire/card.json": [
+   "b420aca03adafcb8de74fa31827d1fc0f631c61cdd8a94e8d67e2ad17eeaa37d",
+   594
+  ],
+  "cards/echo-shield/art.png": [
+   "9194b5d8231256c349f399cdaa0757b2afc64837f633ee0e5ddb8941f469cb9a",
+   23460
+  ],
+  "cards/echo-shield/card.json": [
+   "c9697599ce657a22fdb800096ff940faa97239675826f8942af7427153984ddc",
+   484
+  ],
+  "cards/encore-engine/art.png": [
+   "27505bc2ec0beb6286c2b5a39c2acff869bba31da5a431936f5a4a03b6b8e75c",
+   26571
+  ],
+  "cards/encore-engine/card.json": [
+   "027f2a72ae32fb79c187171e4c6a9f36ec0b703c488c41e47440ea283c4af08d",
+   805
+  ],
+  "cards/extended-mag/art.png": [
+   "77886e92b4b0caf45ed98e5d16f45fb707371d8c1c06115ed74e81c5b39b0d76",
+   9691
+  ],
+  "cards/extended-mag/card.json": [
+   "e45a7069563cbc8c889cd0b27dafc9d56f1533cee9819397b53108cf62906e94",
+   335
+  ],
+  "cards/field-medic/art.png": [
+   "9129eb957e2e7e7a35b0f86dc027cde2c07f644500c09b08ce734e48a87f7f6f",
+   7430
+  ],
+  "cards/field-medic/card.json": [
+   "747c2c98b0d90a054da62aec41a39c11bf982926b4dfe9219222bf3789745b97",
+   322
+  ],
+  "cards/field-rations/art.png": [
+   "e43769ba357c656539f53ebd86d540e7e52d003d6a0a889d0841c41c3cef8172",
+   24672
+  ],
+  "cards/field-rations/card.json": [
+   "640312188bc3300a24c8a0fa48b64111ff68982695cadf4bcf38fde3028ad135",
+   376
+  ],
+  "cards/fortify/art.png": [
+   "1b174aaa40e86dd29c557a921161228d45c2c38448756f6dbfba1c176871ebce",
+   11871
+  ],
+  "cards/fortify/card.json": [
+   "ff38dd0876ff367392e7e81e962ec109fa08bcbf8746f7c97f3ec0c97c67234d",
+   394
+  ],
+  "cards/fortress-stance/art.png": [
+   "25e5bc7a00381a2a1893004b7d438074a4e55a5924a0cccce3a622feb0df4196",
+   5238
+  ],
+  "cards/fortress-stance/card.json": [
+   "bded8dc8b8b991cd11fb95280f87c65e758295bea3b34df929e4fcf4f78045ea",
+   510
+  ],
+  "cards/frost-rounds/art.png": [
+   "830ffbd4eca82566ceec70ac440681f423bf1a68b9dfa7d911847cbc129d92bd",
+   20369
+  ],
+  "cards/frost-rounds/card.json": [
+   "291d78211133dcd31eab066d4d12a0188dcf2a6e315e2f64fc2ac809e71807d2",
+   339
+  ],
+  "cards/glass-core/art.png": [
+   "9644a0f704bd2030cf20b918c5aac54fbddf541a1ea37fb765260b29add07d84",
+   21854
+  ],
+  "cards/glass-core/card.json": [
+   "c8eb685a25fa56bb5f845c198a9c33e071c0129d784d3cc4f1b6ffc79ace346d",
+   356
+  ],
+  "cards/guided-meteor/art.png": [
+   "56e1a6967c0f5bdfa9d6de56de51c771fda33a0cd917bab340ea1b8ca9d572ca",
+   17694
+  ],
+  "cards/guided-meteor/card.json": [
+   "b779ba6e8a802bae5ef52d8c02ae37d68f936d82b18d77ed926e8e38a407efd2",
+   545
+  ],
+  "cards/hair-trigger/art.png": [
+   "d93ef8b31254386d47e862a5c5f3d3493be945a43dbd222199231470a4b2d393",
+   26806
+  ],
+  "cards/hair-trigger/card.json": [
+   "b729348902fc192ae238c74d9e9e13c3a6ae9128b9d67916c029825b5e7ae26a",
+   415
+  ],
+  "cards/heavy-slugs/art.png": [
+   "fb0d8585039b644b588322c45e68be4ad845af3fe2ee25221b4cd2f53805b43a",
+   16549
+  ],
+  "cards/heavy-slugs/card.json": [
+   "37d593e0aa883c2329bbd911345f4fed90c3803027663df977bd29fb2302f4b2",
+   458
+  ],
+  "cards/hex-rounds/art.png": [
+   "448e07cbcf9ba8021e134b5ffd160206dd3c040425ed12bf15b6fe2b538e5cb4",
+   68204
+  ],
+  "cards/hex-rounds/card.json": [
+   "046a5e08b806b2f14d4545d7bf964777a852bf7a1baa407ad595950f95e63d46",
+   367
+  ],
+  "cards/hollow-points/art.png": [
+   "9395d2013205613bc99d1a9015614d118c819dccebd0beff4785b219373788b6",
+   8835
+  ],
+  "cards/hollow-points/card.json": [
+   "1957f59eac4bb92901718038783252786b330c38fb109171d355eca4f3b92f09",
+   383
+  ],
+  "cards/hydra-rounds/art.png": [
+   "1056d457135884c5d38c59e34ad03abc3d6cbcc668e4b3d4fa6ff74c96f1faa9",
+   20600
+  ],
+  "cards/hydra-rounds/card.json": [
+   "062cc80756d0e60256d2306dbc028acd6432aa9ebe0d95348c70c4489c3f3e80",
+   442
+  ],
+  "cards/hydra-swarm/art.png": [
+   "d6034cc1e4afeb2539d146ff27dbc6d220f507f37590295072317a61a562acb0",
+   20171
+  ],
+  "cards/hydra-swarm/card.json": [
+   "7373da6c9a7e02fe2eaa64aa8200a4f134f6308406d4f2685db9b5c7aa51bfe0",
+   462
+  ],
+  "cards/incendiary-rounds/art.png": [
+   "13bc3aeab8512388cd38a9adc180ff513d5ddd9183aad37d4ce1e0cbcfe64ada",
+   22111
+  ],
+  "cards/incendiary-rounds/card.json": [
+   "cbec3aa48676688b362979f71bf063350bae712f972181f8fb66f399c5545cbb",
+   356
+  ],
+  "cards/iron-curtain/art.png": [
+   "3dc29b3e96e77f40b9a03b6d82d72d2d6e34ef89853275f22eb2df3634cba5a3",
+   3479
+  ],
+  "cards/iron-curtain/card.json": [
+   "8cb7796ed8b65e5b91d7e878df740c811414203477652f1d29afe33a2cffa9f4",
+   472
+  ],
+  "cards/iron-lung/art.png": [
+   "5f626e3c2641e6d56a692e222dec6869b151206f0dea169bf4dff0da865e5f8a",
+   11898
+  ],
+  "cards/iron-lung/card.json": [
+   "b8a42f2a93f2d19b8582f3de0c8472d24ac6d02977b65e5280fbe12562ad9e15",
+   369
+  ],
+  "cards/kinetic-rebound/art.png": [
+   "9a7a54a71085cac598e03492db0600f03a0c356252b1238b9319ac9d9ed61e63",
+   20588
+  ],
+  "cards/kinetic-rebound/card.json": [
+   "5c9367ef4cdf18d56614fa8ed5bf7288a293420de3be0fcc80a6972188cb6c9a",
+   342
+  ],
+  "cards/leech-rounds/art.png": [
+   "ef504c7cb70bf5b94d2345662df9a28cfaea9e16f4d929a83a57b063e99bb4f0",
+   12033
+  ],
+  "cards/leech-rounds/card.json": [
+   "be9b02a18e913e6deb96efb6112553219ca94bbd350ba6a2a09c91b23df74e99",
+   274
+  ],
+  "cards/long-guard/art.png": [
+   "84a26032d4cf26001c2ea5521494b71ab78dbc6f767814621f206c36d85a5a3e",
+   14259
+  ],
+  "cards/long-guard/card.json": [
+   "e98977c85094d1cd94ac987c72ec5a202918314fa486d0be6aaba405a6c551de",
+   352
+  ],
+  "cards/loose-sear/art.png": [
+   "e65b20b13553d4bc173ebc6146d785219f770ab1424dc8612172bc314748d58b",
+   23061
+  ],
+  "cards/loose-sear/card.json": [
+   "63aac2342198391423a861763825df09f7df2d536fa02f5c35c02aba685186ef",
+   504
+  ],
+  "cards/mass-driver/art.png": [
+   "3a8047ed26be1345ac4f9289a29f1e190453a9b5094e5afca0ea689c7ca8d548",
+   12361
+  ],
+  "cards/mass-driver/card.json": [
+   "3ad3c26a51cc7952c5aab9f7eba3a32ed5dd6d066b25197bfb4f0f2445afaf31",
+   649
+  ],
+  "cards/mending-field/art.png": [
+   "bb4ef0448e4ec8e2242a32a23b86d8ff8a8db81595b2669c173a1ea6d5fa9341",
+   18786
+  ],
+  "cards/mending-field/card.json": [
+   "3f35ed95b3625f414bed7004cf51ffef3cadceb99ad6cc12a373bb9740dad36e",
+   402
+  ],
+  "cards/mine-layer/art.png": [
+   "e3c03e33726a1a16c97c5980b28cf5e064edd64ec78a5bee6c42befe8e72461c",
+   10817
+  ],
+  "cards/mine-layer/card.json": [
+   "9f8629b3cc81646022b0728590137892651a05fa0be3cf22d1ddc2a11452f6b2",
+   518
+  ],
+  "cards/minefield/art.png": [
+   "39468553ba90e9c485a114788752d9afd34e67ec85b38773d122ed7229843d11",
+   14629
+  ],
+  "cards/minefield/card.json": [
+   "0f9e56843755a97f7671081d36ac8425e37628795627eeade7d2cce3c053a7e7",
+   492
+  ],
+  "cards/mirror-edge/art.png": [
+   "11dbc4954802fe79f412508c94d78ee743e274e24b48a1e6be810f8b4af53465",
+   29943
+  ],
+  "cards/mirror-edge/card.json": [
+   "623fbf7e5e27f8a8af2b6ee3a9ed76bac33f5614a49d423bc73bb1dbe1a767e2",
+   274
+  ],
+  "cards/mod-beam-rifle/art.png": [
+   "74b1f2329594ff195b54575222687fa6423ea7045e22ce7fa108320293331eb6",
+   13199
+  ],
+  "cards/mod-beam-rifle/card.json": [
+   "bdee98b08e1d9dda32fd99ade27a9707f6f21699c82986dff0b8cf38c1a5cb83",
+   664
+  ],
+  "cards/mod-breaker/art.png": [
+   "eedfc890c621301a1baa97325e3f98838d05ad1a50f5be5ea4c61c23ab019b70",
+   26518
+  ],
+  "cards/mod-breaker/card.json": [
+   "627c41a12c3af9a896409942093dd97d14c4745461a70c578a4518864cb76535",
+   474
+  ],
+  "cards/mod-critter/art.png": [
+   "bb10e4aaa147ab97766473e516948f072bca1cab34ecc989937442ec1f950d30",
+   23977
+  ],
+  "cards/mod-critter/card.json": [
+   "9bbbdc20eb671b5fe065c6a38aa8846f29f7f67835a15fc6059986279e58e9d5",
+   650
+  ],
+  "cards/mod-flamethrower/art.png": [
+   "220a3f6afe809de93c255a7d1a905910b5528f9e5eee5311f66ba4a68e33fc00",
+   25595
+  ],
+  "cards/mod-flamethrower/card.json": [
+   "38a3ae665cfa2029fd31f6047201fb9c447b967dddab9c57d58a2131ba8b9e61",
+   711
+  ],
+  "cards/mod-grenade-launcher/art.png": [
+   "f3dd2a1aaa694ca00f3e32f231318c4a9a8ee41b29518ed46515cf694dd31d12",
+   13496
+  ],
+  "cards/mod-grenade-launcher/card.json": [
+   "b0314b8c7878378d232fe85962d8c6d77f3e60d7c30884a6af1f466d0004a705",
+   497
+  ],
+  "cards/mod-katana/art.png": [
+   "e50c1f46468df14aa0c3c3ddb92bf7cd0803271e3f41497ff25079d9f4d9a9bd",
+   36494
+  ],
+  "cards/mod-katana/card.json": [
+   "c0cefa72726957dc96be0f1f0589e6dc29bfc9411cd25b943cdfe845022f1ff7",
+   741
+  ],
+  "cards/mod-riot-shield/art.png": [
+   "7f48cb85d7d4353751c0d2a661783b94042c8a2c949ed1e2d906dd075dc2d674",
+   12460
+  ],
+  "cards/mod-riot-shield/card.json": [
+   "d2f0ad05eac4f65f546f120e76ba20459ff9644d0e53fd88c84f1e3a8c0feb78",
+   800
+  ],
+  "cards/mod-scattergun/art.png": [
+   "56833033199d75ab93cce33ddc4f52feb3008fb9a8007680dc00050065117308",
+   15687
+  ],
+  "cards/mod-scattergun/card.json": [
+   "c8b8989c71a327f1990a28e8438bbeba1ada1a2616425ee832e8a412e1c7fd12",
+   594
+  ],
+  "cards/nanite-repair/art.png": [
+   "67036e0a4a0b3a191e3799417d124ea63d167a15dc2aae095e4c7194af50e9aa",
+   27176
+  ],
+  "cards/nanite-repair/card.json": [
+   "1578d86e0902353c047b47963dd61c733d2b9b79cfa9ca534bc3bba8de084e34",
+   255
+  ],
+  "cards/napalm-rounds/art.png": [
+   "8ea3cf19ae996a9673a952093f1ac98b970e753da07a8339d180e8c85008e7bc",
+   22914
+  ],
+  "cards/napalm-rounds/card.json": [
+   "18e5b374301ef8619a4b8d4b1aaba2453eea6a8b90b2a4b776ca927b6997896a",
+   552
+  ],
+  "cards/orbital-drop/art.png": [
+   "feeeb168157f491024e26a708e1f8ff80fb453c87549784fff055489006a28c2",
+   42274
+  ],
+  "cards/orbital-drop/card.json": [
+   "172f28a3900982c243697b12b25b4232edf605d72d7146a9017172a3ee63b516",
+   514
+  ],
+  "cards/overclocked-legs/art.png": [
+   "3728fa305601c0063e233bfc04eb75b673d71efe7ad5c55be05f7f5e598024c3",
+   40999
+  ],
+  "cards/overclocked-legs/card.json": [
+   "96d753399e40acc736cfc3a21f36468613ec9c535cea7c94501ef0de13ec0580",
+   341
+  ],
+  "cards/overture/art.png": [
+   "f2cbb7144234e64c0ee8c6251f3f70ec8b63e2541bf439f28c12e1d778cbf502",
+   19097
+  ],
+  "cards/overture/card.json": [
+   "61a639f57c22370879dafc6613fd8458a96944467c126d91e5d9141343a2012f",
+   590
+  ],
+  "cards/padded-vest/art.png": [
+   "1de1f7da18a2311640e72a5e3a7d60dd3207cc1a6e01d88e9c92d7973372f6e2",
+   14489
+  ],
+  "cards/padded-vest/card.json": [
+   "4db673aadcb181706e18ccd6bd1c7ed9a74e0a9c50ac65f364957d8e82a5a0a1",
+   267
+  ],
+  "cards/phase-step/art.png": [
+   "3c21a846bcd0da8b096b94e188c131d03b5d035c38aa3948ffb1c8a26c56df6a",
+   22371
+  ],
+  "cards/phase-step/card.json": [
+   "38812d7c7c2f8ca9709541aeaa3421027de102995ce8efe83a2d15a8eee6cf48",
+   363
+  ],
+  "cards/phoenix-protocol/art.png": [
+   "46db284ed8bf0d019c7d33ed38898ad91d1892eb7069a70cb833dffde42e44f2",
+   25882
+  ],
+  "cards/phoenix-protocol/card.json": [
+   "2a44b7d0ad455d74bbd5657f49bbe2120476a0eefda867d9f70e9f9868690a13",
+   391
+  ],
+  "cards/pinball-bomb/art.png": [
+   "00be0af9993a97e8dd25f2a335d97afbb5d224f944ad7f9b1255197ada52bffa",
+   19408
+  ],
+  "cards/pinball-bomb/card.json": [
+   "6369e44b9d574df1871568ee39940611e15742c56708b33cc3f2370d078d41aa",
+   560
+  ],
+  "cards/plague-doctor/art.png": [
+   "3b7a854edf089dd374778cd8753b5eb3c5cb62fad966c1513400f6b58f90217b",
+   26567
+  ],
+  "cards/plague-doctor/card.json": [
+   "d5c3316ae34b43b82091ce55f70383e0341fc5757a75c068d1d7551dbbcfbf9a",
+   651
+  ],
+  "cards/quick-guard/art.png": [
+   "bdd58f0dc4b7711158bee7b3ef19ac2e0d3cf71d105356ab7f590ce9c447d489",
+   15521
+  ],
+  "cards/quick-guard/card.json": [
+   "da1aa23600b13a60f91b77cc4008a84a385aa19bcf63158c62b87708dbe50526",
+   404
+  ],
+  "cards/quick-hands/art.png": [
+   "fc7c86cf6c3b724b3cc6433f08770c653ef9ad20d34aeafaf440363a583a4278",
+   26396
+  ],
+  "cards/quick-hands/card.json": [
+   "d0401b9b139558fd88c119b404cabc06382916d2cbd56c25256a2aa8acb5eee1",
+   251
+  ],
+  "cards/railgun-coil/art.png": [
+   "5e62febf180255cc499abb96e6cf168557c1181f563842e10a952b50b84c0ecd",
+   35931
+  ],
+  "cards/railgun-coil/card.json": [
+   "7bb9c50cea8ae50ca68156802ea27194731e5c427ddbfa836d8d2bc9f7941b98",
+   476
+  ],
+  "cards/rapid-cycler/art.png": [
+   "e1b42f63426bb4d3a9384abad13424d1fa686c561544b739284e35012b5d5192",
+   16225
+  ],
+  "cards/rapid-cycler/card.json": [
+   "bef417dadac3a619a515d8fd4b83a1a7e433da37c4cdbfd5f8736fd850333493",
+   485
+  ],
+  "cards/rebound-charge/art.png": [
+   "417c011f61e330d3f91c5ae5dddc99a6c02d520c019d39e95a9b66364d327334",
+   19839
+  ],
+  "cards/rebound-charge/card.json": [
+   "30857a3248a0ede19962389a6b32d24479b2dcb19ac194aa6bd92f626c320a73",
+   483
+  ],
+  "cards/regretful-pact/art.png": [
+   "c8f9a26c2ed38410d3efaad14ab0ab67108bc2e8e676c4ed61ae2c6ab776b1f5",
+   53330
+  ],
+  "cards/regretful-pact/card.json": [
+   "7565d7b9e9e3b8b836cf46697f66c0cd1f8c4cbf0351e0094d59f28e65457804",
+   461
+  ],
+  "cards/reinforced-plating/art.png": [
+   "a2142417a5bff7ae20e1c8ced35719f0e6b6000b3d45793e669655936e3eac68",
+   26003
+  ],
+  "cards/reinforced-plating/card.json": [
+   "4782c8d1cd8be353d890976c9ab9bb74777cd047e851bf09850981e1ac38d8ce",
+   394
+  ],
+  "cards/repentance/art.png": [
+   "aa53e3dd15e5327494892a7cc36108aee325fb6c455a8c7b0a8a69345480bb8f",
+   50827
+  ],
+  "cards/repentance/card.json": [
+   "9b7689afebdbaf518894d30985cfb430f2fcf249ca78bf76d684aaeb05736279",
+   262
+  ],
+  "cards/repulsor/art.png": [
+   "7d4c6eb8f7c09408188110e2b343e416144fd7972ee221854d4faab8e6864a75",
+   46053
+  ],
+  "cards/repulsor/card.json": [
+   "ed0ab647bfb68749e57b1156008f6ed8ae408162195df2dde849179e528ad339",
+   263
+  ],
+  "cards/reverb-barrage/art.png": [
+   "eea2b8e05f1b4eec4f6b7305474faf6d579cbf46493dc8a20fed2b4e9c4809ae",
+   15800
+  ],
+  "cards/reverb-barrage/card.json": [
+   "d32539ff05e3bd60feac3c56fa25f248d6751dceed2eed9ae0a14e0b1b1669db",
+   496
+  ],
+  "cards/ricochet-rounds/art.png": [
+   "0d94aed46185dd313272c2548d4e6b14c61388d434d6b6489ac9fe92df52bea2",
+   32498
+  ],
+  "cards/ricochet-rounds/card.json": [
+   "06e997f059d4bf615bfd71bf4af689c8d3b220f9c1c6229d59b3c76aa055b786",
+   356
+  ],
+  "cards/rolling-thunder/art.png": [
+   "a460e92f60832d4156811b724b29ea4dbda9fedb1ced81961c1ea3ae3b770278",
+   17305
+  ],
+  "cards/rolling-thunder/card.json": [
+   "88ebaaba64793d6be86e1222267064b506cc611af6b626e6176b8cb240acd1c8",
+   523
+  ],
+  "cards/sanctuary/art.png": [
+   "d0a559c4e7463204e1e29fdc039c6dce2408854691a23bb6f948c4538efa0e2a",
+   14033
+  ],
+  "cards/sanctuary/card.json": [
+   "e8ee6ab8c6bac22a9afa49d246d5fd791754491f445f404f864f5a758d9f0842",
+   489
+  ],
+  "cards/sandbag-barricade/art.png": [
+   "de3b6166baff1bf087fd4bf80ded02df884d651191f1d9874c4a76d7d64d9c11",
+   16724
+  ],
+  "cards/sandbag-barricade/card.json": [
+   "610bfe04e0d91ea410578a67ed216e956af3f9a5b0eb0cfef10fd5fe3378df28",
+   579
+  ],
+  "cards/saturn-rounds/art.png": [
+   "34c555d32d5e134a8ac252b0fe1aa04de142bac78b073db7d1822dc6da3f2537",
+   19503
+  ],
+  "cards/saturn-rounds/card.json": [
+   "38842991eb42788d7a1c9940029b587a7d4d8470660c2913f048fa9323e294c8",
+   390
+  ],
+  "cards/scavenger/art.png": [
+   "40a74e81087432334a9a61a64eaf07feae5e2306cd5fe7498a92b05ebb9f0b07",
+   21877
+  ],
+  "cards/scavenger/card.json": [
+   "fedfc209d87356170c53144e40383e5b2236e45ba25c84167237bbe4012c5432",
+   628
+  ],
+  "cards/scp/art.png": [
+   "a4f9d6490b7944c281777129d51bcb98b1e707d5c63d021bf8041631cd33e17c",
+   28442
+  ],
+  "cards/scp/card.json": [
+   "bc1e84eeac83b75c4397278611b5154f5ec8ce4f2e49765520e5f31d9d105cc3",
+   291
+  ],
+  "cards/second-thought/art.png": [
+   "4bd43b513bed89bde83dcd418dec7dd20e1a0fceef12ebd5e49726702e965c6a",
+   19674
+  ],
+  "cards/second-thought/card.json": [
+   "236fd773829691ed061c3beb555dc344eb90bf6e0853377512c4dbdf9514ce36",
+   621
+  ],
+  "cards/second-wind/art.png": [
+   "127564f587ac70102ae5e118e0ef5c586aca4a42d89bcef2b994e7d118716ed2",
+   15550
+  ],
+  "cards/second-wind/card.json": [
+   "25f37fd93bd17b29b6327cc7c18aa8afd6a2621cb436925c204f9212125fbd6a",
+   384
+  ],
+  "cards/seeker-chip/art.png": [
+   "939d5a13951b34968ebf8e8f18940c0cd287f0d3fe78d33abee59566aab7b1d3",
+   21074
+  ],
+  "cards/seeker-chip/card.json": [
+   "5b900aad1d2d680712127e487118310c63df6c2006dacca0c3cdc18e4dbc36ca",
+   543
+  ],
+  "cards/sentry-unit/art.png": [
+   "09299757a599a6fe9e5995e210697bc208cdfdfcf2529368f68bee7d3ede3370",
+   11240
+  ],
+  "cards/sentry-unit/card.json": [
+   "527c970298b1956935827b1dca24125cc0635fc7131c82695bfdd83bc5a9a5ce",
+   338
+  ],
+  "cards/shield-catcher/art.png": [
+   "27a89dfbff43653a33eb1756c6aef8061828ab81c53e8614051f0316e2a88353",
+   23595
+  ],
+  "cards/shield-catcher/card.json": [
+   "d03d8ef2b55858bdf03cc23f5b7218a4ff670c28d0bdd2ebd49f33c639ddd797",
+   723
+  ],
+  "cards/shield-clone/art.png": [
+   "b00a50d434e8d264ae1dd33ac32cbd5cd7fa26ed762444498a9196957f545d0a",
+   10499
+  ],
+  "cards/shield-clone/card.json": [
+   "f909419041984355e37e9d0996797b7650b70b0e3bbc129bae2853b0157d38be",
+   968
+  ],
+  "cards/shield-grove/art.png": [
+   "cf9af4998236f79630931830a1d7501029f09777b5c2e1f743bd5d7116f32e12",
+   48793
+  ],
+  "cards/shield-grove/card.json": [
+   "9c309820ef898c0997c364cabb923c2fdae6b38daac2b1c8acb94afa18f28644",
+   1766
+  ],
+  "cards/shield-gun-nest/art.png": [
+   "a93c9fb52d360c7ef068b99015c4e9a878c1bd2d998555936673d443670961ae",
+   19831
+  ],
+  "cards/shield-gun-nest/card.json": [
+   "7c076a3a68689098e94779bd034bfa81e86827efbd331710ab3d6e397fca00bf",
+   1231
+  ],
+  "cards/shield-pentagram/art.png": [
+   "95158515c24b1552f13521209b676dd202cb4a05ad8fd1b4c1c8131c4ec4f838",
+   56239
+  ],
+  "cards/shield-pentagram/card.json": [
+   "e4ad6a4d113bc96e7d44bec3833ad49590ad54965ca97e5c9b8502189cb548b7",
+   1767
+  ],
+  "cards/shield-pillar/art.png": [
+   "bc9269f3771c8ea60585b5260ec894994000586fd5c45d0402733095b1adb909",
+   16927
+  ],
+  "cards/shield-pillar/card.json": [
+   "dd37185ba3be58a12c9ab49ef41e16db5673e54016b86b4a020725016018597d",
+   793
+  ],
+  "cards/shield-rewind/art.png": [
+   "64ec468ff18de47596fbb69483a5264c08e60b3b5bddea8421e56b79974e1651",
+   18251
+  ],
+  "cards/shield-rewind/card.json": [
+   "fdbc6684d17e01d99f3446038a95c95d62dd549d76deca9608563c6f20446f96",
+   573
+  ],
+  "cards/shield-saiyan/art.png": [
+   "1fef7cef2c81c95f2a9a41363ddf0194c0e66c98de96f7357ef187cf8c20189c",
+   55169
+  ],
+  "cards/shield-saiyan/card.json": [
+   "67cd5b3dea5f527a0a912f81b0661f8a70015cb2036a5af1d23cb1bdbb796bb9",
+   1466
+  ],
+  "cards/shield-slam/art.png": [
+   "8ded014b40b208a095a225a9466cb163d3d6efcb3802722fd14120de12486b5f",
+   26855
+  ],
+  "cards/shield-slam/card.json": [
+   "9030db05ad675c3b8fbedc0098dffdf546fbe25178510caa6b99cdb4c116ce9a",
+   565
+  ],
+  "cards/shield-spaceking/art.png": [
+   "0198fe2bb591c34ad4e243e0595e8cdd9eb8ac2efbe6495ca4fa94eb6ff1c31c",
+   41410
+  ],
+  "cards/shield-spaceking/card.json": [
+   "0636a5f5e3fa699edfa32630a4b1479e63824d3b7181fa072228c119e547acf0",
+   1214
+  ],
+  "cards/shield-turret/art.png": [
+   "0d5f3a8cc725c2a7208e9ac372ba3ab94801e975e041fb818b959729d7597b3e",
+   47881
+  ],
+  "cards/shield-turret/card.json": [
+   "13867674e292597aea7c8dc8e4ad78ea575d5bcb89b5380295f6251524e7f3bd",
+   823
+  ],
+  "cards/shock-bubble/art.png": [
+   "c890f8a208e663ce8a165facf381a9fa8a7c0aa20045f93f62df7d988c14899d",
+   23468
+  ],
+  "cards/shock-bubble/card.json": [
+   "e67b614952a5c9f935f0dcd8a0c713efff8a58aee4f92c5612e1c870649f5b80",
+   694
+  ],
+  "cards/shrapnel-rounds/art.png": [
+   "483d01352a5f8054c124ee9cb8e80878ea735d8e3d990c863f5f6c7051ec5035",
+   27702
+  ],
+  "cards/shrapnel-rounds/card.json": [
+   "1540929b6e7267fe04751f1c04e90ba4bc74bf66d9bcdb9dc1f8fbf7f5e34ff2",
+   345
+  ],
+  "cards/siphon-shield/art.png": [
+   "33ebd0a0da57db5ea0bd0a2a7bd280c798efd75a73d1ec1f96a1a9715b30b808",
+   18072
+  ],
+  "cards/siphon-shield/card.json": [
+   "70be76a823ab743d55c3a50dd397b1f25b7f187129464cd71d8c660755676472",
+   576
+  ],
+  "cards/speed-loader/art.png": [
+   "732b95ec9f2bf0f4d52f8e0d8cb3d538c0df25bd190b7b7515d4d7b643f9261a",
+   17413
+  ],
+  "cards/speed-loader/card.json": [
+   "53e6acd1efdf8930ac850bf1f5c091ef4ad53c96f4d9a78af581978cb016db59",
+   396
+  ],
+  "cards/splinter-bounce/art.png": [
+   "2d59189e1edb11c846e44c28969763e7d9ab2afa4bca22813719b8af27b53ed3",
+   27729
+  ],
+  "cards/splinter-bounce/card.json": [
+   "cd29874a9abbbc1e4f843e91185542438e83ac9cd13898bfe6588e38cd49005f",
+   441
+  ],
+  "cards/spring-heels/art.png": [
+   "bc884220f8e789d40980f1d4f3bafa58cddad174fdb10ad2bddaee2ac6dd8083",
+   13779
+  ],
+  "cards/spring-heels/card.json": [
+   "568fbe238f33e65567a93a766b326361600f5a7e748624dd57962fbbed32d53e",
+   508
+  ],
+  "cards/squid/art.png": [
+   "9ad67d37d81820ea867675e0d13fdd90d073fb9ac5f262b732213d3aff983266",
+   43771
+  ],
+  "cards/squid/card.json": [
+   "ab4da0eea3fd6b0e119b2f1c662b00815b5ca471fb4de2e71c81b6fc8c9b0f0f",
+   760
+  ],
+  "cards/standing-ovation/art.png": [
+   "e7414c4034ae54b1657b304f7a42a6eb477e9ac47011e65643f3a03e25a5e678",
+   23053
+  ],
+  "cards/standing-ovation/card.json": [
+   "ca0a825121db982d91619e652c2bc6fcedc76b8436769513e262526e84fbb506",
+   612
+  ],
+  "cards/steady-hands/art.png": [
+   "23b5cba28f6b12d81f306ec772e578b687741fb351265b8f43a8219098451d85",
+   21926
+  ],
+  "cards/steady-hands/card.json": [
+   "f0806b429b919ee194bcd648776cfe75ac2b2c2a7001b5e69071c04d0940ed5a",
+   328
+  ],
+  "cards/sticky-bombs/art.png": [
+   "2fe68c5f152aefb2e36b8b42df2dd2e597301d4a5337db72179ad605f990017d",
+   17912
+  ],
+  "cards/sticky-bombs/card.json": [
+   "42c73a79df13751039cd8a082ac0ca0ca81ef3e1a8ed177667cb4b5f938f363a",
+   365
+  ],
+  "cards/storm-caller/art.png": [
+   "bc2170e89e139e72661af460d8d980b4c151767f4cc6b51d8120b6593f2b4511",
+   24720
+  ],
+  "cards/storm-caller/card.json": [
+   "c74433b9ba60d88f09c5e0f563f7bf6d05e523c2eb239757dc5c86b9f83b51be",
+   639
+  ],
+  "cards/stutter-trigger/art.png": [
+   "6778fd93ee373b4c515081650478a0ff6bf20d05d7b926a84ce3af3a662bfebc",
+   7150
+  ],
+  "cards/stutter-trigger/card.json": [
+   "7e9c8ff8cbc5f6ffe6b6d0cbc8b50f00ef1a6fc13303f820e5ce1ee159019d39",
+   407
+  ],
+  "cards/tempered-glass/art.png": [
+   "0ff0cd7df1ec032b92989423fb63e3cc9865fd9bce3ca40036f5b7b1b23a65f3",
+   10980
+  ],
+  "cards/tempered-glass/card.json": [
+   "4f536aeecf83a41c442cc36c735e0512e2794ee9268bd3565a1fc8f0f61d87ba",
+   488
+  ],
+  "cards/thick-hide/art.png": [
+   "081c6c9c364e4877977d37ad3d8c18833d8783906209ac19acee3044d00763ed",
+   21583
+  ],
+  "cards/thick-hide/card.json": [
+   "bc7c3477756cc5efa5f7223885cf72654a4e69f620bb1700c54c56e96612b91f",
+   387
+  ],
+  "cards/thruster/art.png": [
+   "a6b8bc8d840dc6c8633538e8cd9b46e8eb75c192a6dddc63c4f99a31b230dbb0",
+   8617
+  ],
+  "cards/thruster/card.json": [
+   "c88a655294d9127d95a91b050f987f2632e3839ce666f9333e8fb40d76c8494d",
+   425
+  ],
+  "cards/tiny-tank/art.png": [
+   "c78671ede44c56e88497afdc5bb20b989e50bc3658b692f6ef2f68abc02b3280",
+   9664
+  ],
+  "cards/tiny-tank/card.json": [
+   "b527e9bbd164bcec899bb1407d38d58da312e460306d10bee20b488a80387541",
+   892
+  ],
+  "cards/titan-frame/art.png": [
+   "31a3f312a57234f8429ba5d457a5303c31686ff8c0a2dd4193f8d5f1d8ba10b6",
+   7048
+  ],
+  "cards/titan-frame/card.json": [
+   "bb9a4675d87e39dff3aac682f5aa9b0055fc91b71b2d9ede812589cb7c4e6b8c",
+   375
+  ],
+  "cards/tommy-gun/art.png": [
+   "fa63afd7027f2322c921c1e6e287f0958813c1db72987fa7ea75d93c983651c4",
+   21467
+  ],
+  "cards/tommy-gun/card.json": [
+   "95e7c350f6f2560cde74faedd390149e8215c394f9720e1e99e6a5eecd63b14e",
+   450
+  ],
+  "cards/toxic-cloud/art.png": [
+   "b68aa4a1ae1d47b7f68821aae537aefe093bc2c28f9423a62fe415011202a89e",
+   29795
+  ],
+  "cards/toxic-cloud/card.json": [
+   "0088bae76afea1dcd0936aa7281472981c14118650867bf35d12937d495462ea",
+   626
+  ],
+  "cards/trick-shot/art.png": [
+   "2f3d7a2564cdf2752d6e2ab6c3a2f01f2fb38d5ad6ab76bb92c0f7fbdb502f49",
+   27682
+  ],
+  "cards/trick-shot/card.json": [
+   "2fcf67d2d87a9f89de8ca1e1e7985c277519de67fc3d2caae08b5b7d3d56089e",
+   544
+  ],
+  "cards/troll-blood/art.png": [
+   "048eb6fd1d655db088d3769a4575c75c64975219826e51b886d82a2fba27b692",
+   25793
+  ],
+  "cards/troll-blood/card.json": [
+   "3b982f4d6cb5f2ca45050588cd554dd25e61089ecdb0abfa232e12297e2a2189",
+   381
+  ],
+  "cards/tunnel-borer/art.png": [
+   "52638f66346c523dee21c857509862adde28e4503491f417b72aa803acd5e1fc",
+   8857
+  ],
+  "cards/tunnel-borer/card.json": [
+   "1468ac1637f216a8fde2de3f0b027b6343baaa0694153730ea5594932625aa77",
+   478
+  ],
+  "cards/twin-barrel/art.png": [
+   "d8c076d0f8616b6e339de765f929192ebdbe26e29d2ac548b52677bc589e4f60",
+   17730
+  ],
+  "cards/twin-barrel/card.json": [
+   "2d72ca0001385b5d7a60cbaee7476d244f9936fa5f262b55dfca1cf89b747a03",
+   442
+  ],
+  "cards/twin-protocol/art.png": [
+   "dd5235c79b13e0d23450e7313f6619fc2f34527d743c6471c371003b4eaecb27",
+   10283
+  ],
+  "cards/twin-protocol/card.json": [
+   "d5ef6047a00819a3a27bacd566dfd178a1286a1416011b199f0cc16c854c6ca8",
+   364
+  ],
+  "cards/vampiric-nanites/art.png": [
+   "f035dd5a0ba54df9eae89bee8ddeba483d4a880ad925f8aa3f50b1f0406e393f",
+   8453
+  ],
+  "cards/vampiric-nanites/card.json": [
+   "def21dbfd80052ff81635e992a5b0bfe32332b6627dfc954c74f306769126754",
+   466
+  ],
+  "cards/velocity-rounds/art.png": [
+   "d1c06c1232cf1872cc4fcb4598cb54c1f81e015201c1b14b701df271f57f5b9e",
+   5581
+  ],
+  "cards/velocity-rounds/card.json": [
+   "991998b29c0edef82292b35a59368cabc075cf650df665f723c225eff3f47717",
+   366
+  ],
+  "cards/venom-rounds/art.png": [
+   "0b90274de373b8f404312140d9fae4c35e4e5bae1c9d4d0bf2a7f148b749b45e",
+   13938
+  ],
+  "cards/venom-rounds/card.json": [
+   "1792026ce994d1d200b3e371cb84c424991d7331a3e0df83df2b945fc59f5cba",
+   736
+  ],
+  "cards/volatile-payload/art.png": [
+   "dad7f76ede0c8f77d889a03386ad83e5f6ae01296abc72e15531fbce3e598666",
+   43510
+  ],
+  "cards/volatile-payload/card.json": [
+   "c8620305d5e37e439cda9d09c375f26cc66c43a5602e50e52716335b3b0f14bf",
+   427
+  ],
+  "cards/war-drum/art.png": [
+   "2f47c24712bd738d4974ab2417115d72bf7185734b38e88a40f7fcd5e355ed33",
+   12259
+  ],
+  "cards/war-drum/card.json": [
+   "2c6086a8791ee47e414f66fd5b9047fbf5bac40167c20aff057d541cad4c1695",
+   455
+  ],
+  "cards/wasp-drone/art.png": [
+   "fcb00677059c99f4b86b0715a38cf5279f8e9271b733dd89cd7395e0b68d0335",
+   12818
+  ],
+  "cards/wasp-drone/card.json": [
+   "3fafa900a2e838ead283b8de4d131283abad60d629b2329f838ba7f8f6a70e63",
+   352
+  ],
+  "cards/wide-shells/art.png": [
+   "b0e543bf6d4c6fc9bd818b8a16f25bc907f7d2dbb36c407af2ac3b7686c320b6",
+   25339
+  ],
+  "cards/wide-shells/card.json": [
+   "502dc44d03a40835b1e5fccd41589daf5cfbed8752320fc5413bba9bef165512",
+   424
+  ],
+  "cards/wildfire/art.png": [
+   "4914f0e47c9e62b23927c96c4c224b5708bc9314d672bc5e6bd25871d2d26a23",
+   40741
+  ],
+  "cards/wildfire/card.json": [
+   "971cedcc4891483c0e25155a2ce50e95f11db016b47d9bef7423c66376d0fdc8",
+   670
+  ],
+  "electron/boot.cjs": [
+   "31c5e436259ab955e1f755ad4845434a33001fbee0d3fd9187e10a9556b5cffd",
+   374
+  ],
+  "electron/icons/icon.ico": [
+   "b7633e69cabfdd2ae63710ecf506abf666297df2ba56bc51db7331f497e56821",
+   54632
+  ],
+  "electron/icons/icon.png": [
+   "52ff713ed746a8927c89ef8c3c00905c0ecd70dce2a0587175e43704e0df25df",
+   28753
+  ],
+  "electron/main.cjs": [
+   "8bc7f7540df003e5d5b66e0a779584a0cf81b6bce9e1802409aa0d3c086af011",
+   18545
+  ],
+  "electron/p2pwire.cjs": [
+   "7129454bf1074232898eda71047b5695656bc2a40dacf0c549b0db4a3a25367c",
+   5942
+  ],
+  "electron/preload.cjs": [
+   "c5c0762d1d8dda0e208b82aac3cc6c86c29de773db557fbea81f3d2acd540352",
+   1276
+  ],
+  "electron/snapdict.txt": [
+   "6f78870e77b69aff8053393bf257322d26e2c9f0be12b914b749e990bddcf3b5",
+   29277
+  ],
+  "electron/steamfriends.cjs": [
+   "04d2648d18ab118e25bc6fad2c89a9e1e38005bed847010d78fd025a81f9c7cb",
+   4536
+  ],
+  "electron/steamtune.cjs": [
+   "ebeb9921004c9d82a668779d9fe713c5a7794f68c814b65fcef46d16b9b30c64",
+   5124
+  ],
+  "electron/updater.cjs": [
+   "585568a16768c507ea40ac41b4d29791b81495aed0cb1c17be359fb211727db7",
+   8138
+  ],
+  "node_modules/koffi/CHANGELOG.md": [
+   "cbfd5a466d730e929f282273aca572297c507f219a44f5cab8d7ca0395a2101e",
+   24308
+  ],
+  "node_modules/koffi/LICENSE.txt": [
+   "48bfd53f76185bd32bb91393a7e27ab553b77b4b965245ba73f4714c11030a4a",
+   1117
+  ],
+  "node_modules/koffi/README.md": [
+   "026dee03f961268fe0a62c1074392abe640011c2540f0b7e32288ba6df96fa1a",
+   2646
+  ],
+  "node_modules/koffi/build/koffi/win32_x64/koffi.exp": [
+   "e1e6de9198036daa2c325c9710522962e6bd7ccbaf33a2423f9fb53a59cccf65",
+   1019
+  ],
+  "node_modules/koffi/build/koffi/win32_x64/koffi.lib": [
+   "faef5139526f707ccf9340be5b280179d726daa8287635b0a20868b589ff0cde",
+   2054
+  ],
+  "node_modules/koffi/build/koffi/win32_x64/koffi.node": [
+   "c56266742f01bb5e4a35cc159abfba3383964824e6c8face9dcb7d2f0d21006b",
+   2436096
+  ],
+  "node_modules/koffi/index.d.ts": [
+   "7c66c3695ab4690d733ae62abd1f5552443bdc53c1ef38c3d3f27612ffdea1bd",
+   10865
+  ],
+  "node_modules/koffi/index.js": [
+   "26b49aef0cefb44d4936d457705c17732b641cba976f89eb98c063bdf1e10a10",
+   21008
+  ],
+  "node_modules/koffi/indirect.js": [
+   "9a740f6663eff9cc78213532085946bdf2035608957fd0ab29a763f589dfddc7",
+   18710
+  ],
+  "node_modules/koffi/package.json": [
+   "da5e04ab3df32c4aac9d80e8f6dbfc52f4edb2d30d52d4363a6dfda04371a554",
+   994
+  ],
+  "node_modules/steamworks.js/LICENSE": [
+   "11b6ba47ff9ad2792cab88d2934b0cc04133807494a45586561493353bab6b92",
+   1085
+  ],
+  "node_modules/steamworks.js/README.md": [
+   "213e4750a21a2c87ca6e54ba3bd2b824b0eb30b90196bec658f86540de2404f7",
+   3548
+  ],
+  "node_modules/steamworks.js/callbacks.d.ts": [
+   "26adc33f87643f52a79ccf8f9ce074c7f7dd39438f6614d499e0f1206a714822",
+   1658
+  ],
+  "node_modules/steamworks.js/client.d.ts": [
+   "d6ca1fe6f0f6e52301ede498e424694c51859576a7c7c96ae1155a015eab129f",
+   17017
+  ],
+  "node_modules/steamworks.js/dist/win64/steam_api64.dll": [
+   "1add7f151fa644870a735ae86e68d1f019f296130d8e7c0a7ed3ecc7482dccbc",
+   300392
+  ],
+  "node_modules/steamworks.js/dist/win64/steam_api64.lib": [
+   "04fd201b4ad24e9c3428f134737a2507beb6861f9b67aebf4aa5b0199269aaeb",
+   373858
+  ],
+  "node_modules/steamworks.js/dist/win64/steamworksjs.win32-x64-msvc.node": [
+   "1042713f701ace880260e5dcc90cf9a85dfe0ee1768140f650d3268ef8985f17",
+   1754112
+  ],
+  "node_modules/steamworks.js/index.d.ts": [
+   "3d6118ea55778fded2cd7a88f80c8e243211e6fa9ced782eda76889f454bc86d",
+   360
+  ],
+  "node_modules/steamworks.js/index.js": [
+   "564ccc2d04cd0238bddc3d00a6360d293ce1be2488c1a95d69e115a0da606f1f",
+   2870
+  ],
+  "node_modules/steamworks.js/package.json": [
+   "dcaf27f3bf9573faab9e3afc58dd2c45b137692f3c0398f6ed0ae9e5bb79ca88",
+   1196
+  ],
+  "node_modules/three/LICENSE": [
+   "7dddf7c5b8fd10ee654db8857d75d104b5557889aa5a91fc4ca545ea7c07062f",
+   1081
+  ],
+  "node_modules/three/build/three.module.js": [
+   "af527c374b56b8688737a42d7fcea7cb8aaeb57a4e3c6da98b4dffd55bcc3514",
+   1140878
+  ],
+  "node_modules/three/examples/jsm/loaders/GLTFLoader.js": [
+   "943a0d68f63c3f7fb04398d8b125cdc09c1a05af9d5f40b68a2e65c42a78f5d3",
+   95294
+  ],
+  "node_modules/three/examples/jsm/math/SimplexNoise.js": [
+   "9b8d541b77b0ddc79afaa6a1de8941452c191b8b9006f04e7b8fc422e2b263f7",
+   14351
+  ],
+  "node_modules/three/examples/jsm/postprocessing/AdaptiveToneMappingPass.js": [
+   "c8d7e6bcfc5a62ae1313552801c5cc1f016a2440fc51fd600d0000123b2e0ae5",
+   9463
+  ],
+  "node_modules/three/examples/jsm/postprocessing/AfterimagePass.js": [
+   "51408cecff98c06ff58b5cb973a9fd08fc46afd73be646f84c37cc3a61b49edb",
+   2223
+  ],
+  "node_modules/three/examples/jsm/postprocessing/BloomPass.js": [
+   "0f9086024a4076740022161628f2db69331d5ceb60db6a02deaac07664144156",
+   3458
+  ],
+  "node_modules/three/examples/jsm/postprocessing/BokehPass.js": [
+   "2713644e3443fe4b02c0df0ea9e81383e9edd9044ad73b1ce726b6b908f0cc42",
+   3378
+  ],
+  "node_modules/three/examples/jsm/postprocessing/ClearPass.js": [
+   "bab5f0dde86d8f5adac326ecbc5d85fcbda910a3f3f3c4ed0bc71cb2af339662",
+   891
+  ],
+  "node_modules/three/examples/jsm/postprocessing/CubeTexturePass.js": [
+   "24a63451553783be58601f220572e2ce7d509efef80b3b2c52294605689d9055",
+   1863
+  ],
+  "node_modules/three/examples/jsm/postprocessing/DotScreenPass.js": [
+   "ec6450128a13fd4ba8d7a49a92ac87765a448dca7c5d086c0e60441bca7b8c54",
+   1394
+  ],
+  "node_modules/three/examples/jsm/postprocessing/EffectComposer.js": [
+   "a516ceed607c11d2db4291ce6f8d074de28237ed0ed12573d4939d4ae10e774f",
+   6428
+  ],
+  "node_modules/three/examples/jsm/postprocessing/FilmPass.js": [
+   "196b1605695d36e6d8e666e945aca8ac744d7b6509f3ddc873be48d87c5e29eb",
+   1491
+  ],
+  "node_modules/three/examples/jsm/postprocessing/GlitchPass.js": [
+   "8757df97c075a09ccafe42466ded80a2f06e6538d55a391b3d6cf3b694943f72",
+   2947
+  ],
+  "node_modules/three/examples/jsm/postprocessing/HalftonePass.js": [
+   "d7f5091a9f38b2af68898c025d01004433292e51345847bf4ea9de828a86f161",
+   1582
+  ],
+  "node_modules/three/examples/jsm/postprocessing/LUTPass.js": [
+   "84a8fda3f49936046ebffca6f878081839b91986293ef044976bea8935412ad1",
+   3209
+  ],
+  "node_modules/three/examples/jsm/postprocessing/MaskPass.js": [
+   "04d3910546f1e8210e2742d6f7e0baae7eaf76cf0b2fc64c3c76e36cc37e075f",
+   2136
+  ],
+  "node_modules/three/examples/jsm/postprocessing/OutlinePass.js": [
+   "09ea9a2d080aac16ae0678999abd353eded20386a3c656feb0178459dbf9d091",
+   20135
+  ],
+  "node_modules/three/examples/jsm/postprocessing/Pass.js": [
+   "2f723c730a3623904c11a73de09b8413181723e4cda307e042211bfc2a9d5664",
+   1565
+  ],
+  "node_modules/three/examples/jsm/postprocessing/RenderPass.js": [
+   "2b668dffcf762016f5e6c846ef15251d890473adacd0cf7b325a301b8b39edc0",
+   1750
+  ],
+  "node_modules/three/examples/jsm/postprocessing/SAOPass.js": [
+   "8ee233b29e42bcc20a879bd00bfff5da80d21b8a3ec904fab45214e59ce18ed0",
+   14227
+  ],
+  "node_modules/three/examples/jsm/postprocessing/SMAAPass.js": [
+   "e44e5563c2628314f2f35e93da4981cb1b25a5a09531a9d2362dc403982675b9",
+   49511
+  ],
+  "node_modules/three/examples/jsm/postprocessing/SSAARenderPass.js": [
+   "222cb61a403f492ee91c77940d5a3fc5f8a51a153d4af586b7400e313b743749",
+   5472
+  ],
+  "node_modules/three/examples/jsm/postprocessing/SSAOPass.js": [
+   "4a97242031d082b00aafc08b230606ea18ad9c6d38a53e5e3dbf20b8ca5f7f05",
+   12401
+  ],
+  "node_modules/three/examples/jsm/postprocessing/SSRPass.js": [
+   "d0237f3b273b44d17ddbc0d545bcfb49a3f4536edadb5d0180d77fec464797a2",
+   18911
+  ],
+  "node_modules/three/examples/jsm/postprocessing/SSRrPass.js": [
+   "5f180547e9cd3620fb3204f23f4b2a7c1a8d59994c7b76d984261011c5ae4b4a",
+   16170
+  ],
+  "node_modules/three/examples/jsm/postprocessing/SavePass.js": [
+   "ff3c5381feb6c83a6ca237d07931155d6fcdeefc781e691cdff1d7b0e349d00d",
+   1392
+  ],
+  "node_modules/three/examples/jsm/postprocessing/ShaderPass.js": [
+   "c853f5f92b1989ad17731d81d1ff386cdcb0d53bb375199499ba9cbfd4d97a37",
+   1449
+  ],
+  "node_modules/three/examples/jsm/postprocessing/TAARenderPass.js": [
+   "cdade6db22b3b04086b9388adf77cdd5b5221d98fd49dc6044e6db0d25fb9699",
+   4409
+  ],
+  "node_modules/three/examples/jsm/postprocessing/TexturePass.js": [
+   "4840a3786dc2e8126cdc7402177b119b0510020e68587eebbb35c308a5d4e924",
+   1354
+  ],
+  "node_modules/three/examples/jsm/postprocessing/UnrealBloomPass.js": [
+   "3558125c23fecccd0dfa2b1101f7a9c753e90506d5690477566b8a2b247202d2",
+   12463
+  ],
+  "node_modules/three/examples/jsm/shaders/ACESFilmicToneMappingShader.js": [
+   "64d6f4421554c37498e2149d40911cfbede9dee4ec51f8e023551e4ad4bffef4",
+   1871
+  ],
+  "node_modules/three/examples/jsm/shaders/AfterimageShader.js": [
+   "8bad36c75e63547198ec7c60500d7f364bfbcc755a7715ef7ab2aaf267f5fc37",
+   875
+  ],
+  "node_modules/three/examples/jsm/shaders/BasicShader.js": [
+   "fc90c1bb88c5c97d6747ad4151760660fc9caf3c735c18c613f0ae7d145b62de",
+   328
+  ],
+  "node_modules/three/examples/jsm/shaders/BleachBypassShader.js": [
+   "e31d06b0bf108a8ba2ee8f6661afa4ea70f4e734f1eda995cb42cdb1a0980bf4",
+   1182
+  ],
+  "node_modules/three/examples/jsm/shaders/BlendShader.js": [
+   "a6cdb89316e688686573bf953585c8530ae0827e3caa90e406f73a15615afe3e",
+   731
+  ],
+  "node_modules/three/examples/jsm/shaders/BokehShader.js": [
+   "0b62e932b82a412c4f5e9134aa33be6d937da7c44dbdd45a83f81082569a87b3",
+   5746
+  ],
+  "node_modules/three/examples/jsm/shaders/BokehShader2.js": [
+   "39afc2713ac8fabc2c1aa8dd68b2a321f353d61a25698453ef17a5f767a1e180",
+   9557
+  ],
+  "node_modules/three/examples/jsm/shaders/BrightnessContrastShader.js": [
+   "3208cf750d0d9f5588dc5f0a00ff9fc63655755f6658e1537a854197214255f0",
+   1030
+  ],
+  "node_modules/three/examples/jsm/shaders/ColorCorrectionShader.js": [
+   "3f5d52712cd74a647d01439d8948520543dc552b7aefef7698bf2ccd643deea5",
+   789
+  ],
+  "node_modules/three/examples/jsm/shaders/ColorifyShader.js": [
+   "b8253f5f617f5051fd11018c68db7a886a69ebafe6d9423147b8a233d8689513",
+   678
+  ],
+  "node_modules/three/examples/jsm/shaders/ConvolutionShader.js": [
+   "475d32995d3970fc665eab6cf6b893598bd7ab91f75878c5c78f0322ea081fb7",
+   1844
+  ],
+  "node_modules/three/examples/jsm/shaders/CopyShader.js": [
+   "c26246da7fa25ebc5cbd2cb95686d584f271a989d8619612c8a6bc107c71092e",
+   546
+  ],
+  "node_modules/three/examples/jsm/shaders/DOFMipMapShader.js": [
+   "1653457330684807cbc0f234ef7b058596504d2918f25e816e03e01d72edcc9c",
+   891
+  ],
+  "node_modules/three/examples/jsm/shaders/DepthLimitedBlurShader.js": [
+   "589f4ea93aa68fd60670f0c59667399bcc31166a8fd3eba67aa739e1cd3775f9",
+   3670
+  ],
+  "node_modules/three/examples/jsm/shaders/DigitalGlitch.js": [
+   "87a0ab6327dc0cd65edd0de7e457595108629ce01ad84c10ec4e74ba31f8cf46",
+   2582
+  ],
+  "node_modules/three/examples/jsm/shaders/DotScreenShader.js": [
+   "0db56c21903a64aab2e4f32ec5bbc029b5cde7d31d879e11189a5c408da21040",
+   1177
+  ],
+  "node_modules/three/examples/jsm/shaders/FXAAShader.js": [
+   "6d5079694fb475c4fdbb0bc20e56426460957350545dd12658b0bb34c70bba0e",
+   45974
+  ],
+  "node_modules/three/examples/jsm/shaders/FilmShader.js": [
+   "4800d923437039a190ad89edbc0145b16b9713ed8cad2c93bdfc6b292713080a",
+   2295
+  ],
+  "node_modules/three/examples/jsm/shaders/FocusShader.js": [
+   "13076450ee69cd30fc9e635dc200286209e1efc64b5d86090a6b36ff9feb9dd0",
+   2282
+  ],
+  "node_modules/three/examples/jsm/shaders/FreiChenShader.js": [
+   "c7eec73410fb326b180729a99fa8d57762c9ed97283c01c91a1b91075a3b6f91",
+   2942
+  ],
+  "node_modules/three/examples/jsm/shaders/FresnelShader.js": [
+   "d58119db54ea68b17e65818d31b31653f8540a955df1728d284ea49aee8bac39",
+   1934
+  ],
+  "node_modules/three/examples/jsm/shaders/GammaCorrectionShader.js": [
+   "9de7fd5f3eafa829c1f08fb3c96064faba820b940b3909978547cc60142178b0",
+   616
+  ],
+  "node_modules/three/examples/jsm/shaders/GodRaysShader.js": [
+   "ade1faab274f456f29e40d5d23aa4447f782e02ba8edb5817b6b681a9028b107",
+   6695
+  ],
+  "node_modules/three/examples/jsm/shaders/HalftoneShader.js": [
+   "97eb99f2f39b84bb22f0b68d97bd4a7129ab5893550420f0d22ff52dc0e88be3",
+   8558
+  ],
+  "node_modules/three/examples/jsm/shaders/HorizontalBlurShader.js": [
+   "8f330165809ae9d1e64872a966946ff5ddd873957bd18ef1a51f62bff4cfbb6f",
+   1513
+  ],
+  "node_modules/three/examples/jsm/shaders/HorizontalTiltShiftShader.js": [
+   "7f64386ab3442b282933cdfb87b89052f2be18e98a2546556d255e84bf466277",
+   1546
+  ],
+  "node_modules/three/examples/jsm/shaders/HueSaturationShader.js": [
+   "f4e86fdc40a04b89a50aca51810fe84c0693c6807d88ce0eb375b67a85ae9baa",
+   1449
+  ],
+  "node_modules/three/examples/jsm/shaders/KaleidoShader.js": [
+   "523a438008ae3d15de258647947f56edc27ea875e9bf774d2131822acf9a4ea0",
+   989
+  ],
+  "node_modules/three/examples/jsm/shaders/LuminosityHighPassShader.js": [
+   "57de46c2601ab4f14697608d0825eb0db6d53eae0614365e9ffc90de188790c2",
+   1156
+  ],
+  "node_modules/three/examples/jsm/shaders/LuminosityShader.js": [
+   "479a7edd95d9bf0b8f990382e5ee49c937a59e2f6b6e43d10dfa07f6a1f6242e",
+   612
+  ],
+  "node_modules/three/examples/jsm/shaders/MirrorShader.js": [
+   "0ce69d7a4cb88d19f11dd65460d9466a22c0410bf6635ec80a33c31426901458",
+   890
+  ],
+  "node_modules/three/examples/jsm/shaders/NormalMapShader.js": [
+   "03806c809892e1bd1dd51c2ee127b1034ef8f186436d1fd7b6e37678b1d0bb80",
+   968
+  ],
+  "node_modules/three/examples/jsm/shaders/ParallaxShader.js": [
+   "85ffdee48adbec18cf6eb312138b5853a8808880c1873cd8b681ee0761e2946c",
+   5045
+  ],
+  "node_modules/three/examples/jsm/shaders/PixelShader.js": [
+   "adbcf9ec807a03d347cb982083c3f5e86b603a729d0a349e5f418199cb4bb8d9",
+   658
+  ],
+  "node_modules/three/examples/jsm/shaders/RGBShiftShader.js": [
+   "45e559a98b1f3b568ae30eb9b26d7083544ce2b4b2da2fe4f66f82975206f6b9",
+   1003
+  ],
+  "node_modules/three/examples/jsm/shaders/SAOShader.js": [
+   "36ebb866ddaea7c6469a1a2ea4b7d7dc7374370ba50568bc8d114ab511025d16",
+   5160
+  ],
+  "node_modules/three/examples/jsm/shaders/SMAAShader.js": [
+   "23de56b6efa6d67085ce599c90cf04a254d000394a9b00344f1d021a0c026a35",
+   14545
+  ],
+  "node_modules/three/examples/jsm/shaders/SSAOShader.js": [
+   "a7c4c7ac09cff6634f2d3e92d098bc32a7e3a277e4bfa2f8a3269cdd13391f44",
+   6309
+  ],
+  "node_modules/three/examples/jsm/shaders/SSRShader.js": [
+   "d6c50ccf9f1638656c164bd20b3e7a94ed050ee838a2697c6a3cec9662fcd399",
+   9334
+  ],
+  "node_modules/three/examples/jsm/shaders/SSRrShader.js": [
+   "33ee7790475c9fcdd13b006381de4d505f5c8f661a8a538e3ea7838eac3e38c2",
+   8060
+  ],
+  "node_modules/three/examples/jsm/shaders/SepiaShader.js": [
+   "db247084612523ea67e4de094baacade7d30ce93e80008ef3fa8b4d5cf61c169",
+   913
+  ],
+  "node_modules/three/examples/jsm/shaders/SobelOperatorShader.js": [
+   "32c8c395444a66d99547ea414e341c7f57b3b98a401b28ab1d958152bcf097ea",
+   2321
+  ],
+  "node_modules/three/examples/jsm/shaders/SubsurfaceScatteringShader.js": [
+   "6a0fb931c964d384fe4ff1c002f922bea54aecb1c16e25ab8bce31a3be99e957",
+   2908
+  ],
+  "node_modules/three/examples/jsm/shaders/TechnicolorShader.js": [
+   "6229512f589c0a3752b2bacaaeb6b3cbf66e6f0f25ffcc6bb0802aed9e23cc04",
+   835
+  ],
+  "node_modules/three/examples/jsm/shaders/ToneMapShader.js": [
+   "02ed090c5b554a7f97665834debb75ca728b717eb8f49aaa260814c314c4feb8",
+   1615
+  ],
+  "node_modules/three/examples/jsm/shaders/ToonShader.js": [
+   "20c3001a2438922065243570c58fece88bc9db783ce24bcd4d61f40406e6ed3e",
+   6634
+  ],
+  "node_modules/three/examples/jsm/shaders/TriangleBlurShader.js": [
+   "b9020238d86835d83e6179377337cac6bec253092218d2336c6a4184f7f984eb",
+   1248
+  ],
+  "node_modules/three/examples/jsm/shaders/UnpackDepthRGBAShader.js": [
+   "9bf9a50188b89ae1a26307e7a82085ae45e930cd85e75278a33dd30ec82d00cb",
+   676
+  ],
+  "node_modules/three/examples/jsm/shaders/VerticalBlurShader.js": [
+   "bcdacb78aae45d29ce8dbe8261f2c63ac93ef282342fd91351e48057381faafe",
+   1511
+  ],
+  "node_modules/three/examples/jsm/shaders/VerticalTiltShiftShader.js": [
+   "751b2558e359b26ec4bcec41d213b6bf14c06ab5456ac253246fb66ff210b5f2",
+   1544
+  ],
+  "node_modules/three/examples/jsm/shaders/VignetteShader.js": [
+   "b544ec19a177c3a99a2d494bfac46a541b0df7aa95101f12ab12767c37118c91",
+   867
+  ],
+  "node_modules/three/examples/jsm/shaders/VolumeShader.js": [
+   "e991be02a4a9a758ddef48c5f73f7b834b34a01502e9a19aa462602b4d577af1",
+   9745
+  ],
+  "node_modules/three/examples/jsm/shaders/WaterRefractionShader.js": [
+   "33deedffe42f3e301b6e69a0293e08aad174fd821ff8453e9f23f273f09cba8d",
+   1706
+  ],
+  "node_modules/three/package.json": [
+   "d853c404a6a0cf1ba73555da027de3198da9c7464a60cfb7e38984e293c4bfbb",
+   3506
+  ],
+  "node_modules/ws/LICENSE": [
+   "2b29dcfe0d6471f7e8c92c5fb38c9f93edee10330937055440192f1832b1ecef",
+   1183
+  ],
+  "node_modules/ws/README.md": [
+   "bb979132f3cbff08ce47f36d041e18071f8f534d01f591c0b129ba7abf1e480e",
+   15306
+  ],
+  "node_modules/ws/browser.js": [
+   "010da44addea1d88b2b732540c3f1fd0cbcb28926b96623d4c64222e0ead2d0e",
+   176
+  ],
+  "node_modules/ws/index.js": [
+   "924564d5be26d59b9682c4263f68320e48dde7240bd2d1ad17ec305537429dd2",
+   796
+  ],
+  "node_modules/ws/lib/buffer-util.js": [
+   "8b0a45739132f82e25ea13163780abf547ccfe989267f3eb7abb475beec92da3",
+   3056
+  ],
+  "node_modules/ws/lib/constants.js": [
+   "391e823142b8b370e55a2fd32b022deaf03b8415c56000009674ebc86a0b4f86",
+   503
+  ],
+  "node_modules/ws/lib/event-target.js": [
+   "c45d3c6e12d170c860c0c3f1a050aa0f864d9806632b609a1e607d675aba128c",
+   7321
+  ],
+  "node_modules/ws/lib/extension.js": [
+   "852564f0f6b460287043803eae732666fb5610f676874354fc89f06aa4e986ed",
+   6183
+  ],
+  "node_modules/ws/lib/limiter.js": [
+   "e0469d4b83f6ba764b15f80e1766b75c136fbff68f048f4c050f0b1c7f065f69",
+   1034
+  ],
+  "node_modules/ws/lib/permessage-deflate.js": [
+   "16a91536988a53c23047ee5882392068728a839a244178c3b09b8c54982f58b0",
+   14669
+  ],
+  "node_modules/ws/lib/receiver.js": [
+   "a6ada33c9a2d54eaf595824b821ea89ca2c6395f89aa06755c52142148274884",
+   17439
+  ],
+  "node_modules/ws/lib/sender.js": [
+   "d0791d30c3defd44dcabbddb879a901c757993fea2c00a7ffea01d53b23b4b77",
+   16886
+  ],
+  "node_modules/ws/lib/stream.js": [
+   "a56fcb6e2b152097ee820b6f5410b1f71e59819b45d08d9f8bda588fe39070ec",
+   4204
+  ],
+  "node_modules/ws/lib/subprotocol.js": [
+   "be3f6323d6f549568577dcba9004c1479d95c65a7abb0fe0c582875b9fac0b7c",
+   1498
+  ],
+  "node_modules/ws/lib/validation.js": [
+   "41ce8e83d0d434132e1704895fedb91f6703a701b42d91c80954ab29b2845593",
+   3903
+  ],
+  "node_modules/ws/lib/websocket-server.js": [
+   "6d8dd89a841748c80445fd5fcdb5ba8005369b53cc3525135e11304c8b9c55e5",
+   17022
+  ],
+  "node_modules/ws/lib/websocket.js": [
+   "7ccf305925f0cdb74e06b75b4c84de134b1bd771a220ef409b24520def08128f",
+   37848
+  ],
+  "node_modules/ws/package.json": [
+   "c1ef91ca04eb4754c011c5f0e7638b5078ff71104fada400c44ac761cf93e0b1",
+   1829
+  ],
+  "node_modules/ws/wrapper.mjs": [
+   "fe154662301fd558f935f9c217fccbe7a7dac02ff39e648a000589403ff27c7f",
+   554
+  ],
+  "package.json": [
+   "6ff32d49a79494502307566f3e8fdedabafc150b07783b481b62e5717b3bb993",
+   345
+  ],
+  "public/css/style.css": [
+   "2caa58edd0c0358a1a55be85bc1550d02ccb75e4298ded8a2effb4e24e026bfa",
+   65618
+  ],
+  "public/index.html": [
+   "123e666892a4918d222a200f7f94cdeeccf50594908ef73d42184c8ec092443d",
+   39427
+  ],
+  "public/js/a11y.js": [
+   "01493123a592d8868fe91a15be7a72b6c8687f8deac62c1aff7898c1aca4b8c3",
+   2575
+  ],
+  "public/js/ai.js": [
+   "5e6284ab5e699f4e516aa8836b7173fbc858b32c63c9e7a7d1dad927d7c16123",
+   27031
+  ],
+  "public/js/amon.js": [
+   "7edfa6b1afe3aee01cc8b4a7ae2e94bea4f6689fda11d1d6e1e709cfe38bab3a",
+   92757
+  ],
+  "public/js/amondata.js": [
+   "a9123b7e0a3ae25b5f5e43a7e4f4d5b26405399501cc90aa8384178081172ec4",
+   68806
+  ],
+  "public/js/amoninfo.js": [
+   "20e7695f6315527df4b772c952626e6bf9cf152e2328c5b9d3b371d91fcc26c0",
+   15482
+  ],
+  "public/js/amonui.js": [
+   "f2f5c1a98b4dc57b024427b0623bd872faf8eac13c667077907ed687a8de36e3",
+   114377
+  ],
+  "public/js/art.js": [
+   "4e76c62c2226fa51c4ccb4ce7024966ad7f4f9a663ed81af7b7de9ef39eeffbb",
+   91049
+  ],
+  "public/js/audio.js": [
+   "8ef3cf4615f7b156750f9cc52096868ad6937582e5ea88cb026b6bcf97190370",
+   32396
+  ],
+  "public/js/bodies.js": [
+   "c697e7cdd3803906be8a6156f9cad751c48fb226b59a5edca14fbf1a3980955c",
+   30222
+  ],
+  "public/js/brawl.js": [
+   "ac0a3a7c90c696f9d11a99d79b59f76af919c5fa4fe60837f679413ca94f8956",
+   18410
+  ],
+  "public/js/cardinfo.js": [
+   "0b4e2488dc3f4eb73aa4856978599240d4a516bd94bea22387fa766290f25a6a",
+   8526
+  ],
+  "public/js/cards.js": [
+   "0784acfb6c47758185183e508b2dacb5e99af8122fae103b54ddecd044cd45e6",
+   13085
+  ],
+  "public/js/config.js": [
+   "04396d2e8ad80c09caafd3562c23364a36ef216fcc25ea0944468a4567ae081a",
+   27763
+  ],
+  "public/js/coop.js": [
+   "9282d7cdc1bf3eb0ee1708719083a3a8adca2a71c6c7248e6f63b21dea9b4400",
+   45103
+  ],
+  "public/js/core.js": [
+   "a77bcab3582cedd495689b062261cd40b7eaf8e955f2a48fc436768df60d264d",
+   31431
+  ],
+  "public/js/economy.js": [
+   "45eb5b7a382c2a9f980dd2ec575ca85ec14174f9ad58b38d9ea5e86daafb0f8c",
+   4111
+  ],
+  "public/js/effects.js": [
+   "67e495d05c635142508adbc74dd0b65237b1b455772d8c6f441cc13e7ed54383",
+   7496
+  ],
+  "public/js/gallery.js": [
+   "bbae26f01ff6359f7b463dc91d29531cfa19b50613310175cf77671c5c40e0b0",
+   20147
+  ],
+  "public/js/geocache.js": [
+   "ee3a1a9f08d2a9e1b534a443f2dbb6837df880a497d5a1c051a4bceba198703a",
+   932
+  ],
+  "public/js/gfxdetect.js": [
+   "2c76d4d309bb043bbb51395dddd18ea190ba01aa745f286e800a0587c6eac523",
+   1650
+  ],
+  "public/js/i18n.js": [
+   "b19b0ac560aea9052c23347084008dd35382771ee513edc81ced11c1f59f5bcf",
+   24659
+  ],
+  "public/js/levelgen.js": [
+   "93d88e42354b29488365dcf8f28eed5d22adf1fab9d934350d51fa1de0285f04",
+   24265
+  ],
+  "public/js/main.js": [
+   "e9bebf2a112965f69eac42e47c22e000f59bfe0797813b4831b983b6c2d8de83",
+   262290
+  ],
+  "public/js/net.js": [
+   "d415f683a93c1c3320d56977ba98fe00506efc8dacc6d989f8826a6d8c86a2de",
+   4824
+  ],
+  "public/js/netcodec.js": [
+   "7d6a9c53252af9a2626029bc001c110348922ab6cbad84388458b4a4c6eaee2b",
+   17933
+  ],
+  "public/js/netstats.js": [
+   "0b5ac56604563fb184337790136aaf7f4bc7227ec1a248fec0d4b05faf091280",
+   9443
+  ],
+  "public/js/openworld.js": [
+   "3290897c9c6583566f20994a212477dc5287d4fdf0cb8c477052e06861896750",
+   60838
+  ],
+  "public/js/owrender.js": [
+   "dc6e988e83395464ca12878d5cd736604dc92fed3d1146c42c090e189d94ed02",
+   27697
+  ],
+  "public/js/physics.js": [
+   "967a5160bf233a9f4b18abffed3adec65974568ad243ce7117d75e995cf26216",
+   17929
+  ],
+  "public/js/post.js": [
+   "866a0a7bd8eab1bee43cf419162cd8ce8881d69bc5a34fe3c614f2ee8292154f",
+   10712
+  ],
+  "public/js/render.js": [
+   "d86f8e5d80716f1e26906d789adf997aaf4011a0bdbb3f70dd5aacd0cf525c3e",
+   239268
+  ],
+  "public/js/rt.js": [
+   "27da677421fb6d539b91c04feda574eb9ace7f57f74c99b37cceda721eeb4ecc",
+   9646
+  ],
+  "public/js/scenery.js": [
+   "14b0030fd9ea016b658179f9d5b43f770af21d249268300b5b39264435e3ff6c",
+   30454
+  ],
+  "public/js/settings.js": [
+   "1b11c30a6a7df97ca359921a1545adcd38ef33b1e449fc5a6b1591b997474dd4",
+   6709
+  ],
+  "public/js/side.js": [
+   "b9a3915b6085365e0ffadc8a589603a70ade68d62383e425f04b9695afeac523",
+   24607
+  ],
+  "public/js/siderender.js": [
+   "d195bf6a1eb8c221ddb654e093c576ff424d3d13b8c81f74697b46bb37663b34",
+   17528
+  ],
+  "public/js/sim.js": [
+   "cb2f00575e8fee0014045ad0827ac4a17c720319e4c29c138f26da3aee5cac53",
+   231652
+  ],
+  "public/js/slop.js": [
+   "9dc85c181fa4b81008b22eeb11ad788a5774e5e7f4526200377d6ec34d6f9932",
+   5573
+  ],
+  "public/js/synergy.js": [
+   "c2b156aaa3ecf3372be874ff68ae32ec96ef8b91c99f50b1154eff390a6bbf8e",
+   4432
+  ],
+  "public/js/unitart.js": [
+   "eeb879705512e83721bb02e1085f66aa9971316709a502fa0babc2d07b6abd18",
+   28312
+  ],
+  "public/zz_test.html": [
+   "5e0493da5a9decd104a5c2da928c75d55fa3523426b8edc37bbc462cdb141459",
+   1262
+  ],
+  "server.js": [
+   "35915dc9e49515847fb3bd1b38a0f1da462678674f1add3a37b564f1313dc873",
+   10722
+  ],
+  "sounds/README.md": [
+   "fd1b846d6a8f61dd305f4c3e741364d9b31023cf3b69c3a8a1310d2ade5b251f",
+   2608
+  ],
+  "sounds/sounds.json": [
+   "a03e2edae743772b5f473b3e98703a0a825143d79a4bb56fbb8a19a5b0d4eb79",
+   582
+  ],
+  "steam.config.json": [
+   "76d42cdfb4dc165e311a244e33a5f9513847285ba60e934c816c79bbcbb569c8",
+   17
+  ],
+  "tools/HOW-TO-PLAY.txt": [
+   "54b0118a4b740b99b8cc057ffcac556910b228fc9e49f3563ea79be0d2e75bee",
+   1796
+  ],
+  "tools/__pycache__/amon-art.cpython-313.pyc": [
+   "575157b65c264aac0b2a4e932517465dfb1f2a2501d817cf534f8313a2c2bced",
+   28457
+  ],
+  "tools/__pycache__/card-art.cpython-313.pyc": [
+   "9a1792255381211669da6ab4dd6646a4134b9406d73d12ba31bdf320bcaffd37",
+   129711
+  ],
+  "tools/amon-art.py": [
+   "1393105f4f688d9db80b7d20320aec325169f1b5d72c222ebfddf1a4e7e69e57",
+   14800
+  ],
+  "tools/card-art.py": [
+   "9985ef767aecb55a37aa67964f002d10d620c141cafd197e6fa568bf75f42a40",
+   65646
+  ],
+  "tools/codecfuzz.mjs": [
+   "458d5c87606a59514de6c3dd827e739e485d22f7d28f82aaaae7499c062d0c0a",
+   7200
+  ],
+  "tools/publish-update.cjs": [
+   "9218f6620119a966961d39b8d4eb9624c911cebf80ed32ec6e437bdbd469e768",
+   2280
+  ],
+  "tools/simtest.mjs": [
+   "26020cb3e0a862e9b8e519644fbe74877dbacf0f471a333ee869e18383345804",
+   119113
+  ],
+  "tools/trim-build.cjs": [
+   "f14cc62bb2ab8633c47b31e660b4a38c3774977e6e95d099f8a71b9b6c4d288d",
+   2380
+  ]
+ },
+ "electron": "33.4.11"
+}

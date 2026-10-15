@@ -1,0 +1,15 @@
+{
+  "id": "repulsor",
+  "name": "Repulsor",
+  "rarity": "uncommon",
+  "icon": "💨",
+  "description": "Blocking shoves nearby enemies away.",
+  "modifiers": [
+    {
+      "stat": "blockPush",
+      "op": "add",
+      "value": 18
+    }
+  ],
+  "image": "art.png"
+}

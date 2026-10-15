@@ -1,0 +1,29 @@
+{
+  "id": "war-drum",
+  "name": "War Drum",
+  "rarity": "combo",
+  "icon": "🥁",
+  "description": "A bottomless drum of bullets.",
+  "combo": [
+    "tommy-gun",
+    "extended-mag"
+  ],
+  "modifiers": [
+    {
+      "stat": "ammo",
+      "op": "add",
+      "value": 18
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 1.9
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.75
+    }
+  ],
+  "image": "art.png"
+}

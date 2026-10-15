@@ -1,0 +1,22 @@
+{
+  "id": "regretful-pact",
+  "name": "Regretful Pact",
+  "rarity": "rare",
+  "icon": "📜",
+  "description": "A dark gift. From now on almost every card you're offered is cursed. Repentance may appear to undo it.",
+  "modifiers": [
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 1.25
+    },
+    {
+      "stat": "health",
+      "op": "mul",
+      "value": 1.1
+    }
+  ],
+  "special": "regretfulPact",
+  "noCursed": true,
+  "image": "art.png"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "hex-rounds",
+  "name": "Hex Rounds",
+  "rarity": "rare",
+  "icon": "🔮",
+  "description": "Targets you hit take 25% more damage from everything for 2.5 seconds.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "hex",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 0.85
+    }
+  ]
+}

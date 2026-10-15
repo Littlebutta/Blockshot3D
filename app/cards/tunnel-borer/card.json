@@ -1,0 +1,29 @@
+{
+  "id": "tunnel-borer",
+  "name": "Tunnel Borer",
+  "rarity": "combo",
+  "icon": "⛏️",
+  "description": "Bores through anything at rail speed.",
+  "combo": [
+    "drill-rounds",
+    "railgun-coil"
+  ],
+  "modifiers": [
+    {
+      "stat": "drill",
+      "op": "add",
+      "value": 2
+    },
+    {
+      "stat": "bulletSpeed",
+      "op": "mul",
+      "value": 1.9
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 1.2
+    }
+  ],
+  "image": "art.png"
+}

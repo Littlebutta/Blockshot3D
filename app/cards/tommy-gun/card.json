@@ -1,0 +1,26 @@
+{
+  "id": "tommy-gun",
+  "name": "Tommy Gun",
+  "rarity": "uncommon",
+  "icon": "🔫",
+  "description": "A drum magazine and a hot trigger. You can only own one.",
+  "modifiers": [
+    {
+      "stat": "ammo",
+      "op": "add",
+      "value": 12
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 1.6
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.8
+    }
+  ],
+  "unique": true,
+  "image": "art.png"
+}

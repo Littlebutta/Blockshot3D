@@ -1,0 +1,11 @@
+{
+  "id": "repentance",
+  "name": "Repentance",
+  "rarity": "rare",
+  "icon": "🕊️",
+  "description": "Tear up your Regretful Pact. Your card offers go back to normal.",
+  "modifiers": [],
+  "special": "repentance",
+  "noCursed": true,
+  "image": "art.png"
+}

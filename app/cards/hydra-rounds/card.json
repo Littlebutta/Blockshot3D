@@ -1,0 +1,25 @@
+{
+  "id": "hydra-rounds",
+  "name": "Hydra Rounds",
+  "rarity": "legendary",
+  "icon": "🐉",
+  "description": "Every shot splits into a spread of ricocheting bullets.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "projectiles",
+      "op": "add",
+      "value": 2
+    },
+    {
+      "stat": "bounces",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.75
+    }
+  ]
+}

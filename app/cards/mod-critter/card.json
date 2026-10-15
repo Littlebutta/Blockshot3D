@@ -1,0 +1,18 @@
+{
+  "id": "mod-critter",
+  "name": "Critter",
+  "rarity": "mod",
+  "icon": "🐀",
+  "description": "Every shot sends a biting critter after the nearest enemy.",
+  "modifiers": [
+    {
+      "stat": "fireRate",
+      "op": "set",
+      "value": 1.0
+    }
+  ],
+  "weaponMod": "critter",
+  "noCursed": true,
+  "details": "Every shot sends a critter in your color running at the nearest enemy. It keeps a short distance and lunges to bite, like wave critters. Critter speed = 60% of your bullet speed, bite = your bullet damage, health = 10% of yours, at most 6 at once. Fire rate is reset to 1 shot per second when you take it.",
+  "image": "art.png"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "shield-turret",
+  "name": "Turret",
+  "rarity": "shieldmod",
+  "icon": "🗼",
+  "description": "Blocking places a turret with its own shield bubble.",
+  "modifiers": [
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.5
+    }
+  ],
+  "shieldMod": "turret",
+  "noCursed": true,
+  "details": "Blocking also places a turret just ahead of you (between you and any wall you drop). The turret has its own block bubble: its health grows with Block duration and Block size, it breaks and recharges in 3 s, and an intact bubble slowly refills. The bubble turns redder as it nears breaking. Turret health, lifetime, shots and damage grow with your block stats: Block size, Block duration, Echo blocks (= shots per volley), Bullets on block and Reflected damage. Echo blocks are spaced 5 s apart."
+}

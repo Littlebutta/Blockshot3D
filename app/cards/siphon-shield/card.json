@@ -1,0 +1,20 @@
+{
+  "id": "siphon-shield",
+  "name": "Siphon Shield",
+  "rarity": "rare",
+  "icon": "💚",
+  "description": "Damage your block stops heals you for half of it. Works through a deployed shield wall too (not sandbags or concrete). Block takes longer to come back.",
+  "modifiers": [
+    {
+      "stat": "blockLeech",
+      "op": "add",
+      "value": 0.5
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.35
+    }
+  ],
+  "holyDescription": "Damage your block stops heals you. Works through a deployed shield wall too (not sandbags or concrete)."
+}

@@ -1,0 +1,20 @@
+{
+  "id": "long-guard",
+  "name": "Long Guard",
+  "rarity": "common",
+  "icon": "⏳",
+  "description": "Your block bubble lasts much longer.",
+  "modifiers": [
+    {
+      "stat": "blockDuration",
+      "op": "mul",
+      "value": 1.8
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.15
+    }
+  ],
+  "image": "art.png"
+}

@@ -1,0 +1,22 @@
+{
+  "id": "encore-engine",
+  "name": "Encore Engine",
+  "rarity": "rare",
+  "icon": "🎼",
+  "description": "Most shots fire a free Encore shot right after (it uses no ammo). Each bullet hits a bit softer.",
+  "modifiers": [
+    {
+      "stat": "encore",
+      "op": "add",
+      "value": 0.8
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.85
+    }
+  ],
+  "holyDescription": "Most shots fire a free Encore shot right after (it uses no ammo).",
+  "image": "art.png",
+  "details": "An Encore is a full copy of your shot (same bullets, effects and damage) a moment later. It's free: it uses no ammo and still fires if the shot before it emptied your mag. Encores don't trigger more encores. Every full point of Encore is a guaranteed encore; the rest is the chance of one more."
+}

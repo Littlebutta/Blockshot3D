@@ -1,0 +1,21 @@
+{
+  "id": "drain-life",
+  "name": "Drain Life",
+  "rarity": "uncommon",
+  "icon": "🩸",
+  "description": "Siphon health from the nearest enemy you can see. Stacks.",
+  "modifiers": [
+    {
+      "stat": "lifeDrain",
+      "op": "add",
+      "value": 4
+    },
+    {
+      "stat": "drainRange",
+      "op": "add",
+      "value": 3
+    }
+  ],
+  "details": "Every second you pull health out of the nearest enemy you can see (a red beam shows the link) and add it to your own. The base reach is 5 m; this card adds 3 m. Each extra copy adds more drain per second and more reach, so stacking it turns it into a real weapon.",
+  "image": "art.png"
+}

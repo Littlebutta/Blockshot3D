@@ -1,0 +1,16 @@
+{
+  "id": "toxic-cloud",
+  "name": "Toxic Cloud",
+  "rarity": "rare",
+  "icon": "☣️",
+  "description": "Bullet impacts (and each bounce) leave a poison cloud that drifts on the way the bullet flew and spreads out for 4 seconds.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "toxic",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "details": "Unlike Napalm, which sticks to surfaces, the cloud hangs in the air, keeps drifting in the bullet's direction and grows as it thins out, so it can roll around cover. Enemies inside take 30% of your bullet damage per second per level. Up to 4 clouds per bullet."
+}

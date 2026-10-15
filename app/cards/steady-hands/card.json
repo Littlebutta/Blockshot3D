@@ -1,0 +1,19 @@
+{
+  "id": "steady-hands",
+  "name": "Steady Hands",
+  "rarity": "common",
+  "icon": "🤲",
+  "description": "Tighter groupings and a quicker flight.",
+  "modifiers": [
+    {
+      "stat": "spread",
+      "op": "mul",
+      "value": 0.6
+    },
+    {
+      "stat": "bulletSpeed",
+      "op": "mul",
+      "value": 1.1
+    }
+  ]
+}

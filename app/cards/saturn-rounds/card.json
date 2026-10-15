@@ -1,0 +1,19 @@
+{
+  "id": "saturn-rounds",
+  "name": "Saturn Rounds",
+  "rarity": "rare",
+  "icon": "🪐",
+  "description": "Bullets wear an outer ring. The ring passes through walls but counts as a hit on any player it touches.",
+  "modifiers": [
+    {
+      "stat": "ringHit",
+      "op": "add",
+      "value": 0.55
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.9
+    }
+  ]
+}

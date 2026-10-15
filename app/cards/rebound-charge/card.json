@@ -1,0 +1,24 @@
+{
+  "id": "rebound-charge",
+  "name": "Rebound Charge",
+  "rarity": "rare",
+  "icon": "\ud83d\udca5",
+  "description": "Bullets explode for their full damage every time they bounce and when they land, and bounce one extra time.",
+  "modifiers": [
+    {
+      "stat": "bounceExplode",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "bounces",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 0.85
+    }
+  ]
+}

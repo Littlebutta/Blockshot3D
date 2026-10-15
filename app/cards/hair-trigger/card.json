@@ -1,0 +1,21 @@
+{
+  "id": "hair-trigger",
+  "name": "Hair Trigger",
+  "rarity": "common",
+  "icon": "☝️",
+  "description": "A lighter trigger pull. Reloads take a moment longer.",
+  "modifiers": [
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 1.3
+    },
+    {
+      "stat": "reloadTime",
+      "op": "mul",
+      "value": 1.1
+    }
+  ],
+  "holyDescription": "A lighter trigger pull.",
+  "image": "art.png"
+}

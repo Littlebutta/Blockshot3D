@@ -1,0 +1,12 @@
+{
+  "id": "bloodforge",
+  "name": "Bloodforge",
+  "rarity": "rare",
+  "icon": "🫀",
+  "description": "Damage you deal to enemies is added to your max health for the rest of the round. You grow bigger as it builds.",
+  "image": "art.png",
+  "modifiers": [
+    { "stat": "growOnHit", "op": "add", "value": 0.4 },
+    { "stat": "damage", "op": "mul", "value": 0.9 }
+  ]
+}

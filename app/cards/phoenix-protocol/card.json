@@ -1,0 +1,20 @@
+{
+  "id": "phoenix-protocol",
+  "name": "Phoenix Protocol",
+  "rarity": "legendary",
+  "icon": "🔥",
+  "description": "Once per round, a killing blow leaves you standing at half health instead.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "revive",
+      "op": "add",
+      "value": 0.5
+    },
+    {
+      "stat": "health",
+      "op": "mul",
+      "value": 0.9
+    }
+  ]
+}

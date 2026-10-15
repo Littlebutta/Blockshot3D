@@ -1,0 +1,26 @@
+{
+  "id": "heavy-slugs",
+  "name": "Heavy Slugs",
+  "rarity": "common",
+  "icon": "🔩",
+  "description": "Big, slow, painful rounds.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 1.7
+    },
+    {
+      "stat": "bulletSize",
+      "op": "mul",
+      "value": 1.4
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 0.75
+    }
+  ],
+  "holyDescription": "Big, painful rounds."
+}

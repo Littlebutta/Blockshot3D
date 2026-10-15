@@ -1,0 +1,19 @@
+{
+  "id": "kinetic-rebound",
+  "name": "Kinetic Rebound",
+  "rarity": "uncommon",
+  "icon": "📈",
+  "description": "Every bounce adds 25% damage and some speed.",
+  "modifiers": [
+    {
+      "stat": "bounceBoost",
+      "op": "add",
+      "value": 0.25
+    },
+    {
+      "stat": "bounces",
+      "op": "add",
+      "value": 1
+    }
+  ]
+}

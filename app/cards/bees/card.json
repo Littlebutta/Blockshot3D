@@ -1,0 +1,31 @@
+{
+  "id": "bees",
+  "name": "Bees",
+  "rarity": "legendary",
+  "icon": "🐝",
+  "description": "Your gun fires 4 bees that chase the first enemy they see, weaving around obstacles. Much slower fire rate and much weaker bullets.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "bees",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "projectiles",
+      "op": "add",
+      "value": 3
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 0.4
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.35
+    }
+  ],
+  "details": "Each bee locks onto the first enemy it sees and keeps after it until that target dies, then looks for another. Bees fly slowly (8.5 m/s, a bit slower than you run), leave the gun spread out and weave on their way in, look well ahead and keep going round walls instead of bumping into them, and don't drop. They can be blocked: a blocked bee turns on its shooter. Lives 6 s."
+}

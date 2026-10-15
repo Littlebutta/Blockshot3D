@@ -1,0 +1,25 @@
+{
+  "id": "splinter-bounce",
+  "name": "Splinter Bounce",
+  "rarity": "rare",
+  "icon": "🔀",
+  "description": "Every bounce splits off an extra bullet (60% damage).",
+  "modifiers": [
+    {
+      "stat": "bounceSplit",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "bounces",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.85
+    }
+  ],
+  "image": "art.png"
+}

@@ -1,0 +1,25 @@
+{
+  "id": "plague-doctor",
+  "name": "Plague Doctor",
+  "rarity": "combo",
+  "icon": "🩺",
+  "description": "Poison your enemies, patch up your friends.",
+  "combo": [
+    "venom-rounds",
+    "field-medic"
+  ],
+  "modifiers": [
+    {
+      "stat": "poison",
+      "op": "add",
+      "value": 2
+    },
+    {
+      "stat": "healAllies",
+      "op": "add",
+      "value": 0.5
+    }
+  ],
+  "image": "art.png",
+  "details": "Your hits poison (level 2 Venom: a share of the target's health over 5 seconds, ramping up while you keep hitting them; each hit resets the timer). Half of the damage you deal is shared out as healing to your nearby teammates."
+}

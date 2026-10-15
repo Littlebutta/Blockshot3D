@@ -1,0 +1,26 @@
+{
+  "id": "call-and-response",
+  "name": "Call and Response",
+  "rarity": "uncommon",
+  "icon": "📣",
+  "description": "An extra round and a good chance of a free Encore shot (no ammo used) after each shot. Longer reloads.",
+  "modifiers": [
+    {
+      "stat": "encore",
+      "op": "add",
+      "value": 0.4
+    },
+    {
+      "stat": "ammo",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "reloadTime",
+      "op": "mul",
+      "value": 1.15
+    }
+  ],
+  "holyDescription": "An extra round and a good chance of a free Encore shot (no ammo used) after each shot.",
+  "image": "art.png"
+}

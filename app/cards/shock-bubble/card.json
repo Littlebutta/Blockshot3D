@@ -1,0 +1,21 @@
+{
+  "id": "shock-bubble",
+  "name": "Shock Bubble",
+  "rarity": "rare",
+  "icon": "🌩️",
+  "description": "Each block sends a shock burst through the floor around you, hurting and briefly slowing enemies in the area.",
+  "modifiers": [
+    {
+      "stat": "blockShock",
+      "op": "add",
+      "value": 60
+    },
+    {
+      "stat": "blockSize",
+      "op": "mul",
+      "value": 1.2
+    }
+  ],
+  "image": "art.png",
+  "details": "When you block, lightning crackles across the floor in a circle around you (about 3.6 m, bigger with Block size). Every enemy in it takes the Shock burst damage once and is slowed for a moment. Your bubble is also a bit bigger. It no longer zaps on touch."
+}

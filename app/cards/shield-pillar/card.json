@@ -1,0 +1,17 @@
+{
+  "id": "shield-pillar",
+  "name": "Pillar Shield",
+  "rarity": "shieldmod",
+  "icon": "🏛️",
+  "description": "Blocking raises a tall pillar under you with its own shield.",
+  "modifiers": [
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.5
+    }
+  ],
+  "shieldMod": "pillar",
+  "noCursed": true,
+  "details": "Blocking raises a tall, wide pillar under you, boxed in by a square shield that lines up with the pillar's walls. The shield starts at 170 health; Block size makes it (and the pillar) bigger and tougher, and Block duration adds more health.\n\nThe shield belongs to the pillar, not to you: it protects whoever stands on top from your enemies until it's shot down. Step off and you're on your own. Blocking again moves the pillar to where you are."
+}

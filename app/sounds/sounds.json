@@ -1,0 +1,37 @@
+{
+  "sfx": {
+    "shoot": "",
+    "hit": "",
+    "hurt": "",
+    "block": "",
+    "shield": "",
+    "bounce": "",
+    "explode": "",
+    "death": "",
+    "jump": "",
+    "reload": "",
+    "roundStart": "",
+    "fight": "",
+    "roundWin": "",
+    "roundLose": "",
+    "cardPick": "",
+    "reroll": "",
+    "ui": "",
+    "victory": "",
+    "defeat": "",
+    "slash": "",
+    "cut": "",
+    "powerUp": "",
+    "ritual": "",
+    "grunt": "",
+    "darkHum": "",
+    "choir": "",
+    "coin": ""
+  },
+  "music": {
+    "menu": "",
+    "battle": "",
+    "boss": "",
+    "suspense": ""
+  }
+}

@@ -1,0 +1,36 @@
+BLOCKSHOT 3D  -  test build
+===========================
+
+Start the game:  double-click Blockshot3D.exe
+(Windows may show "Windows protected your PC" because this test build isn't signed.
+ Click "More info" then "Run anyway".)
+
+PLAYING WITH STEAM FRIENDS
+1. Make sure Steam is running and you're logged in.
+2. In the game: Multiplayer -> Host for Steam friends.
+3. Press "Invite Steam friends" and pick friends. When they accept, they join your lobby.
+   They need the same build of the game installed and Steam running.
+   (Test builds use Steam's shared developer test app "Spacewar", so Steam will
+    show you as playing Spacewar. That's expected until the game has its own Steam ID.)
+
+TESTING MULTIPLAYER ALONE
+Multiplayer -> Host a game, then press "Open a test window" (or Ctrl+Shift+N).
+In the new window choose Multiplayer and join with the 4-letter room code.
+
+ADDING CARDS, SOUNDS AND ART
+The game's files are in:  resources\app\
+  cards\    one folder per card (card.json + art.png). Copy cards\_TEMPLATE to start.
+  sounds\   drop audio files here and list them in sounds\sounds.json
+  art\      custom player model and art notes
+  public\js\config.js   colors, rarity odds, base stats
+Restart the game (or press Reload cards in the Card directory) after changes.
+
+Feedback tip: press Ctrl+Shift+I to open developer tools if something breaks, and
+screenshot any red errors in the Console tab.
+
+
+PLAY ON YOUR PHONE
+Host a game (Multiplayer > Host a game, or Host for Steam friends). The lobby shows a QR code:
+scan it with your phone on the same Wi-Fi and it joins the match in the phone's browser.
+If Windows asks whether Blockshot3D may use the network, choose Allow (private networks).
+On the phone: left thumb moves, right thumb aims and fires (or let Auto aim and shoot for you).

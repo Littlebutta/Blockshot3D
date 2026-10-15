@@ -1,0 +1,15 @@
+{
+  "id": "padded-vest",
+  "name": "Padded Vest",
+  "rarity": "common",
+  "icon": "🦺",
+  "description": "A little extra padding where it counts.",
+  "modifiers": [
+    {
+      "stat": "health",
+      "op": "add",
+      "value": 25
+    }
+  ],
+  "image": "art.png"
+}

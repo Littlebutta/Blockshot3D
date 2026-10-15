@@ -1,0 +1,20 @@
+{
+  "id": "extended-mag",
+  "name": "Extended Mag",
+  "rarity": "common",
+  "icon": "📦",
+  "description": "More shots before reloading.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "ammo",
+      "op": "add",
+      "value": 6
+    },
+    {
+      "stat": "reloadTime",
+      "op": "mul",
+      "value": 1.15
+    }
+  ]
+}

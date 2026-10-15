@@ -1,0 +1,30 @@
+{
+  "id": "overture",
+  "name": "Overture",
+  "rarity": "combo",
+  "icon": "🎺",
+  "description": "A hair trigger that keeps on playing.",
+  "combo": [
+    "stutter-trigger",
+    "hair-trigger"
+  ],
+  "modifiers": [
+    {
+      "stat": "encore",
+      "op": "add",
+      "value": 0.5
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 1.35
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.9
+    }
+  ],
+  "image": "art.png",
+  "details": "Half your shots are followed by an Encore: a free extra shot right after the first. It uses no ammo."
+}

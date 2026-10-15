@@ -1,0 +1,20 @@
+{
+  "id": "twin-barrel",
+  "name": "Twin Barrel",
+  "rarity": "legendary",
+  "icon": "\ud83d\udd31",
+  "description": "Doubles the bullets in every shot: 1 becomes 2, 2 becomes 4, and so on, whenever you take it. Each bullet deals 30% less damage.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "projMul",
+      "op": "mul",
+      "value": 2
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.7
+    }
+  ]
+}

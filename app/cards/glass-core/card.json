@@ -1,0 +1,21 @@
+{
+  "id": "glass-core",
+  "name": "Glass Core",
+  "rarity": "rare",
+  "icon": "💎",
+  "description": "Hit hard, break easy.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 1.6
+    },
+    {
+      "stat": "health",
+      "op": "mul",
+      "value": 0.7
+    }
+  ],
+  "holyDescription": "Hit hard."
+}

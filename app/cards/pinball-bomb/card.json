@@ -1,0 +1,34 @@
+{
+  "id": "pinball-bomb",
+  "name": "Pinball Bomb",
+  "rarity": "combo",
+  "icon": "🎱",
+  "description": "Bouncing bombs that go off twice.",
+  "combo": [
+    "ricochet-rounds",
+    "volatile-payload"
+  ],
+  "modifiers": [
+    {
+      "stat": "bounces",
+      "op": "add",
+      "value": 3
+    },
+    {
+      "stat": "explosive",
+      "op": "add",
+      "value": 2
+    },
+    {
+      "stat": "bulletSpeed",
+      "op": "mul",
+      "value": 1.1
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 0.85
+    }
+  ],
+  "image": "art.png"
+}

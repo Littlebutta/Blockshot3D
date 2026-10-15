@@ -1,0 +1,28 @@
+{
+  "id": "mod-beam-rifle",
+  "name": "Beam Rifle",
+  "rarity": "mod",
+  "icon": "🔦",
+  "description": "An instant-hit beam that bounces and carries your bullet effects.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 1.5
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.7
+    },
+    {
+      "stat": "ammo",
+      "op": "add",
+      "value": 3
+    }
+  ],
+  "weaponMod": "beam",
+  "noCursed": true,
+  "details": "Instant-hit beam. No travel time, no drop, stopped by shields. Bounces off walls with Bounces and carries your other bullet effects (fire, poison, explosions...)."
+}

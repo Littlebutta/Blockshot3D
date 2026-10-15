@@ -1,0 +1,10 @@
+<html><body style="margin:0;background:#334"><canvas id=c width=900 height=450></canvas><script type="module">
+import * as THREE from '/vendor/three/build/three.module.js';
+import { buildPlayerModel, buildSaiyanHair, buildPentagram, drawPentagram } from '/js/art.js';
+const r=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true}); const sc=new THREE.Scene(); sc.background=new THREE.Color(0x334);
+const cam=new THREE.PerspectiveCamera(35,2,0.1,100); cam.position.set(0,2.6,8); cam.lookAt(0,1.1,0);
+sc.add(new THREE.HemisphereLight(0xffffff,0x444455,1.1)); const s=new THREE.DirectionalLight(0xffffff,.8); s.position.set(2,4,3); sc.add(s);
+const fl=new THREE.Mesh(new THREE.PlaneGeometry(20,20),new THREE.MeshStandardMaterial({color:0x2a2a33})); fl.rotation.x=-Math.PI/2; sc.add(fl);
+for (const [x,f] of [[-2.6,0],[0,0.5],[2.6,1]]) { const m=buildPlayerModel('#4f8cff', x>2?'katana':'cube'); const h=buildSaiyanHair(); const sc2=0.4+0.75*f; h.group.scale.setScalar(sc2); h.mat.color.setRGB(.5+.5*f,.5+.32*f,.5-.27*f); h.mat.emissive.setRGB(f,.68*f,0); h.mat.emissiveIntensity= f>=1?1:0.05+.55*f*f; m.root.add(h.group); m.root.position.x=x; m.root.rotation.y=-0.6; sc.add(m.root); }
+r.render(sc,cam); window.done=1;
+</script></body></html>

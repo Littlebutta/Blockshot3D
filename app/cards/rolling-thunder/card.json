@@ -1,0 +1,21 @@
+{
+  "id": "rolling-thunder",
+  "name": "Rolling Thunder",
+  "rarity": "uncommon",
+  "icon": "🌩️",
+  "description": "Half your shots roll into a free Encore shot right after (no ammo used). Your trigger is a little slower.",
+  "modifiers": [
+    {
+      "stat": "encore",
+      "op": "add",
+      "value": 0.5
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 0.85
+    }
+  ],
+  "holyDescription": "Half your shots roll into a free Encore shot right after (no ammo used).",
+  "image": "art.png"
+}

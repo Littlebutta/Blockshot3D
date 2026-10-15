@@ -1,0 +1,18 @@
+{
+  "id": "mod-katana",
+  "name": "Katana",
+  "rarity": "mod",
+  "icon": "🗡️",
+  "description": "Your gun becomes a sword that slashes bullets out of the air.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "moveSpeed",
+      "op": "mul",
+      "value": 1.1
+    }
+  ],
+  "weaponMod": "katana",
+  "noCursed": true,
+  "details": "Your gun becomes a samurai sword. Click to slash everything in front of you (140% of your bullet damage, with all your bullet effects); a slash also cuts enemy bullets out of the air, so they never hit, explode or burn. Hold to charge a flying slash wave that carries all your bullet cards and cuts bullets in its path. More fire rate = faster swings and faster charging. No ammo, no reload."
+}

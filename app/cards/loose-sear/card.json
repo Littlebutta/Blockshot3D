@@ -1,0 +1,21 @@
+{
+  "id": "loose-sear",
+  "name": "Loose Sear",
+  "rarity": "common",
+  "icon": "⚙️",
+  "description": "A worn part makes your gun fire a free Encore shot now and then (no ammo used). A bit wilder.",
+  "modifiers": [
+    {
+      "stat": "encore",
+      "op": "add",
+      "value": 0.25
+    },
+    {
+      "stat": "spread",
+      "op": "add",
+      "value": 0.04
+    }
+  ],
+  "holyDescription": "A worn part makes your gun fire a free Encore shot now and then (no ammo used).",
+  "image": "art.png"
+}

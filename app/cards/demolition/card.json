@@ -1,0 +1,30 @@
+{
+  "id": "demolition",
+  "name": "Demolition",
+  "rarity": "combo",
+  "icon": "🧨",
+  "description": "Every hit blows up twice.",
+  "combo": [
+    "sticky-bombs",
+    "volatile-payload"
+  ],
+  "modifiers": [
+    {
+      "stat": "explosive",
+      "op": "add",
+      "value": 1.2
+    },
+    {
+      "stat": "limpet",
+      "op": "add",
+      "value": 1.5
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 0.8
+    }
+  ],
+  "image": "art.png",
+  "details": "Bullets explode where they land. Anyone you hit also gets a charge stuck to them that goes off a second later, wherever they run."
+}

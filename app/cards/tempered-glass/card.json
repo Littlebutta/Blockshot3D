@@ -1,0 +1,29 @@
+{
+  "id": "tempered-glass",
+  "name": "Tempered Glass",
+  "rarity": "combo",
+  "icon": "🔷",
+  "description": "All the punch, none of the fragility.",
+  "combo": [
+    "glass-core",
+    "reinforced-plating"
+  ],
+  "modifiers": [
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 1.45
+    },
+    {
+      "stat": "health",
+      "op": "mul",
+      "value": 1.15
+    },
+    {
+      "stat": "bulletSize",
+      "op": "mul",
+      "value": 1.1
+    }
+  ],
+  "image": "art.png"
+}

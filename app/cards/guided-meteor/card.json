@@ -1,0 +1,34 @@
+{
+  "id": "guided-meteor",
+  "name": "Guided Meteor",
+  "rarity": "combo",
+  "icon": "🌠",
+  "description": "Sky strikes that hunt and explode.",
+  "combo": [
+    "seeker-chip",
+    "orbital-drop"
+  ],
+  "modifiers": [
+    {
+      "stat": "skyfall",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "homing",
+      "op": "add",
+      "value": 6
+    },
+    {
+      "stat": "explosive",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.8
+    }
+  ],
+  "image": "art.png"
+}
