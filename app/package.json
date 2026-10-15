@@ -1,6 +1,6 @@
 {
   "name": "blockshot3d",
-  "version": "1.2.17",
+  "version": "1.2.18",
   "description": "Blockshot 3D - round-based arena duels with upgrade cards. Solo with bots or networked multiplayer.",
   "type": "module",
   "main": "electron/boot.cjs",

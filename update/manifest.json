@@ -1,6 +1,6 @@
 {
- "version": "1.2.17",
- "built": "2026-10-15T21:56:26.042Z",
+ "version": "1.2.18",
+ "built": "2026-10-15T22:02:43.084Z",
  "files": {
   ".gitignore": [
    "0068ba7ed54e738118cfb5244ca651fe18f44c4ef3e5236241677de513dfaa9d",
@@ -1559,8 +1559,8 @@
    28753
   ],
   "electron/main.cjs": [
-   "fb60cc6fe0027e835396aeb40bce72df35ce1fdf69d1f688ef961fe98e65f806",
-   21627
+   "2d465ff6ff900c8c007dc7cba74682e4ce94617896797ef160a70ed741c9f9e6",
+   21825
   ],
   "electron/p2pwire.cjs": [
    "7129454bf1074232898eda71047b5695656bc2a40dacf0c549b0db4a3a25367c",
@@ -1599,8 +1599,8 @@
    4536
   ],
   "electron/steamshortcut.cjs": [
-   "e47a31a0199b472ca9b5def6c9e42fd55ef5ae0062ce5416f0cec8cff3105f3b",
-   6234
+   "5573188893177592819d5d0c186b0dd5574310d6c7a4b283eee1ca2f53ae06c6",
+   7922
   ],
   "electron/steamtune.cjs": [
    "ebeb9921004c9d82a668779d9fe713c5a7794f68c814b65fcef46d16b9b30c64",
@@ -2111,7 +2111,7 @@
    554
   ],
   "package.json": [
-   "d6dce90d4077fcfa765d26f83ba3ccee9fd0bd2028bfdeb815c01147da9499dc",
+   "ca3dc9a36c5275bf46d4c472001f4953da174cd9efdafc773494066fdd661b80",
    345
   ],
   "public/css/style.css": [
@@ -2119,7 +2119,7 @@
    75638
   ],
   "public/index.html": [
-   "a3a8f7f4447c4f4c6d90e587bbf0997a6601035810f78c4626ff966ad189835a",
+   "bdbd5dee9fdf6e0cadc4780971ac4382f9cebd6dbb83f327a4c29742c237e89a",
    43219
   ],
   "public/js/a11y.js": [
@@ -2211,8 +2211,8 @@
    27996
   ],
   "public/js/main.js": [
-   "a03ee2b4ffc8f548d0da355caf8eecc8a881592f4063230cb971ca1d3f3d7132",
-   293636
+   "2def28f609853ace5745988f7f74f353208158fc19f65c91e2cf3878aa6ed7be",
+   293652
   ],
   "public/js/net.js": [
    "d415f683a93c1c3320d56977ba98fe00506efc8dacc6d989f8826a6d8c86a2de",
@@ -2235,8 +2235,8 @@
    27697
   ],
   "public/js/patchnotes.js": [
-   "589123a43a0b11698e8a6802ed5602f2d21906fdca5a3e9dde58ccb5dad31b68",
-   4727
+   "b9fb147e16e86713f847999396813bf791a3475f653ad1ef1d32733211a154d6",
+   5013
   ],
   "public/js/physics.js": [
    "967a5160bf233a9f4b18abffed3adec65974568ad243ce7117d75e995cf26216",
