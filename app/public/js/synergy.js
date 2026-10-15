@@ -5,7 +5,7 @@ import { STAT_INFO } from './config.js';
 const ON_HIT = ['poison', 'ignite', 'chill', 'hex', 'chain', 'limpet', 'lifesteal', 'knockback'];
 const BLOCK_FX = ['counterShots', 'blockBarricade', 'blockEcho', 'blockMines', 'blockPush', 'blockDash', 'blockShock', 'blockHeal', 'blockDeploy', 'blockLeech', 'blockConcrete', 'reflectBoost'];
 // [stat, stat, weight]: owning a card that improves one makes a card that improves the other better.
-const PAIRS = [
+export const PAIRS = [
   ['bounces', 'homing', 1.5], ['bounces', 'shrapnel', 1.2], ['bounces', 'explosive', 1], ['bounces', 'bulletSpeed', 0.6],
   ...ON_HIT.map(s => ['projectiles', s, 1.2]), ...ON_HIT.map(s => ['fireRate', s, 1]), ...ON_HIT.map(s => ['counterShots', s, 0.8]),
   ['ammo', 'fireRate', 1.2], ['ammo', 'reloadTime', 0.8], ['fireRate', 'reloadTime', 0.8], ['projectiles', 'ammo', 0.6],

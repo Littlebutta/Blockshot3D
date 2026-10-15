@@ -1,6 +1,18 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.20', date: 'Oct 15', notes: {
+    Added: [
+      'Gun Nest: whoever mans the turret gets a small shield. Hits on it damage the turret instead of you, until the turret is destroyed.',
+      'Card details (right-click a card): a new Stacking & synergy section on how the card\'s stats stack, what makes them stronger, what they make stronger, which cards pair with it and which combos it is part of.',
+      'Bees chasing you turn red on your screen.',
+      'The end-of-round replay now opens and closes with a REPLAY wipe, and has a scanline look so it never reads as live play.',
+    ],
+    Changed: [
+      'Gun Nest turret health now scales with your blocking stats: Block size, Block duration and a shorter Block cooldown add health (half to 4x your max health).',
+      'Squid bullet tentacles grow longer and thicker with Bullet size.',
+    ],
+  } },
   { v: '1.2.19', date: 'Oct 15', notes: {
     Fixed: [
       'Add to Steam: Play said "launch unavailable". The Steam that the button restarted could not launch the game; it now restarts normally. Press Add to Steam once more to fix an existing entry.',

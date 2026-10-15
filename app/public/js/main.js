@@ -3,7 +3,7 @@ import { ART, RULES, DIFFICULTY, RARITY, STAT_INFO, DEFAULT_LOBBY_SETTINGS, COSM
 import { t, setLanguage, languageOptions } from './i18n.js';
 const tr = t;   // for functions that shadow t locally
 import { applyColorBlind } from './a11y.js';
-import { recommend } from './synergy.js';
+import { recommend, PAIRS, cardEffects } from './synergy.js';
 import { slopify, slopVerb, slopCardName, slopBadge, slopTypos, slopInit, setSlop, slopTick, slopOn } from './slop.js';
 import * as THREE from '/vendor/three/build/three.module.js';
 import { buildPlayerModel, attachCosmetics } from './art.js';
@@ -29,7 +29,7 @@ import { owView, VEH_KINDS, owLootPick, LOOT_DISCARD } from './openworld.js';
 import { Sound } from './audio.js';
 import { Net, SteamNet } from './net.js';
 import { loadSettings, saveSettings, settingsFileText, parseSettingsFile, GFX_PRESETS, DEFAULT_BINDS, BIND_LABELS, bindsOf, codeLabel } from './settings.js';
-import { tipFor, TYPE_NOTES } from './cardinfo.js';
+import { tipFor, TYPE_NOTES, STAT_AMP, MOD_AMP } from './cardinfo.js';
 import { PRICES, BET, priceOf, owns, initEconomy, buy, matchPay, fmtCash } from './economy.js';
 import { loadArtAssets } from './art.js';
 
@@ -191,15 +191,20 @@ function kcRecord() {
   KC.buf.push({ t: now, players: S.view.players.map(kcCopy), bullets: (S.view.bullets || []).map(kcCopy) });
   while (KC.buf.length && now - KC.buf[0].t > 3000) KC.buf.shift();
 }
+// v1.2.20 (Devin): a wipe into and out of the replay so it reads apart from live play; the view switches while the band
+// covers the screen (KC.wipe ms in)
+KC.wipe = 230;
+function kcWipe() { const el = $('kcWipe'); if (!el) return; el.classList.remove('hidden', 'go'); void el.offsetWidth; el.classList.add('go'); clearTimeout(kcWipe.t); kcWipe.t = setTimeout(() => el.classList.add('hidden'), 520); }
 function kcStart() {
   const w = S.kcWait; S.kcWait = null;
+  if (!w.wiped) { w.wiped = true; S.kcWait = { ...w, at: performance.now() + KC.wipe }; kcWipe(); sound.play('whoosh', 0.6); return; }
   const d = KC.death, t1 = d ? Math.min(performance.now(), d.t + KC.lead) : 0, t0 = t1 - KC.dur;
   const frames = d ? KC.buf.filter(f => f.t >= t0 && f.t <= t1 && f.players.some(p => p.id === w.k)) : [];
   if (frames.length < 8) { sound.play(w.mine ? 'roundWin' : 'roundLose'); roundSplash(w.w); return; }
   S.killCam = { ...w, frames, t: 0, t0: frames[0].t, span: frames[frames.length - 1].t - frames[0].t, dt: d.t, d, popped: false };
   const el = $('killCam'), r = rosterOf(w.k), o = r.transient && r.ownerId != null ? rosterOf(r.ownerId) : r;
   el.querySelector('.kcName').innerHTML = `<b style="color:${o.color}">${esc(w.k === S.localId ? t('You') : o.name)}</b>`;
-  el.classList.remove('hidden'); sound.play('whoosh', 0.7);
+  el.classList.remove('hidden');
 }
 function kcFrame(dt) {
   const K = S.killCam, at = K.t0 + K.t;
@@ -213,7 +218,10 @@ function kcFrame(dt) {
   rs.view = fpv ? 'first' : 'third'; rs.ots = K.v === 'shoulder';
   renderer.update({ ...S.view, players: f.players, bullets: f.bullets }, K.k, dt);
   [rs.view, rs.ots, renderer.yaw, renderer.pitch] = keep;
-  if (K.t >= K.span) kcEnd(true);
+  if (K.t >= K.span) {   // hold the last frame while the wipe covers the switch back
+    if (!K.endAt) { K.endAt = performance.now() + KC.wipe; kcWipe(); sound.play('whoosh', 0.5); }
+    else if (performance.now() >= K.endAt) kcEnd(true);
+  }
 }
 function kcEnd(splash) {
   const K = S && S.killCam; $('killCam').classList.add('hidden'); if (!K) return;
@@ -429,9 +437,40 @@ function openCardDetail(c) {
   }
   const lines = cardLines(c, { exact: true }).filter(l => l[3] && tipFor(l[3]));
   if (lines.length) parts.push(sec('Stats on this card', `<ul class="cdstats">${lines.map(([v, l, g, k]) => `<li class="${g ? 'up' : 'down'}" data-stat="${esc(k)}"><b><em class="cdval">${esc(v)}</em> ${esc((STAT_INFO[k] || { label: l }).label)}</b><span>${esc(tipFor(k))}</span></li>`).join('')}</ul>`));
+  const syn = synergyHtml(c); if (syn) parts.push(sec('Stacking & synergy', syn, 'syn'));
   $('cdInfo').innerHTML = parts.join('');
   $('cardDetail').classList.remove('hidden');
   sound.play('ui');
+}
+// v1.2.20 (Devin): how this card's stats stack and get amplified, and what they amplify (cardinfo.js STAT_AMP / MOD_AMP,
+// partner stats from synergy.js PAIRS, plus the other cards that raise those partners and any combos it is part of)
+function synergyHtml(c) {
+  const out = [], lab = k => (STAT_INFO[k] || { label: k }).label, base = cardById.get(c.holyFrom || c.cursedFrom) || c;
+  const mk = base.weaponMod || base.shieldMod || base.special;
+  if (mk && MOD_AMP[mk]) out.push(`<p>${esc(MOD_AMP[mk])}</p>`);
+  const rules = [];
+  for (const m of c.modifiers || []) {
+    if (!STAT_INFO[m.stat]) continue;
+    const L = lab(m.stat);
+    if (m.op === 'mul') rules.push(`<b>${esc(L)} x${+m.value.toFixed(2)}</b>: multiplies, so it stacks with other ${esc(L)} cards (two copies = x${+(m.value * m.value).toFixed(2)}) and scales any flat bonus you already have.`);
+    else if (m.op === 'add') rules.push(`<b>${esc(L)} ${m.value > 0 ? '+' : ''}${+m.value.toFixed(2)}</b>: adds up with every other ${esc(L)} card.`);
+    else if (m.op === 'set') rules.push(`<b>${esc(L)}</b>: reset to ${m.value} when you take it; later cards still change it.`);
+    else if (m.op === 'convert') rules.push(`<b>${esc(L)} into ${esc(lab(m.to))}</b>: trades one for the other in proportion.`);
+  }
+  if (rules.length) out.push(`<ul class="cdsyn">${rules.map(r => `<li>${r}</li>`).join('')}</ul>`);
+  const { up } = cardEffects(c);
+  for (const k of up) {
+    const a = STAT_AMP[k], partners = PAIRS.filter(p => p[2] >= 1 && (p[0] === k || p[1] === k)).map(p => p[0] === k ? p[1] : p[0]);
+    const helpers = [...new Set(CARDS.filter(o => o.id !== c.id && !o.holyFrom && !o.cursedFrom && o.rarity !== 'combo' && [...cardEffects(o).up].some(x => partners.includes(x))).map(o => o.name))].slice(0, 6);
+    const bits = [];
+    if (a && a.by) bits.push(`<i>Amplified by:</i> ${esc(a.by)}`);
+    if (a && a.amps) bits.push(`<i>Amplifies:</i> ${esc(a.amps)}`);
+    if (partners.length) bits.push(`<i>Pairs well with:</i> ${esc([...new Set(partners.map(lab))].slice(0, 6).join(', '))}${helpers.length ? ` (cards like ${esc(helpers.join(', '))})` : ''}.`);
+    if (bits.length) out.push(`<div class="cdamp"><h6>${esc(lab(k))}</h6><p>${bits.join('<br>')}</p></div>`);
+  }
+  const combos = CARDS.filter(o => Array.isArray(o.combo) && !o.holyFrom && !o.cursedFrom && o.combo.includes(base.id));
+  for (const o of combos) { const other = cardById.get(o.combo.find(x => x !== base.id) || base.id); out.push(`<p><i>Combo:</i> with <b>${esc(other ? other.name : '?')}</b> it merges into <b>${esc(o.name)}</b>.</p>`); }
+  return out.join('');
 }
 function closeCardDetail() { $('cardDetail').classList.add('hidden'); $('statTip').classList.add('hidden'); }
 function bindCardDetail() {
@@ -1641,7 +1680,7 @@ function hostFrame(dt, ts = 1) {
     phase: g.phase, phaseT: g.phaseT, scores: g.scores, round: g.round,
     waiting: g.phase === 'picking' ? g.players.filter(p => !p.picked).length : 0,
     players: g.players.filter(p => p.connected).map(viewOfPlayer),
-    bullets: g.bullets.map(b => ({ id: b.id, pos: b.pos, vel: b.vel, ring: b.ring || 0, r: b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r, color: b.color, fx: b.fx })),
+    bullets: g.bullets.map(b => ({ id: b.id, pos: b.pos, vel: b.vel, ring: b.ring || 0, r: b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r, color: b.color, fx: b.fx, tgt: b.swarm === 'bee' && b.swTgt ? b.swTgt.id : 0 })),
     dynamics: g.dyn.map(o => ({ id: o.id, x: o.pos.x, y: o.pos.y, z: o.pos.z, h: o.h, tip: o.tipped || 0, tx: o.tx || 0, tz: o.tz || 0 })),
     shields: g.shields.map(sh => ({ id: sh.id, x: sh.x, y0: sh.y0, z: sh.z, w: sh.w, h: sh.h, d: sh.d, ang: sh.ang || 0, shock: !!sh.shock, leech: !!sh.leech, box: !!sh.box, hp: sh.box ? Math.max(0, sh.hp) / sh.maxHp : 1, color: (g.player(sh.owner) || {}).color || '#ffffff' })),
     mines: g.mines.filter(m => !m.snare || friendOf(m.owner)).map(m => ({ id: m.id, x: m.x, y: m.y, z: m.z, armed: m.armT <= 0, sz: m.sz || 1, snare: !!m.snare, color: (g.player(m.owner) || {}).color || '#ffffff' })),
@@ -1780,7 +1819,7 @@ function applySnap(s) {
   predAck(s.mv);
   // v1.2.6: bullets keep their objects and are placed like bodies (snapshot position + velocity since then + a fading
   // correction), so they no longer jerk at every snapshot. Your own new shots start from where your body is drawn.
-  const bfx = new Map(s.bfx || []), nb = new Map(), me = S.pmap.get(S.localId);
+  const bfx = new Map((s.bfx || []).map(e => [e[0], e])), nb = new Map(), me = S.pmap.get(S.localId);
   for (const [id, x, y, z, vx, vy, vz, r, o, ring, co] of s.bu) {
     let b = S.bmap.get(id); const old = !!b;
     if (old) placeBullet(b, now, tmp); else b = { id, pos: { x, y, z }, p0: {}, vel: {}, off: { x: 0, y: 0, z: 0 } };
@@ -1792,7 +1831,7 @@ function applySnap(s) {
       if (Math.hypot(dx, dy, dz) < 2.5) setXYZ(b.off, dx, dy, dz);
     }
     placeBullet(b, now, b.pos);
-    b.r = r; b.ring = ring || 0; b.fx = bfx.get(id); b.color = (S.roster.get(co || o) || {}).color || '#ffffff';
+    b.r = r; b.ring = ring || 0; const fe = bfx.get(id); b.fx = fe && fe[1]; b.tgt = (fe && fe[2]) || 0; b.color = (S.roster.get(co || o) || {}).color || '#ffffff';
     nb.set(id, b);
   }
   S.bmap = nb;

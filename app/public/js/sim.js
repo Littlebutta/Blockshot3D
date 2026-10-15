@@ -1155,7 +1155,7 @@ export class Game {
     if (p.kind !== 'hero' || this.players.some(u => u.kind === 'mount' && u.alive && u.casterId === p.id)) return null;
     const s = p.stats, r = PR * MOUNT.size, spot = this.mountSpot(p, r);
     if (!spot) return null;
-    const stats = { ...s, health: Math.max(1, Math.round(this.maxHp(p))), fireRate: s.fireRate * MOUNT.fireK, moveSpeed: 0, jump: 0, regen: 0, revive: 0, lifeDrain: 0,
+    const stats = { ...s, health: this.mountHealth(p), fireRate: s.fireRate * MOUNT.fireK, moveSpeed: 0, jump: 0, regen: 0, revive: 0, lifeDrain: 0,
       growOnHit: 0, drain: 0, tank: 0, slowField: 0, summonTwin: 0, summonTurret: 0, summonDrone: 0, blockCooldown: 99, blockDeploy: 0, blockBarricade: 0,
       blockConcrete: 0, blockMines: 0, blockEcho: 0, counterShots: 0, blockHeal: 0, blockPush: 0, blockDash: 0, blockShock: 0 };
     const u = this.spawnUnit('mount', p, spot, { stats });
@@ -1164,6 +1164,13 @@ export class Game {
     this.emit({ t: 'barricade', p: p.id, x: spot.x, y: spot.y, z: spot.z, kind: 'mount' });
     this.unitsChanged();
     return u;
+  }
+  // v1.2.20 (Devin): turret health scales off the blocking stats: your max health x Block size, Block duration and Block
+  // cooldown (shorter = more; measured from the 1.3x cooldown Gun Nest itself gives, so base stats = 1x), from 0.5x to 4x
+  mountHealth(p) {
+    const s = p.stats, D = DEFAULT_STATS;
+    const k = clamp(Math.sqrt(s.blockSize || 1) * Math.pow((s.blockDuration || D.blockDuration) / D.blockDuration, 0.5) * Math.pow(D.blockCooldown * 1.3 / Math.max(0.5, s.blockCooldown || D.blockCooldown), 0.35), 0.5, 4);
+    return Math.max(1, Math.round(this.maxHp(p) * k));
   }
   // Beside you first (either side), then behind, then the diagonals, then further out.
   mountSpot(p, r) {
@@ -2606,6 +2613,12 @@ export class Game {
       if (hs.until <= this.time || hs.hp <= 0) t.fx.holyShield = null;
       else { const k = Math.min(amt - soaked, hs.hp); hs.hp -= k; soaked += k; if (hs.hp <= 0.001) { t.fx.holyShield = null; this.emit({ t: 'shieldBreak', p: t.id, x: t.pos.x, y: this.chest(t), z: t.pos.z }); } }
     }
+    // v1.2.20 Gun Nest (Devin): manning the turret puts a small shield on you; what hits it hurts the turret, until the turret is gone
+    const mu = t.fx.mount && amt - soaked > 0 ? this.player(t.fx.mount.id) : null;
+    if (mu && mu.alive && mu.hp > 0) {
+      const k = Math.min(amt - soaked, mu.hp); mu.hp -= k; soaked += k; mu.flashT = 0.12;
+      if (mu.hp <= 0.001) { mu.hp = 0; this.emit({ t: 'shieldBreak', p: t.id, x: t.pos.x, y: this.chest(t), z: t.pos.z }); }
+    }
     const rest = amt - soaked;
     const dealt = Math.max(0, BRAWL_ON && t.kind === 'hero' ? amt : soaked + Math.min(rest, Math.max(0, t.hp)));   // v1.0.1: brawl fighters sit at 1 hp, so count the whole hit
     if (t.kind === 'hero' && dealt > 0) this.logDamage(t, src, tag, dealt);
@@ -3964,7 +3977,7 @@ export class Game {
         p.healN || 0, p.mod === 'critter' ? this.critterCount(p) : -1, r2(this.slowFieldRadius(p.stats.slowField || 0)),
         this.extRow(p),
       ]),
-      bfx: this.bullets.filter(b => b.fx).map(b => [b.id, b.fx]),
+      bfx: this.bullets.filter(b => b.fx).map(b => b.swarm === 'bee' && b.swTgt ? [b.id, b.fx, b.swTgt.id] : [b.id, b.fx]),   // v1.2.20: [2] who a bee is after (it turns red for them)
       bu: this.bullets.map(b => [b.id, r2(b.pos.x), r2(b.pos.y), r2(b.pos.z), b.hold ? 0 : r2(b.vel.x * (b.slowK ?? 1)), b.hold ? 0 : r2(b.vel.y * (b.slowK ?? 1)), b.hold ? 0 : r2(b.vel.z * (b.slowK ?? 1)),
         r3(b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r), b.owner, b.ring ? r2(b.ring) : 0, b.cown && b.cown !== b.owner ? b.cown : 0,
         b.hold ? 0 : r2((b.grav ?? RULES.bulletGravity) * (b.slowK ?? 1) ** 2)]),   // v1.2.9: [11] its gravity, so joiners' decoders predict the drop (netcodec.js GRAV)

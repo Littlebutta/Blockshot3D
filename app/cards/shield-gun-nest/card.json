@@ -3,7 +3,7 @@
   "name": "Gun Nest",
   "rarity": "shieldmod",
   "icon": "🪖",
-  "description": "Blocking builds a turret beside you that anyone can man. It fires your gun twice as fast.",
+  "description": "Blocking builds a turret beside you that anyone can man. It fires your gun twice as fast and shields whoever mans it.",
   "image": "art.png",
   "modifiers": [
     {
@@ -14,5 +14,5 @@
   ],
   "shieldMod": "mount",
   "noCursed": true,
-  "details": "Your block still works as normal, and also builds a turret beside you on a clear spot (away from walls, shields, mines and other bodies; nothing else can be dropped onto it). Walk up to it and press Use (E) to man it, and E again to get off. While you man it you stand still, aim with your crosshair and fire the turret with your trigger.\n\nThe turret fires a copy of your gun as it was when you built it (every bullet stat and effect: damage, size, bounces, splits, napalm, mods...) at twice your fire rate, with its own ammo. It keeps those stats whoever mans it, and anyone can: teammates, or an enemy who walks up to it (its shots are theirs while they're on it).\n\nIt has health equal to your max health, can never be healed, and slowly wears down over time. You can only have one: while yours stands, blocking doesn't build another."
+  "details": "Your block still works as normal, and also builds a turret beside you on a clear spot (away from walls, shields, mines and other bodies; nothing else can be dropped onto it). Walk up to it and press Use (E) to man it, and E again to get off. While you man it you stand still, aim with your crosshair and fire the turret with your trigger.\n\nThe turret fires a copy of your gun as it was when you built it (every bullet stat and effect: damage, size, bounces, splits, napalm, mods...) at twice your fire rate, with its own ammo. It keeps those stats whoever mans it, and anyone can: teammates, or an enemy who walks up to it (its shots are theirs while they're on it).\n\nIts health is your max health scaled by your blocking stats: bigger Block size, longer Block duration and shorter Block cooldown all add health (from half up to 4x). It can never be healed and slowly wears down over time. While you man it, a small shield covers you: hits on it damage the turret instead of you, until the turret is destroyed. You can only have one: while yours stands, blocking doesn't build another."
 }

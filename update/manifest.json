@@ -1,6 +1,6 @@
 {
- "version": "1.2.19",
- "built": "2026-10-15T22:10:53.273Z",
+ "version": "1.2.20",
+ "built": "2026-10-15T22:49:37.901Z",
  "files": {
   ".gitignore": [
    "0068ba7ed54e738118cfb5244ca651fe18f44c4ef3e5236241677de513dfaa9d",
@@ -1175,8 +1175,8 @@
    19831
   ],
   "cards/shield-gun-nest/card.json": [
-   "7c076a3a68689098e94779bd034bfa81e86827efbd331710ab3d6e397fca00bf",
-   1231
+   "edd937eaf547de17716e42158a0bf320164a891b0b29a72eb538560b2e0f6bc4",
+   1508
   ],
   "cards/shield-pentagram/art.png": [
    "95158515c24b1552f13521209b676dd202cb4a05ad8fd1b4c1c8131c4ec4f838",
@@ -2111,16 +2111,16 @@
    554
   ],
   "package.json": [
-   "1fb29c7b27d93f471e7b56e769ac378e37f67fefa4b11e6aeface8e1398304ea",
+   "ce395d53a0651b533a3e6ac1d6a9d85c6977c5cbe3ff93d17c83d2858bd1d64a",
    345
   ],
   "public/css/style.css": [
-   "260276f78c6482c683cb58056c99d9d77639241a97cd1f8fce23a0e8366fe64d",
-   75638
+   "01c08454fcdcb10a321ce021b1b1c52226bc62c5dd3831e827d9c73093da47f9",
+   76851
   ],
   "public/index.html": [
-   "16ff13273e3b78e06fec0b3b4d6b5bc58ef4fa4931d729ce3b0c1c15c09fcc2c",
-   43219
+   "074762aa9abca6ba3006c0381a8ad053eec9a54574841b86fd21d1f0ea7676ec",
+   43288
   ],
   "public/js/a11y.js": [
    "01493123a592d8868fe91a15be7a72b6c8687f8deac62c1aff7898c1aca4b8c3",
@@ -2163,8 +2163,8 @@
    18680
   ],
   "public/js/cardinfo.js": [
-   "6de1cca186dcc0f3594ee180b49556895659d4cab0980132f562c0417770297c",
-   8569
+   "e875aebc9b4942ee28ea26ae25a6feeb3b23ad3b105b79f62f3bcceeff210c8e",
+   17080
   ],
   "public/js/cards.js": [
    "50da45b3454e917aba4b271e20d4ce96a880605a633a15d2103f2185972b93e5",
@@ -2211,8 +2211,8 @@
    27996
   ],
   "public/js/main.js": [
-   "5c1f7178c9718748b0cac9a31d95fb6e9b45909252f1df6781794cefdfeed762",
-   293941
+   "c965182db91555f366fa7a5cab1e537124fc748e1b64609cbd6148b04023e1ea",
+   297528
   ],
   "public/js/net.js": [
    "d415f683a93c1c3320d56977ba98fe00506efc8dacc6d989f8826a6d8c86a2de",
@@ -2235,8 +2235,8 @@
    27697
   ],
   "public/js/patchnotes.js": [
-   "099587482ac71e67427cddd964fa1070762317832f5467fc005ba451973ab8cc",
-   5529
+   "73aeee2d96be03bd60eb8a63e0fa01a3c23589fc00a6583a0d26e5636875c9b4",
+   6398
   ],
   "public/js/physics.js": [
    "967a5160bf233a9f4b18abffed3adec65974568ad243ce7117d75e995cf26216",
@@ -2247,8 +2247,8 @@
    18006
   ],
   "public/js/render.js": [
-   "066b6b5ed22569124422f43acd900c1a81fc3d8a90bbc32e110780c5ae72fc91",
-   261522
+   "361a8042863f7576d516782b8732531d40d8757ca6f7049d954ef17a7eb901f6",
+   262661
   ],
   "public/js/rt.js": [
    "68f0d19eb699b5354e1e85708e3623fe01797c728db60d260b3e644b35cb9741",
@@ -2271,16 +2271,16 @@
    17528
   ],
   "public/js/sim.js": [
-   "61b7ab02281f24cd6a87b7d1b36ff4d24e0f939f616cf06c0dccaaf8ea0384bc",
-   268471
+   "0f3459f4d9650e25e780b50c851b570540b465c43c38babe9f49a626023807aa",
+   269637
   ],
   "public/js/slop.js": [
    "9dc85c181fa4b81008b22eeb11ad788a5774e5e7f4526200377d6ec34d6f9932",
    5573
   ],
   "public/js/synergy.js": [
-   "c2b156aaa3ecf3372be874ff68ae32ec96ef8b91c99f50b1154eff390a6bbf8e",
-   4432
+   "43e48129376d5feab4299da6254fb07b64830a295a89b71bc5354c988cf97032",
+   4439
   ],
   "public/js/traps.js": [
    "46fe5084a54ec5c34b8fcbff75ea00b84676c073c9d60a0a3d92ae39ebb8aea5",
@@ -2339,8 +2339,8 @@
    2422
   ],
   "tools/simtest.mjs": [
-   "ded2a20463ff984dd14fdd67b28e64cab74d6278842656ffd3536657497f017f",
-   150861
+   "220086e101f176378a98291660a9e6217e1a9b6e1a6f877113b2e9af07c08bba",
+   151487
   ],
   "tools/trim-build.cjs": [
    "f14cc62bb2ab8633c47b31e660b4a38c3774977e6e95d099f8a71b9b6c4d288d",

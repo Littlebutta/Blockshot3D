@@ -1435,8 +1435,10 @@ for (const kind of ['squid', 'bees']) {
   p.blockCdT = 0; g.tryBlock(p);
   const u = g.players.find(q => q.kind === 'mount');
   check('gun nest: block builds a turret', !!u && u.casterId === p.id && u.alive && p.blockT > 0);
-  check('gun nest: health = caster max health, fires twice as fast, same bullets', u && u.stats.health === Math.round(g.maxHp(p)) && Math.abs(u.stats.fireRate - 2 * p.stats.fireRate) < 1e-9 &&
+  check('gun nest: health = caster max health at base block stats, fires twice as fast, same bullets', u && u.stats.health === Math.round(g.maxHp(p)) && Math.abs(u.stats.fireRate - 2 * p.stats.fireRate) < 1e-9 &&
     u.stats.damage === p.stats.damage && u.stats.bounces === p.stats.bounces && u.stats.napalm === p.stats.napalm && u.stats.bulletSize === p.stats.bulletSize && u.stats.moveSpeed === 0);
+  { const s0 = { ...p.stats }; p.stats.blockSize = s0.blockSize * 2; p.stats.blockDuration = s0.blockDuration * 2;
+    check('gun nest: turret health grows with blocking stats (v1.2.20)', g.mountHealth(p) > Math.round(g.maxHp(p)) * 1.9); p.stats = s0; }
   check('gun nest: placed beside you, clear of you and walls', u && Math.hypot(u.pos.x - p.pos.x, u.pos.z - p.pos.z) > 0.9 && Math.abs(u.pos.x - p.pos.x) < 0.5 && !g.solids.some(s => u.pos.x + 0.4 > s.min.x && u.pos.x - 0.4 < s.max.x && u.pos.z + 0.4 > s.min.z && u.pos.z - 0.4 < s.max.z && s.max.y > u.pos.y + 0.2));
   p.blockCdT = 0; g.tryBlock(p);
   check('gun nest: only one at a time', g.players.filter(q => q.kind === 'mount' && q.alive).length === 1);
@@ -1467,6 +1469,10 @@ for (const kind of ['squid', 'bees']) {
   check('gun nest: the trigger fires the turret, not your gun', tb.length >= 1 && p.ammo === ammo0 && u.ammo === uam0 - 1, `${tb.length} ${p.ammo}/${ammo0} ${u.ammo}/${uam0}`);
   check('gun nest: shots carry the stats (size, bounces, napalm) and aim at the crosshair', tb[0] && tb[0].napalm > 0 && tb[0].bLeft === Math.round(p.stats.bounces) && Math.abs(tb[0].r - g.effSize(p.stats, g.effDamage(p.stats))) < 1e-9 && tb[0].vel.x > Math.abs(tb[0].vel.z) * 3);
   check('gun nest: fires twice as fast', Math.abs(u.fireT - 1 / (2 * p.stats.fireRate)) < 0.02, `${u.fireT}`);
+  { const php = p.hp, uhp = u.hp, wasPlay = g.phase; g.phase = 'play'; p.fx.invulnT = 0; p.blockT = 0;
+    g.hurt(p, 30, e, null);
+    check('gun nest: the rider\'s shield sends damage to the turret (v1.2.20)', p.hp === php && Math.abs(u.hp - (uhp - 30 * g.suddenMul())) < 1e-6, `${php}->${p.hp} ${uhp}->${u.hp}`);
+    u.hp = uhp; g.phase = wasPlay; }
   const sn = g.snapshot(), row = sn.pl.find(r => r[0] === p.id);
   check('gun nest: manning goes out in the snapshot, the turret in the unit list', row && row[row.length - 1][8] === u.id && g.unitList().some(x => x.id === u.id && x.kind === 'mount'));
   check('gun nest: no move prediction while manning', !g.predRows().some(r => r[0] === p.id && r[4] === 1));
