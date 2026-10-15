@@ -15,7 +15,12 @@ try {
   const gfx = JSON.parse(fs.readFileSync(GFX_FILE, 'utf8'));
   if (gfx.vsync === false) { app.commandLine.appendSwitch('disable-gpu-vsync'); app.commandLine.appendSwitch('disable-frame-rate-limit'); }
 } catch { /* first launch: v-sync on */ }
-app.commandLine.appendSwitch('force_high_performance_gpu');   // v1.2.6: hybrid laptops run the game on the dedicated GPU, not the integrated one
+app.commandLine.appendSwitch('force_high_performance_gpu');
+// v1.2.16: after alt+tab (or a screenshot overlay) Windows could leave the window marked as covered, and a GPU reset could
+// block WebGL for the page: either way the picture froze while the game ran on. Keep drawing, and never block WebGL.
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+app.commandLine.appendSwitch('disable-gpu-process-crash-limit');
+app.commandLine.appendSwitch('disable-domain-blocking-for-3d-apis');   // v1.2.6: hybrid laptops run the game on the dedicated GPU, not the integrated one
 ipcMain.on('app:gfx', (_e, g) => {
   try { fs.mkdirSync(path.dirname(GFX_FILE), { recursive: true }); fs.writeFileSync(GFX_FILE, JSON.stringify({ vsync: !(g && g.vsync === false) })); } catch (e) { console.warn('[gfx] could not save', e && e.message); }
 });
@@ -213,6 +218,12 @@ ipcMain.on('app:newWindow', () => createWindow(false));
 ipcMain.on('app:quit', () => shutdown());
 // v1.2.10: automatic updates (electron/updater.cjs). The game window asks for the state when it loads and gets live status after.
 const updater = require('./updater.cjs');
+// v1.2.16 Suggestions (electron/suggest.cjs)
+const suggest = require('./suggest.cjs');
+ipcMain.handle('app:suggest', async (_e, s) => {
+  try { const r = await suggest.submit(app.getPath('documents'), s || {}); if (r.url) await shell.openExternal(r.url); return { saved: r.saved, uploaded: !!r.uploaded, opened: !!r.url }; }
+  catch (err) { return { error: String(err && err.message || err) }; }
+});
 let updState = global.blockshotUpdateApplied ? (global.blockshotUpdateApplied.ok ? { state: 'applied', version: global.blockshotUpdateApplied.version } : { state: 'error', error: 'install: ' + global.blockshotUpdateApplied.error }) : null;
 const updSend = st => { updState = st; for (const w of BrowserWindow.getAllWindows()) { try { w.webContents.send('app:update', st); } catch { /* closing */ } } };
 ipcMain.handle('app:updateState', () => ({ enabled: updater.enabled(app.isPackaged), version: updater.localVersion(), ...(updState || {}) }));
@@ -250,6 +261,8 @@ function createWindow(isMain = true) {
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' },   // v30: the intro plays with sound straight away   // v30: a minimized host keeps the match running
   });
   win.loadURL(`http://127.0.0.1:${serverPort}/`);
+  // v1.2.16: coming back from alt+tab / minimize: repaint and tell the page, so it rechecks its size and graphics
+  for (const ev of ['focus', 'restore', 'show']) win.on(ev, () => { try { win.webContents.invalidate(); win.webContents.send('app:refocus'); } catch { /* closing */ } });
   if (isMain) { mainWindow = win; win.on('closed', () => { mainWindow = null; leaveLobby(); }); }
   return win;
 }
@@ -286,7 +299,7 @@ app.whenReady().then(async () => {
     ],
   }]));
   createWindow(true);
-  setTimeout(() => updater.check({ packaged: app.isPackaged, electronVersion: process.versions.electron, onStatus: updSend }), 2500);   // v1.2.10: look for an update once the game is up
+  setTimeout(() => updater.check({ packaged: app.isPackaged, electronVersion: process.versions.electron, onStatus: updSend }), 800);   // v1.2.10: look for an update once the game is up (v1.2.16: right away; on the menus it installs and restarts itself, main.js updScreen)
 });
 app.on('window-all-closed', () => shutdown());
 app.on('before-quit', () => shutdown());

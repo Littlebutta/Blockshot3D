@@ -91,8 +91,23 @@
     <button class="btn ghost" data-go="settings">Settings</button>
     <button class="btn ghost" id="quitBtn">Quit</button>
   </nav>
-  <div id="versionTag" class="versiontag">v1.2.15</div>
+  <button class="btn ghost small" id="patchBtn" type="button">Patch list</button>
+  <button class="btn ghost small" id="suggestBtn" type="button">Suggestions</button>
+  <div id="versionTag" class="versiontag">v1.2.16</div>
   <div id="updLine" class="updline hidden"></div>
+  <div id="suggestWin" class="hidden"><div class="plCard panel"><div class="plHead"><h2>Suggestions</h2><button class="btn ghost small" id="suggestClose" type="button">Close</button></div>
+    <p class="hint">Tell us what you'd like fixed or added. Pick what kind it is so it lands in the right pile. It goes straight to the developer.</p>
+    <div class="sgCats"><button type="button" data-cat="bug" class="on">🐞 Bug</button><button type="button" data-cat="feature">✨ Feature / content</button><button type="button" data-cat="balance">⚖️ Balance</button><button type="button" data-cat="other">💬 Other</button></div>
+    <input id="sgTitle" type="text" maxlength="80" placeholder="Short title, e.g. Bees fly through walls">
+    <textarea id="sgText" maxlength="4000" rows="7" placeholder="What happened, or what you'd like. For a bug: what you were doing and which mode."></textarea>
+    <div class="sgRow"><span id="sgStatus"></span><button class="btn" id="sgSend" type="button">Send</button></div>
+  </div></div>
+  <div id="patchList" class="hidden"><div class="plCard panel"><div class="plHead"><h2>Patch list</h2><button class="btn ghost small" id="patchClose" type="button">Close</button></div><div class="plTabs"></div><div class="plBody"></div></div></div>
+  <div id="updScreen" class="hidden"><div class="usCard">
+    <div class="usStage"><div class="usHero l"><i></i><b></b></div><div class="usShell"></div><div class="usHero r"><i></i><b></b></div><div class="usFloor"></div></div>
+    <div class="usTitle">Updating</div><div class="usBar"><i></i></div><div class="usNote"></div>
+    <button class="btn ghost small" id="updSkip">Skip for now</button>
+  </div></div>
   <label class="langcorner" title="Language"><span aria-hidden="true">🌐</span><select id="langCorner"></select></label>
 </section>
 
@@ -208,7 +223,7 @@
               <label class="field">Maps
                 <select id="setMaps"><option value="mixed">Mixed</option><option value="generated">Random generated</option><option value="classic">Classic layouts</option><option value="traps">Trap arenas only</option><option value="lava">Lava Lake only</option><option value="ice">Ice Sheets only</option></select></label>
               <label class="field">Map themes
-                <select id="setThemes"><option value="standard">Standard</option><option value="experimental" title="Castle, western, candy, forest, tundra, neon, sakura, tropical, lunar, volcano">Experimental</option><option value="all">All</option>
+                <select id="setThemes"><option value="all">All themes</option><option value="standard">Extra themes off</option><option value="experimental" title="Castle, western, candy, forest, tundra, neon, sakura, tropical, lunar, volcano">Extra themes only</option>
                   <optgroup label="Only one"><option value="forest">Forest</option><option value="tundra">Tundra</option><option value="neon">Neon</option><option value="castle">Castle</option><option value="western">Western</option><option value="candy">Candy</option><option value="sakura">Sakura</option><option value="tropical">Tropical</option><option value="lunar">Lunar</option><option value="volcano">Volcano</option></optgroup></select></label>
             </div>
             <label class="check" data-maps="mixed"><input type="checkbox" id="setMapLava"> Lava Lake maps (floating platforms over a lava floor)</label>
@@ -359,6 +374,7 @@
     <label class="field">Anti-aliasing
       <select id="sAA"><option value="off">Off</option><option value="fxaa">FXAA (fastest)</option><option value="smaa">SMAA</option><option value="msaa">MSAA 4× (sharpest)</option></select></label>
     <label class="field">Render scale <span class="val" id="sScaleV"></span><input type="range" id="sScale" min="0.5" max="1" step="0.05"></label>
+    <label class="field">GUI scale (menus and HUD) <span class="val" id="sUiScaleV"></span><input type="range" id="sUiScale" min="0.7" max="1.5" step="0.05"></label>
     <label class="check"><input type="checkbox" id="sVsync"> V-sync</label>
     <label class="field">Frame rate limit
       <select id="sFpsCap"><option value="0">No limit</option><option value="30">30 FPS</option><option value="60">60 FPS</option><option value="120">120 FPS</option><option value="144">144 FPS</option><option value="240">240 FPS</option></select></label>

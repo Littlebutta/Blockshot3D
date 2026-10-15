@@ -10,6 +10,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { WebSocketServer } from 'ws';
 import { validateCard } from './public/js/cards.js';
 
@@ -65,6 +66,15 @@ async function listCards() {
   return out;
 }
 
+// v1.2.16 Suggestions from the browser version: saved under <game folder>/.local/Blockshot3D/suggestions (electron/suggest.cjs)
+async function saveSuggestion(req, res) {
+  if (!isLocal(req)) return sendJson(res, 403, { error: 'Suggestions can only be sent from this computer.' });
+  let size = 0; const chunks = [];
+  for await (const c of req) { size += c.length; if (size > 20000) return sendJson(res, 413, { error: 'Too long.' }); chunks.push(c); }
+  let body; try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return sendJson(res, 400, { error: 'Bad JSON.' }); }
+  const { submit } = createRequire(import.meta.url)('./electron/suggest.cjs');
+  try { return sendJson(res, 200, await submit(path.join(ROOT, '.local'), body || {})); } catch (e) { return sendJson(res, 500, { error: String(e && e.message || e) }); }
+}
 async function saveCard(req, res) {
   if (!isLocal(req)) return sendJson(res, 403, { error: 'Cards can only be saved from the computer running the server.' });
   let size = 0; const chunks = [];
@@ -117,6 +127,7 @@ const server = http.createServer(async (req, res) => {
     const p = new URL(req.url, 'http://x').pathname;
     if (p === '/api/cards' && req.method === 'GET') return sendJson(res, 200, await listCards());
     if (p === '/api/cards' && req.method === 'POST') return saveCard(req, res);
+    if (p === '/api/suggest' && req.method === 'POST') return saveSuggestion(req, res);
     if (p === '/api/info') return sendJson(res, 200, { port: server.address().port, lan: server.address().address === '0.0.0.0' ? lanAddresses() : [], canSaveCards: isLocal(req) });
     return serveStatic(req, res);
   } catch (err) { console.error(err); sendJson(res, 500, { error: 'Server error' }); }
