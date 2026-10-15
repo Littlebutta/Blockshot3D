@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS = {
   bloom: 'off',         // 'off' | 'low' | 'high' (v1.2.6: off on Medium; bloom alone forced the whole post-processing chain)
   reflections: 'off',   // 'off' | 'probe' (reflection probe + bounce light) | 'ssr' (probe + screen-space floor reflections)
   aa: 'msaa',           // 'off' | 'fxaa' | 'smaa' | 'msaa'
+  uiScale: 1,           // v1.2.16: size of menus and HUD (0.7 to 1.5)
   renderScale: 1,       // 0.5 to 1 of the screen's resolution
   raytracing: 'off',    // v27: 'off' | 'on' | 'ultra' (hybrid screen-space ray tracing: reflections on every surface + traced sun shadows)
   upscaler: 'off',      // v27: 'off' | 'quality' | 'balanced' | 'performance' (FSR 1-style upscale + sharpen)

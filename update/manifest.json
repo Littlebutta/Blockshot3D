@@ -1,7 +1,11 @@
 {
- "version": "1.2.15",
- "built": "2026-10-15T07:17:58.932Z",
+ "version": "1.2.16",
+ "built": "2026-10-15T21:01:16.496Z",
  "files": {
+  ".gitignore": [
+   "0068ba7ed54e738118cfb5244ca651fe18f44c4ef3e5236241677de513dfaa9d",
+   29
+  ],
   "README.md": [
    "093714591df80a725b8f8ed50b1914d19f7ae06f20854c059bf8906ceedd6226",
    53070
@@ -1555,16 +1559,16 @@
    28753
   ],
   "electron/main.cjs": [
-   "32f75ec6d4d02ca7b3816d9d749b0b11a9dd733404b1d5cbf4f3c58c3ea0c272",
-   19886
+   "1d182466ac4ae2f9c7b4d2709ba04584c72b94bafe25f649b26d2c74bba2edcf",
+   21116
   ],
   "electron/p2pwire.cjs": [
    "7129454bf1074232898eda71047b5695656bc2a40dacf0c549b0db4a3a25367c",
    5942
   ],
   "electron/preload.cjs": [
-   "e4be2188a93229b82692e54ac7abc76497943f8f56093ab7fa65dac5de5fc8a6",
-   1522
+   "9506ec124796742d322c0be92a5fa6d7fe64903d09fe1466c6a64d7f897ad4a5",
+   1774
   ],
   "electron/snapdict.txt": [
    "6f78870e77b69aff8053393bf257322d26e2c9f0be12b914b749e990bddcf3b5",
@@ -1577,6 +1581,10 @@
   "electron/steamtune.cjs": [
    "ebeb9921004c9d82a668779d9fe713c5a7794f68c814b65fcef46d16b9b30c64",
    5124
+  ],
+  "electron/suggest.cjs": [
+   "bf378764cf9d5c792436433c09bbd297e2ba267e2c76924bfc43634c12db8ec9",
+   3557
   ],
   "electron/updater.cjs": [
    "585568a16768c507ea40ac41b4d29791b81495aed0cb1c17be359fb211727db7",
@@ -2079,16 +2087,16 @@
    554
   ],
   "package.json": [
-   "f0e75119b303b0e65f8d9eaaead3383a1f70416302559928b9ac985edd278840",
+   "c573b5310ea5a395ae3061cce93d86c66338ac293872210c02f5a12e43aa0809",
    345
   ],
   "public/css/style.css": [
-   "ccdb666108ac2006c49f8eb6b137b46e42c90b8c546f20dff7d8d1e02ff5bf18",
-   69700
+   "27f8a81235b3a4168c44bc2122ce9eafed0c0a845d0564d559e80ba4eab0a891",
+   75076
   ],
   "public/index.html": [
-   "fd267f00da5255ac144404eea23267fbb3c6fdc0df263d9993ae99161d6bc86d",
-   40879
+   "9e4128ad9f266d684a3949de2c7583324c61d64f1b9e6cf4a36bbfdd92e17db1",
+   42920
   ],
   "public/js/a11y.js": [
    "01493123a592d8868fe91a15be7a72b6c8687f8deac62c1aff7898c1aca4b8c3",
@@ -2139,8 +2147,8 @@
    13476
   ],
   "public/js/config.js": [
-   "9790a08dca3bee1dcd256c88dc047ef2eba7fc7021e1795c0252f5eda198ae91",
-   35483
+   "7b275544e54c905d4c419e5e635d2ce643faacbb96aed5747bbe468505e2f4f9",
+   35535
   ],
   "public/js/coop.js": [
    "9282d7cdc1bf3eb0ee1708719083a3a8adca2a71c6c7248e6f63b21dea9b4400",
@@ -2179,8 +2187,8 @@
    27996
   ],
   "public/js/main.js": [
-   "acfc2853621a67c6c22cdfbf27cf685ee26948ed7f0d0d45cf1d36c3caf77541",
-   286275
+   "7e6347c80d3f5de5ac9851aee124ef6089d7552db80afde6262f717555843830",
+   291773
   ],
   "public/js/net.js": [
    "d415f683a93c1c3320d56977ba98fe00506efc8dacc6d989f8826a6d8c86a2de",
@@ -2202,6 +2210,10 @@
    "dc6e988e83395464ca12878d5cd736604dc92fed3d1146c42c090e189d94ed02",
    27697
   ],
+  "public/js/patchnotes.js": [
+   "c726f0c8fc28a47c6002465435081ab5c3ab417f893b1fda586b553cbc6fbcbd",
+   3571
+  ],
   "public/js/physics.js": [
    "967a5160bf233a9f4b18abffed3adec65974568ad243ce7117d75e995cf26216",
    17929
@@ -2211,8 +2223,8 @@
    10712
   ],
   "public/js/render.js": [
-   "a5c93d46bfed75779f723730c966fa99e36508b4c636422a56c3f78bae40c5d2",
-   255372
+   "153543c620dd2b9844ecf5be3305177ecd91856c567b396b02d2c03cdf033ad4",
+   259808
   ],
   "public/js/rt.js": [
    "27da677421fb6d539b91c04feda574eb9ace7f57f74c99b37cceda721eeb4ecc",
@@ -2223,8 +2235,8 @@
    30454
   ],
   "public/js/settings.js": [
-   "53605443d87e2d31755b19f803a432a0d5f6321542eded17f39542d74a6a5894",
-   8591
+   "61d5fc8a2df405258433f6576cbb8ebf785d6843c49c11136ad7952c907d9707",
+   8662
   ],
   "public/js/side.js": [
    "b9a3915b6085365e0ffadc8a589603a70ade68d62383e425f04b9695afeac523",
@@ -2259,8 +2271,8 @@
    1262
   ],
   "server.js": [
-   "35915dc9e49515847fb3bd1b38a0f1da462678674f1add3a37b564f1313dc873",
-   10722
+   "dfc65715e2f2102916fb88469f08ade3ddfcd69d7e4ae179c8446b3e73529278",
+   11700
   ],
   "sounds/README.md": [
    "fd1b846d6a8f61dd305f4c3e741364d9b31023cf3b69c3a8a1310d2ade5b251f",
@@ -2299,8 +2311,8 @@
    7372
   ],
   "tools/publish-update.cjs": [
-   "9218f6620119a966961d39b8d4eb9624c911cebf80ed32ec6e437bdbd469e768",
-   2280
+   "f0111755f4f685369a79cefa675a080792d7d96822cace77e69a9ba15b2c08de",
+   2422
   ],
   "tools/simtest.mjs": [
    "ded2a20463ff984dd14fdd67b28e64cab74d6278842656ffd3536657497f017f",

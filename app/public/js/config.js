@@ -312,7 +312,7 @@ export const DEFAULT_LOBBY_SETTINGS = {
   side: false,           // 2D side view (side.js): flat orthographic camera, ROUNDS-style maps. Every mode except the open world
   commander: false,      // you pick the cards, an AI controls your character
   pickTime: 30,          // seconds to pick a card, 0 = no limit
-  themes: 'standard',    // 'standard' | 'experimental' (castle, western, candy, forest, tundra, neon) | 'all' | one theme name ('forest')
+  themes: 'all',         // v1.2.16: every theme by default. 'standard' (extra themes off) | 'experimental' (castle, western, candy, forest, tundra, neon) | 'all' | one theme name ('forest')
   speed: false,          // Speed mode: two picks per pick phase (fresh hand after each pick)
   waveDifficulty: 'normal', // co-op difficulty: 'easy' | 'normal' | 'hard' | 'nightmare' (old 'relaxed'/'brutal' = easy/hard)
   coopScale: 'standard',  // co-op: how much each extra hero (player or bot) scales the waves: 'off' | 'standard' | 'strong'

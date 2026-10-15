@@ -1,3 +1,4 @@
+import { PATCHES } from './patchnotes.js';
 import { ART, RULES, DIFFICULTY, RARITY, STAT_INFO, DEFAULT_LOBBY_SETTINGS, COSMETICS, COSMETIC_LABELS, assignColors, sizeFor, ROUND_MODS } from './config.js';
 import { t, setLanguage, languageOptions } from './i18n.js';
 const tr = t;   // for functions that shadow t locally
@@ -586,7 +587,7 @@ function pressAction(code, e) {
       sound.play('ui');
     }
   }
-  if (bound('view', code)) {
+  if (bound('view', code) && !(e && e.altKey)) {   // (v1.2.16: not Alt+Tab)
     if (e) e.preventDefault();
     if (S && S.amon) return;   // AMON: Tab holds the leaderboard (amonui.js)
     if (S && S.inGame && S.matchSettings.mode === 'open' && currentScreen === 'none') {   // open world: always mouse-look; Tab picks the camera
@@ -696,7 +697,9 @@ function bindInput() {
   addEventListener('keyup', e => { keys[e.code] = false; if (EW.open && !held('emote')) closeWheel(true); });
   addEventListener('blur', () => { for (const k in keys) keys[k] = false; peerNeutral(); closeWheel(false); });
   // v1.2.6: a hidden or minimized window stops drawing frames, so a joiner's "all keys up" would never be sent: send it now
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { for (const k in keys) keys[k] = false; peerNeutral(); } });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { for (const k in keys) keys[k] = false; peerNeutral(); } else renderer.checkGL(); });
+  addEventListener('focus', () => renderer.checkGL());   // v1.2.16: back from alt+tab: make sure the picture is still being drawn
+  if (window.steamBridge && window.steamBridge.onRefocus) window.steamBridge.onRefocus(() => renderer.checkGL());
   renderer.canvas.addEventListener('mousedown', e => {
     if (!inPlay()) return;
     if (settings.view === 'first' && !locked() && !S.amon && !spectating()) { altFree = false; renderer.canvas.requestPointerLock(); return; }   // (AMON: the mouse runs the store, never locked)
@@ -1008,7 +1011,7 @@ function renderLobby() {
   $('setRounds').value = String(st.roundsToWin);
   $('setTeams').value = st.mode === 'tdm' ? 'tdm' : 'ffa'; $('setTeams').disabled = !host;
   $('setCombos').checked = st.combos !== false;
-  $('setThemes').value = st.themes || 'standard';
+  $('setThemes').value = st.themes || 'all';
   $('setHazards').checked = !!st.hazards;
   $('setRoundMods').value = ROUND_MODS[st.roundMods] || st.roundMods === 'random' ? st.roundMods : 'off';
   $('setSide').checked = !!st.side; $('setStocks').value = String(st.stocks || 3); $('setBrawlFlat').checked = !!st.brawlFlat;
@@ -2216,10 +2219,64 @@ function updShow(st) {
   else if (st.state === 'full') html = `Version ${esc(st.version)} is out. It needs a fresh download of the game.`;
   else if (st.state === 'error') html = `Couldn't update: ${esc(String(st.error).slice(0, 120))}`;
   el.innerHTML = html; el.classList.toggle('hidden', !html); el.classList.toggle('err', st.state === 'error');
+  updScreen(st);
   const b = $('updRestart'); if (b) b.onclick = () => { if (S && S.inGame) { toast('Leave the match first, then restart to update.'); return; } b.disabled = true; window.steamBridge.updateRestart(); };
   if (st.state === 'applied' && !updShow.said) { updShow.said = 1; toast(`Updated to ${st.version}`); toastT = 4; }
 }
+// v1.2.16: an update found while you're still on the menus installs itself: a full-screen "Updating" card (two players
+// blocking a shell back and forth), then the game restarts on its own. In a lobby or match it waits for you instead
+// (the title line's Restart button), and Skip on the card does the same.
+const UPD = { skip: false, restarting: false };
+const updAuto = () => !S && !UPD.skip;
+function updScreen(st) {
+  const el = $('updScreen'); if (!el) return;
+  const on = updAuto() && (st.state === 'downloading' || st.state === 'ready');
+  el.classList.toggle('hidden', !on); if (!on) return;
+  const pct = st.state === 'ready' ? 100 : st.bytes ? Math.round(100 * st.done / st.bytes) : 0;
+  el.querySelector('.usTitle').textContent = t('Updating to {v}', { v: 'v' + st.version });
+  el.querySelector('.usBar i').style.width = pct + '%';
+  el.querySelector('.usNote').textContent = st.state === 'ready' ? t('Restarting…') : `${pct}% · ${(st.bytes / 1048576).toFixed(1)} MB`;
+  if (st.state === 'ready' && !UPD.restarting) {
+    UPD.restarting = true;
+    setTimeout(() => { if (updAuto()) window.steamBridge.updateRestart(); else { UPD.restarting = false; el.classList.add('hidden'); } }, 1400);
+  }
+}
+// v1.2.16 Patch list (title screen, bottom left): the last few updates as tabs, always opening on the newest
+function showPatches(i = 0) {
+  const el = $('patchList'), P = PATCHES.slice(0, 5), p = P[i] || P[0];
+  el.querySelector('.plTabs').innerHTML = P.map((q, k) => `<button type="button" class="plTab${k === i ? ' on' : ''}" data-k="${k}">v${q.v}${k === 0 ? ' <i>new</i>' : ''}</button>`).join('');
+  el.querySelector('.plBody').innerHTML = `<div class="plDate">Version ${esc(p.v)} · ${esc(p.date)}</div>` +
+    Object.entries(p.notes).map(([h, list]) => `<h3 class="pl-${h.toLowerCase()}">${esc(h)}</h3><ul>${list.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`).join('');
+  el.querySelectorAll('.plTab').forEach(b => b.onclick = () => { sound.play('ui'); showPatches(+b.dataset.k); });
+  el.classList.remove('hidden');
+}
+$('patchBtn').onclick = () => { sound.play('ui'); showPatches(0); };
+// v1.2.16 Suggestions (title screen, next to the Patch list): saved by category on this PC and uploaded to the suggestions
+// repo, or a filled-in GitHub issue opens when there's no key (electron/suggest.cjs; the browser version uses the local server)
+let sgCat = 'bug';
+$('suggestBtn').onclick = () => { sound.play('ui'); $('sgStatus').textContent = ''; $('suggestWin').classList.remove('hidden'); setTimeout(() => $('sgTitle').focus(), 50); };
+$('suggestClose').onclick = () => $('suggestWin').classList.add('hidden');
+$('suggestWin').onclick = e => { if (e.target.id === 'suggestWin') $('suggestWin').classList.add('hidden'); };
+document.querySelectorAll('.sgCats button').forEach(b => b.onclick = () => { sgCat = b.dataset.cat; document.querySelectorAll('.sgCats button').forEach(x => x.classList.toggle('on', x === b)); });
+$('sgSend').onclick = async () => {
+  const s = { cat: sgCat, title: $('sgTitle').value.trim(), text: $('sgText').value.trim(), name: settings.name || '', version: $('versionTag').textContent };
+  if (!s.text && !s.title) { $('sgStatus').textContent = t('Write something first.'); return; }
+  $('sgSend').disabled = true; $('sgStatus').textContent = t('Sending…');
+  let r = null;
+  try {
+    if (window.steamBridge && window.steamBridge.suggest) r = await window.steamBridge.suggest(s);
+    else r = await (await fetch('/api/suggest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s) })).json();
+  } catch (err) { r = { error: String(err) }; }
+  $('sgSend').disabled = false;
+  if (!r || r.error) { $('sgStatus').textContent = t("Couldn't save it: ") + ((r && r.error) || '?'); return; }
+  if (r.url) window.open(r.url, '_blank', 'noopener');
+  $('sgStatus').textContent = r.uploaded ? t('Sent. Thanks!') : t('Saved. Finish sending it on the GitHub page that just opened (needs a GitHub account). Thanks!');
+  sound.play('pip'); $('sgTitle').value = ''; $('sgText').value = '';
+};
+$('patchClose').onclick = () => $('patchList').classList.add('hidden');
+$('patchList').onclick = e => { if (e.target.id === 'patchList') $('patchList').classList.add('hidden'); };
 if (window.steamBridge && window.steamBridge.onUpdate) {
+  $('updSkip').onclick = () => { UPD.skip = true; $('updScreen').classList.add('hidden'); };
   window.steamBridge.onUpdate(updShow);
   window.steamBridge.updateState().then(updShow).catch(() => {});
 }
@@ -3412,8 +3469,17 @@ function updateOwHud(v, me) {
 }
 
 // ---------------------------------------------------------------- settings UI
+// v1.2.16 GUI scale (Settings > Graphics): the desktop app zooms the page (the 3D view keeps its resolution: the
+// renderer follows the device pixel ratio); a browser scales the page with CSS zoom
+function applyUiScale() {
+  const k = Math.max(0.7, Math.min(1.5, +settings.uiScale || 1));
+  if (window.steamBridge && window.steamBridge.setZoom) window.steamBridge.setZoom(k);
+  else document.documentElement.style.setProperty('--uiz', String(k));   // (style.css: everything but the 3D canvas)
+  if (applyUiScale.k !== k) { applyUiScale.k = k; setTimeout(() => renderer.resize(), 0); }
+}
 function applySettings() {
   saveSettings(settings);
+  applyUiScale();
   setSlop(settings.slop);
   renderer.applySettings(S && S.inGame && (S.matchSettings.commander || S.amon) ? { ...settings, view: 'third' } : settings);
   if (S && S.amon && document.pointerLockElement) document.exitPointerLock();
@@ -3445,7 +3511,7 @@ function bindSettings() {
     ['sCB', 'colorBlind', 'value'], ['sRecommend', 'recommend', 'checked'],
     ['sCurAmmo', 'cursorAmmo', 'checked'], ['sHaze', 'shieldHaze', 'checked'],
     ['sLighting', 'lighting', 'value'], ['sShadowQ', 'shadowQ', 'value'], ['sAO', 'ao', 'checked'], ['sBloom', 'bloom', 'value'],
-    ['sRefl', 'reflections', 'value'], ['sAA', 'aa', 'value'], ['sScale', 'renderScale', 'value', Number, pct],
+    ['sRefl', 'reflections', 'value'], ['sAA', 'aa', 'value'], ['sScale', 'renderScale', 'value', Number, pct], ['sUiScale', 'uiScale', 'value', Number, pct],
     ['sVsync', 'vsync', 'checked'], ['sFpsCap', 'fpsCap', 'value', Number], ['sShowFps', 'showFps', 'checked'], ['sShowPing', 'showPing', 'checked'], ['sNetPredict', 'netPredict', 'checked'], ['sHiModels', 'hiModels', 'checked'],
     ['sRT', 'raytracing', 'value'], ['sUpscale', 'upscaler', 'value'],
   ];
@@ -3761,7 +3827,10 @@ function loadGuard(ms, now) {
 let last = performance.now();
 function loop(now) {
   // v1.0.1: one bad frame must never stop the game loop for good (it used to freeze the screen until a restart)
-  try { frameBody(now); } catch (err) { console.error('frame', err); if ((loopErrs = (loopErrs || 0) + 1) < 5) toast('Something went wrong this frame (see the console); the game keeps running.'); }
+  try { frameBody(now); } catch (err) {
+    console.error('frame', err); if ((loopErrs = (loopErrs || 0) + 1) < 5) toast('Something went wrong this frame (see the console); the game keeps running.');
+    try { renderer.render(); } catch { /* v1.2.16: still draw the picture, so it never freezes on the last good frame */ }
+  }
   requestAnimationFrame(loop);
 }
 let loopErrs = 0;

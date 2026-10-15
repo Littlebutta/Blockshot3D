@@ -9,6 +9,7 @@ const SKIP = /^(\.update-|update-manifest\.json$|noupdate$)/;
 const walk = (dir, rel = '') => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {
   const r = rel ? rel + '/' + e.name : e.name;
   if (!rel && SKIP.test(e.name)) return [];
+  if (r === 'electron/suggest-target.json') return [];   // v1.2.16: the suggestions key ships in the Windows zip only (electron/suggest.cjs)
   return e.isDirectory() ? walk(path.join(dir, e.name), r) : e.isFile() ? [r] : [];
 });
 const files = walk(src).sort(), out = path.join(repo, 'app');

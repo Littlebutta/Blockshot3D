@@ -66,6 +66,7 @@ export class Renderer {
     THREE.Texture.DEFAULT_ANISOTROPY = Math.min(8, r.capabilities.getMaxAnisotropy() || 1);
     container.prepend(r.domElement);
     this.canvas = r.domElement;
+    this.watchContext(this.canvas);
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(ART.background);
     this.scene.fog = new THREE.Fog(ART.background, 55, 120);
@@ -175,6 +176,48 @@ export class Renderer {
   }
 
   // ---------------- graphics options (lighting, shadows, reflections, post effects) ----------------
+  // v1.2.16: the graphics card can drop WebGL (alt+tab out of fullscreen, a screenshot overlay, a driver reset). The
+  // picture then froze on its last frame while the game, its sounds and the menus ran on. three.js re-uploads everything
+  // when the browser hands the context back; when it doesn't within 2.5 s, the drawing surface is rebuilt on a fresh canvas.
+  watchContext(canvas) {
+    canvas.addEventListener('webglcontextlost', () => {
+      clearTimeout(this.ctxT);
+      this.ctxT = setTimeout(() => { this.ctxT = null; if (this.canvas === canvas && this.r.getContext().isContextLost()) this.rebuildGL(); }, 2500);
+    }, false);
+    canvas.addEventListener('webglcontextrestored', () => { clearTimeout(this.ctxT); this.afterGLReset(); }, false);
+  }
+  checkGL() {   // (main.js, when the window comes back)
+    if (this.r.getContext().isContextLost() && !this.ctxT) this.ctxT = setTimeout(() => { this.ctxT = null; if (this.r.getContext().isContextLost()) this.rebuildGL(); }, 1500);
+    this.resize();
+  }
+  rebuildGL() {
+    const old = this.r, oc = old.domElement;
+    const r = new THREE.WebGLRenderer({ antialias: this.ctxMSAA, powerPreference: 'high-performance' });
+    r.setPixelRatio(old.getPixelRatio()); r.setSize(innerWidth, innerHeight);
+    const setRT = r.setRenderTarget.bind(r);
+    r.setRenderTarget = (t, ...rest) => {
+      if (t && !t.deepDepth) { t.deepDepth = true; if (t.depthTexture) t.depthTexture.type = THREE.UnsignedIntType; else if (t.depthBuffer) t.stencilBuffer = true; }
+      return setRT(t, ...rest);
+    };
+    for (const k of ['toneMapping', 'toneMappingExposure', 'outputEncoding', 'physicallyCorrectLights']) r[k] = old[k];
+    r.shadowMap.enabled = old.shadowMap.enabled; r.shadowMap.type = old.shadowMap.type;
+    const nc = r.domElement; nc.id = oc.id; nc.className = oc.className; nc.style.cssText = oc.style.cssText;
+    // listeners added to the old canvas (here, main.js, amonui.js) keep working: its events are passed on to it
+    for (const type of ['mousedown', 'mouseup', 'mousemove', 'click', 'dblclick', 'wheel', 'contextmenu', 'pointerdown', 'pointerup', 'pointermove', 'touchstart', 'touchmove', 'touchend'])
+      nc.addEventListener(type, e => { if (type === 'contextmenu') e.preventDefault(); try { oc.dispatchEvent(new e.constructor(type, e)); } catch { /* skip */ } }, { passive: type !== 'contextmenu' && type !== 'wheel' });
+    oc.replaceWith(nc);
+    this.r = r; this.canvas = nc; this.pmrem = null;
+    try { old.dispose(); } catch { /* lost anyway */ }
+    this.watchContext(nc);
+    this.afterGLReset();
+    console.warn('[graphics] WebGL was lost and not given back: rebuilt the drawing surface');
+  }
+  afterGLReset() {
+    if (this.post) { try { this.post.dispose(); } catch { /* lost */ } this.post = null; }
+    this.gfxKey = ''; this.warmSig = null; this.needWarm = true; this.envDirty = true;
+    try { this.applyGraphics(); } catch (err) { console.warn('[graphics reset]', err); }
+    this.resize();
+  }
   applyGraphics() {
     const s = this.settings, vivid = s.lighting !== 'classic', rtOn = s.raytracing === 'on' || s.raytracing === 'ultra';
     const refl = s.reflections === 'probe' || s.reflections === 'ssr' || rtOn;   // v27: ray tracing always uses the probe for bounce light
@@ -2644,10 +2687,11 @@ export class Renderer {
       else if (m.userData.fx === 'flame') { const age = (performance.now() - m.userData.born) / 1000; m.scale.setScalar(b.r * (1 + age * 6)); m.material.color.setHSL(0.08 - Math.min(0.08, age * 0.2), 1, 0.55); }
       else if (m.userData.fx === 'wave') m.scale.set(b.r * 2.2, b.r * 0.6, b.r * 2.2);
       else if (m.userData.fx === 'swap') { const k = 1 + 0.2 * Math.sin(performance.now() / 70); m.scale.setScalar(b.r * k); }   // v1.2.15 Swap Shot orb
-      else if (m.userData.fx === 'bee') {   // Bees: a little striped body that buzzes
+      else if (m.userData.fx === 'bee') {   // Bees (v1.2.16): a small striped body with two see-through wings that flap; no more blinking
         const v = b.vel, age = (performance.now() - m.userData.born) / 1000;
-        m.scale.set(b.r * 1.1, b.r * 1.1, b.r * 1.9); if (v) m.lookAt(m.position.x + v.x, m.position.y + v.y, m.position.z + v.z);
-        m.position.y += Math.sin(age * 40 + b.id) * 0.04; m.material.color.set(Math.floor(age * 14) % 3 === 0 ? '#2a2210' : '#ffd23a');
+        m.scale.set(b.r * 0.85, b.r * 0.85, b.r * 1.35); if (v) m.lookAt(m.position.x + v.x, m.position.y + v.y, m.position.z + v.z);
+        m.position.y += Math.sin(age * 40 + b.id) * 0.03;
+        this.beeParts(m, age);
       } else if (m.userData.fx === 'squid') {   // Squid: squashes and stretches with each stroke
         const v = b.vel, sp = v ? Math.hypot(v.x, v.y, v.z) : 0, k = Math.min(1, sp / 13);
         m.scale.set(b.r * (1.5 - 0.5 * k), b.r * (1.5 - 0.5 * k), b.r * (1 + 1.2 * k)); if (v && sp > 0.1) m.lookAt(m.position.x + v.x, m.position.y + v.y, m.position.z + v.z);
@@ -2667,6 +2711,26 @@ export class Renderer {
     }
   }
 
+  // v1.2.16 bee bullet: two dark stripes, a stinger and a pair of pale wings (shared geometry and materials: bees come in swarms)
+  beeParts(m, age) {
+    let p = m.userData.bee;
+    if (!p) {
+      const B = this.beeKit || (this.beeKit = (() => {
+        const stripe = new THREE.CylinderGeometry(1.01, 1.01, 0.22, 10, 1, true); stripe.rotateX(Math.PI / 2);
+        const sting = new THREE.ConeGeometry(0.28, 0.5, 6); sting.rotateX(-Math.PI / 2); sting.translate(0, 0, -1.15);
+        const wing = new THREE.CircleGeometry(0.75, 10); wing.rotateX(-Math.PI / 2); wing.scale(0.7, 1, 1.25); wing.translate(0.55, 0, 0);
+        return { stripe, sting, wing, dark: new THREE.MeshBasicMaterial({ color: 0x2a2210 }),
+          wingM: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false }) };
+      })());
+      p = m.userData.bee = new THREE.Group();
+      for (const z of [-0.25, 0.25]) { const s = new THREE.Mesh(B.stripe, B.dark); s.position.z = z; p.add(s); }
+      p.add(new THREE.Mesh(B.sting, B.dark));
+      p.userData.wings = [1, -1].map(sx => { const w = new THREE.Mesh(B.wing, B.wingM); w.scale.x = sx; w.position.set(0, 0.55, 0.15); p.add(w); return w; });
+      m.add(p);
+    }
+    const flap = Math.sin(age * 60) * 0.7;
+    p.userData.wings[0].rotation.z = 0.35 + flap; p.userData.wings[1].rotation.z = -0.35 - flap;
+  }
   recycleBullet(m) {
     const u = m.userData;
     if (u.fx || u.slash || u.ring || m.geometry !== this.bulletGeo || m.material.transparent || this.bulletPool.length >= 300) return;
