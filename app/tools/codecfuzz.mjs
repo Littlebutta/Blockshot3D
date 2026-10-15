@@ -15,9 +15,9 @@ let serial = 1, fails = 0, msgs = 0, decoded = 0, packets = 0;
 function fail(what, a, b) { fails++; console.log('FAIL', what, JSON.stringify(a).slice(0, 300), '\n    ', JSON.stringify(b).slice(0, 300)); if (fails > 5) process.exit(1); }
 for (let round = 0; round < ROUNDS; round++) {
   seed = round * 7919 + 1;
-  const enc = new AckEncoder(), dec = new AckDecoder(), sent = new Map(), evSent = [];
+  const enc = new AckEncoder(), dec = new AckDecoder(), sent = new Map(), evSent = [], rs = 1 + (round % 5);   // (rs: resend spacing, v1.2.12)
   let pl = Array.from({ length: 2 + Math.floor(rnd() * 9) }, (_, i) => ['p' + i, ...Array.from({ length: 34 }, val)]);
-  let bu = [], ob = Array.from({ length: Math.floor(rnd() * 6) }, (_, i) => [100 + i, num(), num(), num(), num(), 0, 0, 0]), nextId = 1000, tm = 1000, ack = 0, since = 0;
+  let ek = 0, bu = [], ob = Array.from({ length: Math.floor(rnd() * 6) }, (_, i) => [100 + i, num(), num(), num(), num(), 0, 0, 0]), nextId = 1000, tm = 1000, ack = 0, since = 0;
   const inFlight = [], evGot = [];
   for (let t = 0; t < 400; t++) {
     tm += 33 + Math.floor(rnd() * 5);
@@ -35,7 +35,7 @@ for (let round = 0; round < ROUNDS; round++) {
     const full = JSON.parse(JSON.stringify(s));
     const q = enc.push(s, ev); if (!since) since = q;
     sent.set(q, full); if (ev.length) evSent.push([q, ev.map(e => JSON.parse(JSON.stringify(e)))]);
-    const m = enc.encodeFor(ack, since); msgs++;
+    const m = enc.encodeFor(ack, since, round % 7 === 6 ? 0 : ek, rs); msgs++;   // (every 7th match: a host that never hears ek)
     // through the Steam packet layer (pieces may arrive in any order)
     const pks = W.packMessage({ t: 'msg', from: 'host', msg: { k: 'snap', s: m } }, false); packets += pks.length;
     if (pks.length > 1) for (let i = pks.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [pks[i], pks[j]] = [pks[j], pks[i]]; }
@@ -52,14 +52,14 @@ for (let round = 0; round < ROUNDS; round++) {
       const want = sent.get(mm.q);
       for (const k of ['pl', 'bu', 'ob', 'sc', 'tg', 'mv', 'ph', 'pt', 'tm']) if (!eq(out[k] ?? null, want[k] ?? null)) fail(`decode ${k} at q ${mm.q} (base ${mm.b})`, out[k], want[k]);
       evGot.push(...out.ev);
-      if (rnd() < 0.85) { const a = dec.ack(); if (rnd() < 0.05) ack = Math.max(0, a[1] - 120); else ack = a[1]; }   // acks: usually the newest, sometimes too old to use
+      if (rnd() < 0.85) { const a = dec.ack(); if (rnd() < 0.05) ack = Math.max(0, a[1] - 120); else ack = a[1]; if (a[2] > ek) ek = a[2]; }   // acks: usually the newest, sometimes too old to use
     }
   }
   // events: numbers go to 2 places on the wire; sound/particle ones may be dropped once stale and an older unit roster once a newer
   // one is out, but the rest (hits, deaths, rounds, napalm...) must each come exactly once, in order, from the first one received
   const FXT = new Set(['shoot', 'impact']), key = e => JSON.stringify({ ...e, x: typeof e.x === 'number' && !Number.isInteger(e.x) ? r2(e.x) : e.x });
   const want = evSent.flatMap(([, e]) => e).filter(e => !FXT.has(e.t) && e.t !== 'units').map(key), got = evGot.filter(e => !FXT.has(e.t) && e.t !== 'units').map(key);
-  const at = want.indexOf(got[0]); if (got.length && (at < 0 || !eq(want.slice(at, at + got.length), got) || at + got.length < want.length - 40)) fail('events once and in order', got.slice(0, 5), want.slice(at, at + 5));
+  const at = want.indexOf(got[0]); if (got.length && (at < 0 || !eq(want.slice(at, at + got.length), got) || at + got.length < want.length - 60)) fail('events once and in order', got.slice(0, 5), want.slice(at, at + 5));
   const ns = evGot.map(e => e.n); if (new Set(ns).size !== ns.length) fail('an event came twice', ns.length, new Set(ns).size);
 }
 // p2pwire alone: messages of every size, reliable and not

@@ -58,6 +58,7 @@ function applySplit(s, k) { for (const key of SPLIT_STATS) if (typeof s[key] ===
 export const NAPALM = { life: 5, max: 40, perBullet: 8, dps: 0.22, burnFor: 2, polyWallTop: 1.0 };
 // Bullet Time: a field around the holder that slows bullets which can hurt them to 25% speed. More copies = bigger field.
 export const SLOWFIELD = { slow: 0.75, radius: 4, perCopy: 2.5, height: 3 };
+const UNIT_WINS = new Set(['turret', 'blockTurret', 'mount', 'critter']);   // v1.2.13: units that win a round for their owner (with a Space King)
 export const BANK_RANGE = 22;   // Bank Shot: how far a bounced bullet looks for a visible target   // extra bite reach for critters beyond touching distance
 export const PILLAR_SHIELD = 170;   // Pillar Shield health before Block size / Block duration scaling
 // Turret shield mod: the turret's own block bubble. hp = base x (Block duration / 0.35)^0.75 x sqrt(Block size).
@@ -71,7 +72,7 @@ export const KATANA = { reach: 2.1, arc: 1.1, slashMul: 1.4, active: 0.16, charg
   waveSpeed: 0.85, waveLife: [0.8, 1.3], waveW: [0.5, 1.15], waveDmg: [1.0, 2.6], cutPad: 0.3, minScale: 0.7, maxScale: 2.6 };
 // Super Saiyan Hair shield mod: a separate health pool soaked before your own health, filled by holding block.
 //   mult: full pool = mult x your max health; fillTime: seconds from empty to full at base block stats
-export const HAIR = { mult: 2, fillTime: 8, fullSpeed: 2, fullDamage: 2 };   // v1.0.1: hair pool = 2x max health (was 3x); a FULL pool doubles move speed and damage
+export const HAIR = { mult: 3, fillTime: 8, fullSpeed: 2, fullDamage: 2 };   // v1.2.13 (Devin): hair pool = 3x max health (v1.0.1 had 2x); a FULL pool doubles move speed and damage
 // Cursed Sacrifice shield mod: hold block to draw a pentagram under you, then keep charging inside it for 3 levels.
 // L1 a swarm of critters, L2 a big brute, L3 a meteor storm. drawTime / levelTime at base block stats, radius x Block size.
 // Charging costs health: `cost` of your max health over the whole charge (draw + 3 levels), never refunded.
@@ -245,7 +246,7 @@ export class Game {
     const mx = fin(i.mx) ? i.mx : 0, mz = fin(i.mz) ? i.mz : 0, ml = Math.hypot(mx, mz);
     inp.mx = ml > 1 ? mx / ml : mx; inp.mz = ml > 1 ? mz / ml : mz;
     inp.fp = !!i.fp;   // first-person view: shots leave from the eye, straight down the crosshair
-    inp.jump = !!i.jump; inp.shoot = !!i.shoot; inp.block = !!i.block; inp.crouch = !!i.crouch; inp.use = !!i.use; inp.drop = !!i.drop; inp.ready = i.ready | 0;
+    inp.jump = !!i.jump; inp.shoot = !!i.shoot; inp.block = !!i.block; inp.crouch = !!i.crouch; inp.use = !!i.use; inp.drop = !!i.drop; inp.dash = !!i.dash; inp.ready = i.ready | 0;
     inp.blockSeq = i.blockSeq | 0; inp.reloadSeq = i.reloadSeq | 0; inp.useSeq = i.useSeq | 0; inp.rot = (i.rot | 0) & 7;   // rot: Core Defense carry turn (scroll wheel)
     inp.jumpSeq = (i.jumpSeq ?? i.js) | 0; inp.shotSeq = (i.shotSeq ?? i.ss) | 0;   // v1.2.6: press counters, so a quick tap is never lost between two steps
     if (!p.alive || p.reviving) { p.fx.jSeq = inp.jumpSeq; p.lastShotSeq = inp.shotSeq; }   // (presses made while down don't fire once you're back)
@@ -312,9 +313,16 @@ export class Game {
     // One weapon mod and one shield mod at a time: once you hold one, no more of that kind are dealt to you.
     const hasW = p.cards.some(id => (this.cardById.get(id) || {}).weaponMod), hasS = p.cards.some(id => (this.cardById.get(id) || {}).shieldMod);
     return this.allCards.filter(c => !c.combo && c.rarity !== 'combo' && c.special !== 'repentance' && this.modeOK(c) &&
-      !(c.unique && p.cards.includes(c.id)) && !(c.weaponMod && hasW) && !(c.shieldMod && hasS) &&
+      !this.uniqueHeld(p, c) && !(c.weaponMod && hasW) && !(c.shieldMod && hasS) &&
       !(c.special === 'modBreaker' && !hasW && !hasS) &&
       !(a.holy && (c.rarity === 'cursed' || c.special === 'regretfulPact')) && !(a.cursed && c.rarity === 'holy'));
+  }
+  // "unique": one copy (holy / cursed versions count as the same card). "uniqueGroup": one card of the group
+  // (Squid / Bees, Orbital Drop / Guided Meteor), for cards whose main effect doesn't stack.
+  uniqueHeld(p, c) {
+    if (!c.unique && !c.uniqueGroup) return false;
+    const base = this.baseId(c.id);
+    return p.cards.some(id => { const h = this.cardById.get(id); return h && ((c.unique && this.baseId(id) === base) || (c.uniqueGroup && h.uniqueGroup === c.uniqueGroup)); });
   }
   makeOffer(p, exclude = []) {
     const pool = this.offerPool(p).filter(c => !exclude.includes(c.id));
@@ -483,7 +491,7 @@ export class Game {
     p.lootQ = null;
     p.pos = { x: pt.x, y: pt.y || 0, z: pt.z }; p.vel = { x: 0, y: 0, z: 0 };
     p.bonusHp = 0; p.size = sizeFor(p.stats.health);
-    p.hp = p.stats.health; p.ammo = p.stats.ammo; p.reloadT = 0; p.fireT = 0.3; p.blockT = 0; p.blockCdT = 0; p.blockExtra = 0;
+    p.hp = p.stats.health; p.ammo = p.stats.ammo; p.reloadT = 0; p.fireT = 0.3; p.blockT = p.kind === 'hero' && this.phase === 'play' ? 1 : 0; p.blockCdT = 0; p.blockExtra = 0;   // (v1.2.13: a respawn mid-round comes with a one-second shield)
     if (BRAWL_ON) { p.pct = 0; p.bHp = null; }
     p.encoreQ = null; p.alive = true; p.reviving = false; p.flashT = 0; p.ai = {}; p.fx = {}; p.spawn = { x: pt.x, y: pt.y || 0, z: pt.z };
     const l = Math.hypot(pt.x, pt.z) || 1;
@@ -1468,7 +1476,7 @@ export class Game {
     if (p.reviveT > 0) return;
     p.reviving = false;
     p.hp = Math.max(1, this.maxHp(p) * Math.min(1, p.fx.reviveFrac || 0.5));
-    p.blockT = 0.8; p.blockExtra = RULES.blockMaxExtra;
+    p.blockT = 1; p.blockExtra = RULES.blockMaxExtra;   // (v1.2.13: a one-second shield, like any spawn)
     this.emit({ t: 'revive', p: p.id, x: p.pos.x, y: p.pos.y + 0.8, z: p.pos.z });
   }
 
@@ -1632,7 +1640,7 @@ export class Game {
   updateStatus(p, dt) {
     const f = p.fx;
     if (f.burns && f.burns.length) {
-      for (const b of f.burns) { if (b.t <= 0) continue; const step = Math.min(dt, b.t); b.t -= dt; this.hurt(p, b.dps * step, b.src, null, true); if (!p.alive) return; }
+      for (const b of f.burns) { if (b.t <= 0) continue; const step = Math.min(dt, b.t); b.t -= dt; this.dmgTag = 'fire'; this.hurt(p, b.dps * step, b.src, null, true); if (!p.alive) return; }
       f.burns = f.burns.filter(b => b.t > 0);
     }
     const P = f.poisonS;
@@ -1641,7 +1649,7 @@ export class Game {
       const step = Math.min(dt, Math.max(0, P.left));
       P.t += step; P.left -= dt;
       const rate = Math.min(this.maxHp(p), POISON.hpCap) * POISON.share / POISON.dur * (0.4 + 0.24 * Math.min(P.t, POISON.rampCap)) * (1 + POISON.perLevel * Math.max(0, P.lvl - 1)) * (p.kind === 'boss' || p.heavy ? POISON.boss : 1);
-      if (step > 0) this.hurt(p, rate * step, P.src, null, true);
+      if (step > 0) { this.dmgTag = 'poison'; this.hurt(p, rate * step, P.src, null, true); }
       if (!p.alive) return;
       if (P.left <= 0) f.poisonS = null;
     }
@@ -2166,7 +2174,11 @@ export class Game {
     if (!encore) { p.fireT = 1 / s.fireRate; p.ammo--; }
     if (!encore && s.encore > 0 && p.mod !== 'critter') {
       const n = Math.floor(s.encore) + (Math.random() < s.encore % 1 ? 1 : 0);
-      if (n > 0) p.encoreQ = Array.from({ length: n }, (_, k) => ({ t: ENCORE.gap * (k + 1) }));
+      if (n > 0) {   // v1.2.11: added to the queue (a fast next shot used to wipe the encores still waiting from the last one)
+        const q = p.encoreQ || (p.encoreQ = []);
+        for (let k = 0; k < n; k++) q.push({ t: ENCORE.gap * (k + 1) });
+        q.sort((a, b) => a.t - b.t);
+      }
     }
     const n = Math.round(s.projectiles);
     if (p.mod && p.mod !== 'tank') { this.fireMod(p, n); if (p.ammo <= 0) this.startReload(p); return; }   // Tiny Tank fires normal bullets
@@ -2341,7 +2353,9 @@ export class Game {
       for (const q of this.players) {
         if (!q.alive || q.reviving || !this.isEnemy(p, q)) continue;
         const dx = q.pos.x - p.pos.x, dz = q.pos.z - p.pos.z, d = Math.hypot(dx, dz);
-        if (d < R && d > 0.01) { const f = s.blockPush * (1 - d / R) / q.size; q.vel.x += dx / d * f; q.vel.z += dz / d * f; q.vel.y += f * 0.3; }
+        if (!(d < R && d > 0.01)) continue;
+        if (BRAWL_ON && q.kind === 'hero') { if (!((q.fx.invulnT || 0) > this.time)) brawlLaunch(this, q, s.blockPush * (1.2 - 0.6 * d / R), { x: dx / d, y: 0.5, z: 0 }); continue; }   // v1.2.13: Brawl: a real launch that grows with damage %
+        const f = s.blockPush * (1 - d / R) / q.size; q.vel.x += dx / d * f; q.vel.z += dz / d * f; q.vel.y += f * 0.3;
       }
       this.emit({ t: 'push', p: p.id, x: p.pos.x, y: this.chest(p), z: p.pos.z, r: R });
     }
@@ -2403,6 +2417,7 @@ export class Game {
     return 2 ** n;
   }
   hurt(t, amt, src, dir, quiet) {
+    const tag = this.dmgTag || (quiet ? 'dot' : 'hit'); this.dmgTag = null;   // v1.2.11: what kind of damage, for the death recap
     if (!t.alive || t.reviving || this.phase !== 'play') return;
     if ((t.fx.invulnT || 0) > this.time) return;
     if (t.veh && t.veh.hp != null && amt > 0 && owCarHit(this, t, amt, src)) return;   // open world: in a car, the car takes the damage
@@ -2423,6 +2438,7 @@ export class Game {
     }
     const rest = amt - soaked;
     const dealt = Math.max(0, BRAWL_ON && t.kind === 'hero' ? amt : soaked + Math.min(rest, Math.max(0, t.hp)));   // v1.0.1: brawl fighters sit at 1 hp, so count the whole hit
+    if (t.kind === 'hero' && dealt > 0) this.logDamage(t, src, tag, dealt);
     t.hp -= rest; if (!quiet) t.flashT = 0.12;   // steady damage (burn, poison, shock) shows its own effect instead of a white flash
     if (this.isPractice() && this.settings.practiceGod && !t.isBot && t.kind === 'hero' && t.hp < 1) t.hp = 1;   // practice: you can't die
     if (BRAWL_ON && t.kind === 'hero' && amt > 0) brawlHit(this, t);   // a hit lets go of a ledge; two break a dash charge
@@ -2459,13 +2475,26 @@ export class Game {
       const late = !src && t.fx.lastSrc && this.time - (t.fx.lastSrcT || -99) < 6 ? this.creditOf(t.fx.lastSrc) : null;
       if (enemyHit && credit && credit.kind === 'hero') credit.tally.kills++;
       else if (late && late !== t && late.kind === 'hero' && this.isEnemy(late, t)) late.tally.kills++;
-      this.emit({ t: 'death', p: t.id, k: src ? src.id : null, x: t.pos.x, y: t.pos.y + 0.8, z: t.pos.z });
+      this.emit({ t: 'death', p: t.id, k: src ? src.id : null, x: t.pos.x, y: t.pos.y + 0.8, z: t.pos.z, ...(t.kind === 'hero' ? this.deathRecap(t, tag) : {}) });
       if (t.kind === 'splitter' && (t.gen || 0) < 2) this.splitBlob(t);
       else if (t.kind === 'splitter') addBlotch(this, t, t.pos.x, t.pos.z, 1.3, (t.melee || 8) * 0.35, 5);   // smallest blobs leave a poison puddle
       if (t.kind === 'boss' && !t.kingOf) bossDown(this, t);
       if (t.kind === 'clone') this.cloneInherit(t);
       if (t.kind === 'angel') this.emit({ t: 'angelUp', p: t.id, x: t.pos.x, y: t.pos.y, z: t.pos.z });
     }
+  }
+
+  // v1.2.11 death recap: who hurt a hero in the last DLOG_WINDOW seconds, by source and kind (shots, explosions, fire...).
+  logDamage(t, src, tag, a) {
+    const L = t.fx.dlog || (t.fx.dlog = []), now = this.time, sid = src ? src.id : null;
+    while (L.length && now - L[0].t > 8) L.shift();
+    const e = L.length && L.find(x => x.s === sid && x.k === tag);
+    if (e) { e.a += a; e.t = now; L.splice(L.indexOf(e), 1); L.push(e); }
+    else { L.push({ s: sid, k: tag, a, t: now, o: src && src.kind !== 'hero' ? src.ownerId ?? null : null, n: src && src.kind !== 'hero' ? src.name || null : null }); if (L.length > 16) L.shift(); }
+  }
+  deathRecap(t, tag) {
+    const L = (t.fx.dlog || []).filter(x => this.time - x.t <= 8).sort((a, b) => b.a - a.a).slice(0, 5);
+    return { kk: tag, dl: L.map(x => x.n ? [x.s, x.k, Math.round(x.a), x.o, x.n] : [x.s, x.k, Math.round(x.a)]) };   // units: + owner id, name (they may be gone by the time it shows)
   }
 
   // ---------------------------------------------------------- bullet hits
@@ -2506,7 +2535,7 @@ export class Game {
       const f = this.spawnBullet(b.ownerRef, { x: b.pos.x + d.x * 0.3, y: Math.max(0.3, b.pos.y), z: b.pos.z + d.z * 0.3 }, d, 18, false);
       Object.assign(f, { dmg: b.dmg * 0.3, r: 0.07, grav: bulletGravityFor(0.07), life: 0.4, bounced: true, shrapnel: 0, explosive: 0, bLeft: 0, poison: 0, limpet: 0, chain: 0, napalm: 0,
         color: b.color, cown: b.cown, ignite: b.ignite, chill: b.chill, hex: b.hex, knockback: b.knockback, homing: 0, drill: 0, ring: 0,
-        bounceTarget: 0, bounceExplode: 0, bounceBoost: 0, bounceSplit: 0, noHit: hitQ ? hitQ.id : null });
+        bounceTarget: 0, bounceExplode: 0, bounceBoost: 0, bounceSplit: 0, noHit: hitQ ? hitQ.id : null, swarm: null, fx: undefined });   // v1.2.11: fragments are never bees / squid
     }
   }
   splitBlob(t) {
@@ -2536,7 +2565,7 @@ export class Game {
       if (q === owner) { if (q.stats.noSelfDamage > 0 || opts.noSelf) continue; amt = dmg * (opts.full ? 1 : 0.3); }
       else { if (!this.canHurt(owner, q)) continue; amt = dmg * (opts.full ? 1 : 0.6); }
       const dir = norm({ x: cx, y: 0, z: cz });
-      this.hurt(q, amt, owner, dir);
+      this.dmgTag = 'blast'; this.hurt(q, amt, owner, dir);
       const k = (3 + R + (opts.knock || 0) * dmg * 0.06) / q.size;
       q.vel.x += dir.x * k; q.vel.z += dir.z * k; q.vel.y += 3;
     }
@@ -2584,8 +2613,8 @@ export class Game {
     if (impact && b.shrapnel > 0) this.shrapnelBurst(b, hitQ);
     if (impact && b.toxic > 0) this.toxicCloud(b);
     if (impact && b.explosive > 0) this.explode(b.pos, b.dmg, b.ownerRef, { extra: Math.max(0, Math.round(b.explosive) - 1), knock: b.knockback, rmul: b.boomMul });
-    else if (impact && b.bounceExplode > 0 && !b.beam) this.explode(b.pos, b.dmg * b.bounceExplode, b.ownerRef, { knock: b.knockback, noSelf: true });   // Rebound Charge: the last hit blasts too
-    else if (impact) this.emit({ t: 'impact', x: b.pos.x, y: b.pos.y, z: b.pos.z, p: b.owner });
+    if (impact && b.bounceExplode > 0 && !b.beam) this.explode(b.pos, b.dmg * b.bounceExplode, b.ownerRef, { knock: b.knockback, noSelf: true });   // Rebound Charge: the last hit blasts too (v1.2.11: also with Volatile Payload, like on bounces)
+    if (impact && !(b.explosive > 0) && !(b.bounceExplode > 0 && !b.beam)) this.emit({ t: 'impact', x: b.pos.x, y: b.pos.y, z: b.pos.z, p: b.owner });
   }
 
   bounce(b, ax) {
@@ -2824,7 +2853,7 @@ export class Game {
       for (const q of this.players) {
         if (!q.alive || q.reviving || q === c.ownerRef || !this.canHurt(c.ownerRef, q) || this.shielded(q)) continue;
         if (Math.hypot(q.pos.x - c.x, q.pos.z - c.z) > c.r + PR * q.size || q.pos.y > c.y + c.r || q.pos.y + PH * q.size < c.y - c.r - 0.6) continue;
-        this.hurt(q, c.dps * 0.25, c.ownerRef, null, true);
+        this.dmgTag = 'toxic'; this.hurt(q, c.dps * 0.25, c.ownerRef, null, true);
         q.fx.toxT = this.time + 0.4;
       }
     }
@@ -3105,11 +3134,28 @@ export class Game {
       return;
     }
     const keys = new Set(this.players.filter(p => p.kind === 'hero' && live(p)).map(p => this.scoreKey(p)));
+    if (keys.size === 0 && !BRAWL_ON) {
+      // v1.2.13 (Devin): everyone's down, but a Space King, deployed turret or critter still standing wins the round for its owner.
+      // Units of several sides left: they fight on for up to 8 s, then the side with the most health left takes it.
+      const side = new Map();
+      for (const u of this.players) {
+        if (!u.alive || !u.transient || !(u.kingOf || UNIT_WINS.has(u.kind))) continue;
+        const o = this.player(u.ownerId || u.kingOf), k = o && this.scoreKey(o);
+        if (k && k !== 'gone' && k !== 'hazard') side.set(k, (side.get(k) || 0) + Math.max(0, u.hp));
+      }
+      if (side.size === 1) { this.endRound([...side.keys()][0]); return; }
+      if (side.size > 1) {
+        this.unitsOnlyT = (this.unitsOnlyT ?? this.time);
+        if (this.time - this.unitsOnlyT < 8) return;
+        this.endRound([...side.entries()].sort((a, b) => b[1] - a[1])[0][0]); return;
+      }
+    }
+    this.unitsOnlyT = null;
     if (keys.size <= 1) this.endRound(keys.size === 1 ? [...keys][0] : null);
   }
 
   endRound(w) {
-    this.phase = 'roundEnd'; this.phaseT = 2.0; this.roundWinner = w;
+    this.phase = 'roundEnd'; this.phaseT = 2.0; this.roundWinner = w; this.unitsOnlyT = null;
     if (w != null && w !== 'waves' && w in this.scores) this.scores[w]++;
     this.emit({ t: 'roundEnd', w, wave: this.isWaves() ? this.round : 0 });
   }
@@ -3424,7 +3470,8 @@ export class Game {
   playerFlags(p) {
     return (p.stats.tank > 0 ? 1 : 0) | (p.stats.lifeDrain > 0 ? 4 : 0) | (p.smod === 'catcher' ? 8 : 0) |
       (p.stats.regen > 0 && p.alive && !p.reviving && !(BRAWL_ON && p.kind === 'hero') && p.hp < this.maxHp(p) - 0.01 ? 16 : 0) | (p.crouch ? 32 : 0) |
-      (BRAWL_ON && p.kind === 'hero' && p.alive && !p.onGround && (p.fx.airJ || 0) > 0 ? 64 : 0);   // v1.1.6: 64 = Brawl second jump ready (drawn for its own player only)
+      (BRAWL_ON && p.kind === 'hero' && p.alive && !p.onGround && (p.fx.airJ || 0) > 0 ? 64 : 0) |   // v1.1.6: 64 = Brawl second jump ready (drawn for its own player only)
+      (p.fx.thrust && p.fx.thrust.t > 0 ? 128 : 0);   // v1.2.13: 128 = being pushed by Thrust (a streak trails behind them)
   }
   // A one-off heal (lifesteal, leech, healing field, Field Medic, Bloodforge...): bumps a counter the health bar flashes on.
   // Steady healing (regen, life drain) doesn't count; regen shows as a pulsing outline instead.

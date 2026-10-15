@@ -1,6 +1,6 @@
 {
- "version": "1.2.10",
- "built": "2026-10-15T02:07:48.009Z",
+ "version": "1.2.13",
+ "built": "2026-10-15T05:29:25.187Z",
  "files": {
   "README.md": [
    "093714591df80a725b8f8ed50b1914d19f7ae06f20854c059bf8906ceedd6226",
@@ -227,16 +227,16 @@
    10084
   ],
   "cards/battering-ram/card.json": [
-   "1527cd348e6fa742aead0bf5a431022b28e50a3f5a2ea0f635c83b72bf04b8ad",
-   553
+   "c205eaf5d6e4aab927d21dcc8c20f606886e2ff27ab1cfcd26d5055573ff80aa",
+   586
   ],
   "cards/bees/art.png": [
    "4f1620f32922c5859c6f60afac30c28c81d979e64962ea38ca23e9dd48694716",
    38546
   ],
   "cards/bees/card.json": [
-   "39ea2d587b4cb7e00d586add2d21778ec0095b55f7b26e1f9497e8cbc1d0bd63",
-   966
+   "fc012af53c6a3d6572dc9b9eba1a872cf7641af6437343a181de41f2a1cac0d3",
+   1034
   ],
   "cards/big-bubble/art.png": [
    "ed3dd4b45fedc7e61cfc53107247c1213296440c352bca7e85a4fc947e3afd0b",
@@ -443,8 +443,8 @@
    17694
   ],
   "cards/guided-meteor/card.json": [
-   "b779ba6e8a802bae5ef52d8c02ae37d68f936d82b18d77ed926e8e38a407efd2",
-   545
+   "ac90226ba86d165fffa6460906d5e8793bbc39b4d572c8205e2b255306ad2e52",
+   573
   ],
   "cards/hair-trigger/art.png": [
    "d93ef8b31254386d47e862a5c5f3d3493be945a43dbd222199231470a4b2d393",
@@ -555,8 +555,8 @@
    12361
   ],
   "cards/mass-driver/card.json": [
-   "3ad3c26a51cc7952c5aab9f7eba3a32ed5dd6d066b25197bfb4f0f2445afaf31",
-   649
+   "a8d6c3dbea2e62702f1e1ae752c28d0b4ab4904b2fc5f0dd45076406ee59bead",
+   686
   ],
   "cards/mending-field/art.png": [
    "bb4ef0448e4ec8e2242a32a23b86d8ff8a8db81595b2669c173a1ea6d5fa9341",
@@ -651,8 +651,8 @@
    15687
   ],
   "cards/mod-scattergun/card.json": [
-   "c8b8989c71a327f1990a28e8438bbeba1ada1a2616425ee832e8a412e1c7fd12",
-   594
+   "d7fc96f02df80fd593fcfadb83346f7f468999ab90246fc2b3a2bd7c5fb94961",
+   632
   ],
   "cards/nanite-repair/art.png": [
    "67036e0a4a0b3a191e3799417d124ea63d167a15dc2aae095e4c7194af50e9aa",
@@ -675,8 +675,8 @@
    42274
   ],
   "cards/orbital-drop/card.json": [
-   "172f28a3900982c243697b12b25b4232edf605d72d7146a9017172a3ee63b516",
-   514
+   "718a2a467d506567d3ed896f87d96929553057d36e3df57dec0ce39d78faa3ca",
+   587
   ],
   "cards/overclocked-legs/art.png": [
    "3728fa305601c0063e233bfc04eb75b673d71efe7ad5c55be05f7f5e598024c3",
@@ -859,16 +859,16 @@
    21877
   ],
   "cards/scavenger/card.json": [
-   "fedfc209d87356170c53144e40383e5b2236e45ba25c84167237bbe4012c5432",
-   628
+   "8c9b622963fecbe6002ffda6c826a9a21062de938b03937a33196f02d76ce7aa",
+   668
   ],
   "cards/scp/art.png": [
    "a4f9d6490b7944c281777129d51bcb98b1e707d5c63d021bf8041631cd33e17c",
    28442
   ],
   "cards/scp/card.json": [
-   "bc1e84eeac83b75c4397278611b5154f5ec8ce4f2e49765520e5f31d9d105cc3",
-   291
+   "8df03b3184907f6ee22fdac2fdfca49a3a566b1cc0c3982baac8e8c2c13c6a0d",
+   331
   ],
   "cards/second-thought/art.png": [
    "4bd43b513bed89bde83dcd418dec7dd20e1a0fceef12ebd5e49726702e965c6a",
@@ -963,7 +963,7 @@
    55169
   ],
   "cards/shield-saiyan/card.json": [
-   "67cd5b3dea5f527a0a912f81b0661f8a70015cb2036a5af1d23cb1bdbb796bb9",
+   "74cea1b63589a9f87b98f93cde44ccc7fddca0351c5159e3898c917b567d0176",
    1466
   ],
   "cards/shield-slam/art.png": [
@@ -1043,8 +1043,8 @@
    43771
   ],
   "cards/squid/card.json": [
-   "ab4da0eea3fd6b0e119b2f1c662b00815b5ca471fb4de2e71c81b6fc8c9b0f0f",
-   760
+   "41e50583314f35bbceed0ad4508d45fc6b0a27dc10386371f6df4016d688a3eb",
+   827
   ],
   "cards/standing-ovation/art.png": [
    "e7414c4034ae54b1657b304f7a42a6eb477e9ac47011e65643f3a03e25a5e678",
@@ -1107,8 +1107,8 @@
    8617
   ],
   "cards/thruster/card.json": [
-   "c88a655294d9127d95a91b050f987f2632e3839ce666f9333e8fb40d76c8494d",
-   425
+   "fb167347fa0258fd682d7d155e371a5623384e0c93846b54bdf961b230742802",
+   477
   ],
   "cards/tiny-tank/art.png": [
    "c78671ede44c56e88497afdc5bb20b989e50bc3658b692f6ef2f68abc02b3280",
@@ -1259,16 +1259,16 @@
    28753
   ],
   "electron/main.cjs": [
-   "8bc7f7540df003e5d5b66e0a779584a0cf81b6bce9e1802409aa0d3c086af011",
-   18545
+   "32f75ec6d4d02ca7b3816d9d749b0b11a9dd733404b1d5cbf4f3c58c3ea0c272",
+   19886
   ],
   "electron/p2pwire.cjs": [
    "7129454bf1074232898eda71047b5695656bc2a40dacf0c549b0db4a3a25367c",
    5942
   ],
   "electron/preload.cjs": [
-   "c5c0762d1d8dda0e208b82aac3cc6c86c29de773db557fbea81f3d2acd540352",
-   1276
+   "e4be2188a93229b82692e54ac7abc76497943f8f56093ab7fa65dac5de5fc8a6",
+   1522
   ],
   "electron/snapdict.txt": [
    "6f78870e77b69aff8053393bf257322d26e2c9f0be12b914b749e990bddcf3b5",
@@ -1783,16 +1783,16 @@
    554
   ],
   "package.json": [
-   "6ff32d49a79494502307566f3e8fdedabafc150b07783b481b62e5717b3bb993",
+   "b41cdcbe8161e13e5a16b8e1455d670b8f0d86383885d5c923a925e361c7de44",
    345
   ],
   "public/css/style.css": [
-   "2caa58edd0c0358a1a55be85bc1550d02ccb75e4298ded8a2effb4e24e026bfa",
-   65618
+   "dcc2a6590468d8087adc0d6b40faaa434e990cde2747b8be3aa68f9fea9bbda9",
+   67238
   ],
   "public/index.html": [
-   "123e666892a4918d222a200f7f94cdeeccf50594908ef73d42184c8ec092443d",
-   39427
+   "841673b1cfeb92a1a082dab99f056c62a25581ad2aaf8e00b70fb7dbbf19d2bb",
+   40092
   ],
   "public/js/a11y.js": [
    "01493123a592d8868fe91a15be7a72b6c8687f8deac62c1aff7898c1aca4b8c3",
@@ -1803,20 +1803,20 @@
    27031
   ],
   "public/js/amon.js": [
-   "7edfa6b1afe3aee01cc8b4a7ae2e94bea4f6689fda11d1d6e1e709cfe38bab3a",
-   92757
+   "728452010bb9ace4fa8f4d9a95d8a9e946aa4347289001feffef7d1609cefdfe",
+   94316
   ],
   "public/js/amondata.js": [
-   "a9123b7e0a3ae25b5f5e43a7e4f4d5b26405399501cc90aa8384178081172ec4",
-   68806
+   "c08ddd0ac914223bea2978c1904d943c6fd66db5e6bceb3819adb0d7e3398458",
+   68932
   ],
   "public/js/amoninfo.js": [
    "20e7695f6315527df4b772c952626e6bf9cf152e2328c5b9d3b371d91fcc26c0",
    15482
   ],
   "public/js/amonui.js": [
-   "f2f5c1a98b4dc57b024427b0623bd872faf8eac13c667077907ed687a8de36e3",
-   114377
+   "92fb5e76041645a29ccabc696abcf1787b8edddf118b4031701d178e191d4ad0",
+   115900
   ],
   "public/js/art.js": [
    "4e76c62c2226fa51c4ccb4ce7024966ad7f4f9a663ed81af7b7de9ef39eeffbb",
@@ -1831,20 +1831,20 @@
    30222
   ],
   "public/js/brawl.js": [
-   "ac0a3a7c90c696f9d11a99d79b59f76af919c5fa4fe60837f679413ca94f8956",
-   18410
+   "f3face55bc81acf1285902454e5aa9f188e676065b68c143ebe519ee384ef17b",
+   18680
   ],
   "public/js/cardinfo.js": [
-   "0b4e2488dc3f4eb73aa4856978599240d4a516bd94bea22387fa766290f25a6a",
-   8526
+   "6de1cca186dcc0f3594ee180b49556895659d4cab0980132f562c0417770297c",
+   8569
   ],
   "public/js/cards.js": [
-   "0784acfb6c47758185183e508b2dacb5e99af8122fae103b54ddecd044cd45e6",
-   13085
+   "0ef7333172516e45fda83796ff7d80bb77cfc481686659708d78ee209ac85f12",
+   13326
   ],
   "public/js/config.js": [
-   "04396d2e8ad80c09caafd3562c23364a36ef216fcc25ea0944468a4567ae081a",
-   27763
+   "941078857640016abf44c3ccb49a7f1e75ca35ea74876118f2a7cb7a6f5e9b0d",
+   27829
   ],
   "public/js/coop.js": [
    "9282d7cdc1bf3eb0ee1708719083a3a8adca2a71c6c7248e6f63b21dea9b4400",
@@ -1859,8 +1859,8 @@
    4111
   ],
   "public/js/effects.js": [
-   "67e495d05c635142508adbc74dd0b65237b1b455772d8c6f441cc13e7ed54383",
-   7496
+   "fa1205ab3b2df1d86308064f7dba18cccb4ebff2c73701e2571afc29e1642521",
+   7516
   ],
   "public/js/gallery.js": [
    "bbae26f01ff6359f7b463dc91d29531cfa19b50613310175cf77671c5c40e0b0",
@@ -1883,24 +1883,24 @@
    24265
   ],
   "public/js/main.js": [
-   "e9bebf2a112965f69eac42e47c22e000f59bfe0797813b4831b983b6c2d8de83",
-   262290
+   "c192e6c0903f6e6d9185f466a4aca03cfd16cf558f97651afe28672260d830f1",
+   268926
   ],
   "public/js/net.js": [
    "d415f683a93c1c3320d56977ba98fe00506efc8dacc6d989f8826a6d8c86a2de",
    4824
   ],
   "public/js/netcodec.js": [
-   "7d6a9c53252af9a2626029bc001c110348922ab6cbad84388458b4a4c6eaee2b",
-   17933
+   "f6407f7f0ae5ff64fa6ead7f60f4b50dd9cf267a045710829f84e9fa983ade18",
+   22035
   ],
   "public/js/netstats.js": [
    "0b5ac56604563fb184337790136aaf7f4bc7227ec1a248fec0d4b05faf091280",
    9443
   ],
   "public/js/openworld.js": [
-   "3290897c9c6583566f20994a212477dc5287d4fdf0cb8c477052e06861896750",
-   60838
+   "1050071b38cee1b09a057b214e08d5f21b2f46fe64cfb44058bfc1f845785ef8",
+   60820
   ],
   "public/js/owrender.js": [
    "dc6e988e83395464ca12878d5cd736604dc92fed3d1146c42c090e189d94ed02",
@@ -1915,8 +1915,8 @@
    10712
   ],
   "public/js/render.js": [
-   "d86f8e5d80716f1e26906d789adf997aaf4011a0bdbb3f70dd5aacd0cf525c3e",
-   239268
+   "db1bd2eb2921878339bfa85d24c1e17126f1a94b5217c635c16a182ed8a517ba",
+   241244
   ],
   "public/js/rt.js": [
    "27da677421fb6d539b91c04feda574eb9ace7f57f74c99b37cceda721eeb4ecc",
@@ -1927,8 +1927,8 @@
    30454
   ],
   "public/js/settings.js": [
-   "1b11c30a6a7df97ca359921a1545adcd38ef33b1e449fc5a6b1591b997474dd4",
-   6709
+   "cc38d93f603872354207f2cfd3a08033b4c5d400a8cd93d7ca30753fd0015c79",
+   8321
   ],
   "public/js/side.js": [
    "b9a3915b6085365e0ffadc8a589603a70ade68d62383e425f04b9695afeac523",
@@ -1939,8 +1939,8 @@
    17528
   ],
   "public/js/sim.js": [
-   "cb2f00575e8fee0014045ad0827ac4a17c720319e4c29c138f26da3aee5cac53",
-   231652
+   "e0b018c9cf27c99f3ea12c1ac495eb7c8103a3776ce6d08d2681b644b86be7ee",
+   235559
   ],
   "public/js/slop.js": [
    "9dc85c181fa4b81008b22eeb11ad788a5774e5e7f4526200377d6ec34d6f9932",
@@ -1995,16 +1995,16 @@
    65646
   ],
   "tools/codecfuzz.mjs": [
-   "458d5c87606a59514de6c3dd827e739e485d22f7d28f82aaaae7499c062d0c0a",
-   7200
+   "2d077d825c8748e3f184e51a9d2f53fa0495f4bca9ce5cd90d8f4f9971a518ad",
+   7372
   ],
   "tools/publish-update.cjs": [
    "9218f6620119a966961d39b8d4eb9624c911cebf80ed32ec6e437bdbd469e768",
    2280
   ],
   "tools/simtest.mjs": [
-   "26020cb3e0a862e9b8e519644fbe74877dbacf0f471a333ee869e18383345804",
-   119113
+   "134f6e6e9db37f7b52b8bbe9d5f03a2f5c7777154d64d54512b0bc3774f4d7ba",
+   125721
   ],
   "tools/trim-build.cjs": [
    "f14cc62bb2ab8633c47b31e660b4a38c3774977e6e95d099f8a71b9b6c4d288d",

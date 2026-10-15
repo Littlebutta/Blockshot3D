@@ -2112,6 +2112,13 @@ export class Renderer {
         if (v.status & 4) this.burst(v.pos.x, y, v.pos.z, '#9fe7ff', 1, 1);
         if (v.status & 8) this.burst(v.pos.x, y, v.pos.z, '#b07bff', 1, 1.5);
       }
+      if (v.alive && ((v.flags || 0) & 128) && this.settings.effects !== 'off') {   // v1.2.13 (Devin): pushed by Thrust: a hot streak and sparks trail behind
+        const sz = v.size || 1, vx = (v.vel && v.vel.x) || 0, vz = (v.vel && v.vel.z) || 0, sp = Math.hypot(vx, vz) || 1;
+        for (let k = 0; k < 2; k++) {
+          const back = 0.3 + Math.random() * 0.5;
+          this.burst(v.pos.x - vx / sp * back * sz, v.pos.y + (0.3 + Math.random() * 1.1) * sz, v.pos.z - vz / sp * back * sz, Math.random() < 0.5 ? '#ffb347' : '#fff1c2', 1, 0.8);
+        }
+      }
       if (v.alive && (v.status & 16) && Math.random() < 0.45) {   // wet and slowed (Ice Sheets water): icy drips and frost bits
         const a = Math.random() * 6.28, r = 0.35 * (v.size || 1);
         this.burst(v.pos.x + Math.cos(a) * r, v.pos.y + (0.5 + Math.random() * 0.8) * (v.size || 1), v.pos.z + Math.sin(a) * r, Math.random() < 0.5 ? '#bfe9ff' : '#ffffff', 1, 0.6);
@@ -2833,6 +2840,16 @@ export class Renderer {
   }
   // Zoom punch toward a point (the round-winning kill). Weight eases in fast and out slowly.
   punch(x, y, z, dur = 1.4) { this.punchFx = { x, y, z, t: 0, dur }; }
+  // v1.2.11 spectator camera: drag pans (screen pixels -> metres at the current height), the wheel zooms.
+  specDrag(dx, dy) {
+    const sc = this.spec || (this.spec = { x: 0, z: 0, zoom: 1, manual: false });
+    const k = 0.0016 * Math.max(4, this.camera.position.y) * (this.camera.fov / 60);
+    sc.manual = true; sc.x -= dx * k; sc.z -= dy * k;
+  }
+  specZoom(dy) {
+    const sc = this.spec || (this.spec = { x: 0, z: 0, zoom: 1, manual: false });
+    sc.zoom = clamp(sc.zoom * (dy > 0 ? 1.12 : 1 / 1.12), 0.45, 2.5);
+  }
   punchWeight() {
     const P = this.punchFx; if (!P) return 0;
     const u = P.t / P.dur; return u < 0.12 ? u / 0.12 : u < 0.55 ? 1 : Math.max(0, 1 - (u - 0.55) / 0.45) ** 2;
@@ -2980,7 +2997,8 @@ export class Renderer {
     // Open world: over-the-shoulder camera when chosen (and always while falling / parachuting), the bus camera while riding it.
     const ow = !!(this.level && this.level.open), owSt = ow && local ? owStateOf(view, local.id) : 0;
     if (ow) owUpdate(this, view, local, dt);
-    const fp = this.settings.view === 'first' && local && local.alive && owSt !== 1;
+    const revHold = !!(local && !local.alive && this.reviveHold > performance.now());   // v1.2.13: Phoenix revive: the camera stays on you
+    const fp = this.settings.view === 'first' && local && (local.alive || revHold) && owSt !== 1;
     const tankView = !!fp && (!!((local.flags || 0) & 1) || (ow && (this.owThird || owSt >= 2)) || (!ow && !!this.settings.ots));   // v1.0.1: over-the-shoulder view in the arena modes too
     this.owOts = tankView && (ow || !!this.settings.ots);   // (shows your own model behind the camera)
     this.viewGun.visible = !!fp && !tankView;   // Tiny Tank / over-the-shoulder: no hand-held gun
@@ -3061,7 +3079,7 @@ export class Renderer {
     else if (!fpTank && !(ow && owCamera(this, view, local, dt))) {
       let focus, zoom;
       const L = this.level || { hx: 19, hz: 12 };
-      if (local && local.alive) {
+      if (local && (local.alive || revHold)) {
         focus = new THREE.Vector3(local.pos.x, 0, local.pos.z);
         if (local.aimPoint) {
           const lead = new THREE.Vector3(local.aimPoint.x - local.pos.x, 0, local.aimPoint.z - local.pos.z);
@@ -3078,6 +3096,17 @@ export class Renderer {
       }
       // keep the camera from drifting far past the arena edges
       focus.x = clamp(focus.x, -L.hx + 7, L.hx - 7); focus.z = clamp(focus.z, -L.hz + 4, L.hz - 6);
+      // v1.2.11: spectator pan and zoom (main.js spectating / specInput). Panning leaves the auto camera until Jump.
+      const sc = this.spec || (this.spec = { x: 0, z: 0, zoom: 1, manual: false });
+      if (local && (local.alive || revHold)) sc.manual = false;
+      else {
+        const si = this.specInput;
+        if (si && si.follow) sc.manual = false;
+        else if (si && (si.f || si.r)) { const sp = (si.fast ? 34 : 17) * zoom * sc.zoom * dt; sc.manual = true; sc.x += si.r * sp; sc.z -= si.f * sp; }
+        if (sc.manual) { sc.x = clamp(sc.x, -L.hx, L.hx); sc.z = clamp(sc.z, -L.hz, L.hz); focus.set(sc.x, 0, sc.z); }
+        else { sc.x = focus.x; sc.z = focus.z; }
+        zoom *= sc.zoom;
+      }
       const pw = this.punchWeight();   // v1.2.0: zoom in on the round-winning kill
       if (pw > 0) { const P = this.punchFx; focus.lerp(new THREE.Vector3(P.x, 0, P.z), 0.7 * pw); zoom *= 1 - 0.38 * pw; }
       const target = new THREE.Vector3(focus.x, 15 * zoom, focus.z + 11 * zoom);

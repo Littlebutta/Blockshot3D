@@ -27,7 +27,8 @@ export const AMON = {
   commandPerLevel: 0.05,                    // store levels above 8: +5% health and damage for all your units per level
   pctCap: 6,                                // v1.0.7: breeder cards can grow a unit card up to 6x its own size
   squadMul: 1.6,                            // unit cards bring this many times more (weaker) units than their base size
-  maxRank: 9,                               // duplicate cards merge into one card of a higher rank
+  maxSpeed: 4,                              // v1.2.13: battles can be voted up to this speed
+  maxRank: Infinity,                        // duplicate cards merge into one card of a higher rank (v1.2.13, Devin: no cap; was 9)
   rankMul: r => 1 + 0.5 * (r - 1),          // stat multiplier per rank
   sellValue: rank => 2 * rank,
   teamHealth: 100,

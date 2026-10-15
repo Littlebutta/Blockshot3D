@@ -805,3 +805,23 @@ body[data-screen=pick] #modeTip,body[data-screen=over] #modeTip{opacity:0}
 .updline .btn{padding:6px 12px;font-size:13px}
 .updline.err{opacity:.6}
 body:not([data-screen=title]) .updline{display:none}
+
+/* v1.2.11 death recap: who killed you and what hurt you in your last 8 seconds */
+#deathLog{position:absolute;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(150px + env(safe-area-inset-bottom,0px));min-width:300px;max-width:min(440px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13px;pointer-events:none;z-index:6;opacity:1;transition:opacity .4s}
+#deathLog.fade{opacity:0}
+#deathLog h4{margin:0 0 6px;font-size:15px}
+#deathLog .dlrow{display:flex;gap:8px;align-items:center;margin:2px 0}
+#deathLog .dlrow .dlbar{flex:1;min-width:60px;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+#deathLog .dlrow .dlbar i{display:block;height:100%}
+#deathLog .dlrow .dln{min-width:90px;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#deathLog .dlrow .dla{min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
+#deathLog .dlk{opacity:.7;font-size:12px}
+#deathLog .dlcards{margin-top:6px;opacity:.85;font-size:12px}
+
+/* v1.2.13: block ready indicator by the reticle ammo */
+.curblk{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle;flex:none;
+  background:conic-gradient(rgba(140,200,255,.85) var(--p,100%),rgba(255,255,255,.14) 0);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+.curblk.ready{background:#8fd0ff;box-shadow:0 0 0 1px rgba(0,0,0,.5),0 0 6px #8fd0ff}
+.curblk.pop{animation:curblkPop .35s ease-out}
+@keyframes curblkPop{0%{transform:scale(1.8)}100%{transform:scale(1)}}
+.curammo .currow{display:flex;align-items:center}

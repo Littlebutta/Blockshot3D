@@ -37,7 +37,7 @@ export const FIGHTERS = {
   quack:    { name: 'Rubber Ducky',     cards: ['pinball-bomb', 'splinter-bounce', 'kinetic-rebound', 'spring-heels', 'shield-slam'] },
   astro:    { name: 'Star Caller',      cards: ['guided-meteor', 'volatile-payload', 'overclocked-legs', 'shield-rewind'] },
   cubert:   { name: 'Blockhead',        cards: ['mod-grenade-launcher', 'fortify', 'heavy-slugs', 'iron-lung', 'titan-frame'] },
-  tiki:     { name: 'Fire Dancer',      cards: ['mod-flamethrower', 'wildfire', 'napalm-rounds', 'troll-blood', 'overclocked-legs'] },
+  tiki:     { name: 'Fire Dancer',      cards: ['mod-flamethrower', 'wildfire', 'napalm-rounds', 'troll-blood', 'overclocked-legs', 'repulsor'] },   // v1.2.13 (Devin): block blasts people away
   shroom:   { name: 'Spore Lord',       cards: ['plague-doctor', 'hex-rounds', 'sanctuary', 'wide-shells'] },
   prism:    { name: 'Refractor',        cards: ['trick-shot', 'kinetic-rebound', 'mirror-edge', 'velocity-rounds', 'shield-catcher'] },
   gumdrop:  { name: 'Sticky Situation', cards: ['demolition', 'scp', 'rebound-charge', 'ricochet-rounds', 'bulk-up'] },
@@ -227,6 +227,7 @@ export function brawlRecover(g, p, inp, A, stands) {
 // Either way no shooting or blocking meanwhile.
 export function brawlMove(g, p, inp, dt, frozen) {
   const f = p.fx, fresh = !!inp.jump && !f.jHeld, B = g.level.brawl;
+  const freshD = !!inp.dash && !f.dHeld; f.dHeld = !!inp.dash;   // v1.2.13: the dash has its own key (Devin)
   if (!p.alive || frozen || !B) return 0;
   // respawn float
   if (f.floatT > g.time) {
@@ -251,13 +252,13 @@ export function brawlMove(g, p, inp, dt, frozen) {
     for (const e of B.ledges || []) {
       const [ex, top, side] = e, dx = (p.pos.x - ex) * side;
       if (dx > -0.25 && dx < H.reach && p.pos.y > top - 2 && p.pos.y < top - 0.15) {
-        f.hang = { e, t: 0 }; f.dashC = null; f.dashT = 0;
+        f.hang = { e, t: 0 }; f.dashC = null; f.dashT = 0; f.dashUsed = false;
         g.emit({ t: 'brawlHang', p: p.id, x: ex, y: top, z: 0 });
         return 1;
       }
     }
   }
-  // air dash: the second jump fires on the press as usual; keep holding to charge a dash toward the mouse
+  // air dash (v1.2.13: its own key, once per time in the air): hold to charge a dash toward the mouse, let go to dash
   const D = BRAWL.dash;
   if (f.dashT > 0) {
     f.dashT -= dt;
@@ -265,12 +266,13 @@ export function brawlMove(g, p, inp, dt, frozen) {
     if (f.dashT <= 0) { p.vel.x *= 0.3; p.vel.y *= 0.3; }
     return 2;
   }
-  if (p.onGround) { f.dashC = null; return 0; }
-  if (fresh && (f.airJ || 0) > 0) { f.dashC = 0; f.dashHits = 0; return 0; }   // (the double jump itself happens in sim.js)
+  if (p.onGround) { f.dashC = null; f.dashUsed = false; return 0; }
+  if (freshD && !f.dashUsed && f.dashC == null) { f.dashC = 0; f.dashHits = 0; f.dashUsed = true; return 0; }
   if (f.dashC == null) return 0;
-  if (!inp.jump) {   // let go
+  if (!inp.dash) {   // let go
     const c = f.dashC; f.dashC = null;
     if (c >= D.minHold) startDash(g, p, Math.min(1, (c - D.minHold) / (D.maxCharge - D.minHold)));
+    else f.dashUsed = false;   // a quick tap doesn't use it up
     return 0;
   }
   f.dashC += dt;

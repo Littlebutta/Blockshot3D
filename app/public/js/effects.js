@@ -140,7 +140,7 @@ EFFECTS.lifeDrain = {
     const q = p.fx.drainTgt;
     if (!q || !q.alive || q.reviving || g.shielded(q) || g.boxCover(q, { x: p.pos.x, y: g.chest(p), z: p.pos.z }, p)) return;
     const amt = Math.min(rate * dt, Math.max(0, q.hp));
-    g.hurt(q, amt, p, null, true);
+    g.dmgTag = 'drain'; g.hurt(q, amt, p, null, true);
     p.hp = Math.min(g.maxHp(p), p.hp + amt);
   },
 };

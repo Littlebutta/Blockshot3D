@@ -2,8 +2,8 @@
   "id": "mass-driver",
   "name": "Mass Driver",
   "rarity": "combo",
-  "icon": "☄️",
-  "description": "Slugs launched by rail: enormous, fast and shoving.",
+  "icon": "\u2604\ufe0f",
+  "description": "Slugs launched by rail: enormous, fast, with Thrust that shoves whoever they hit.",
   "combo": [
     "heavy-slugs",
     "railgun-coil"

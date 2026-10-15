@@ -2,8 +2,8 @@
   "id": "battering-ram",
   "name": "Battering Ram",
   "rarity": "combo",
-  "icon": "🐏",
-  "description": "Huge slugs that send people flying.",
+  "icon": "\ud83d\udc0f",
+  "description": "Huge slugs with Thrust: whoever they hit gets shoved along.",
   "combo": [
     "thruster",
     "heavy-slugs"

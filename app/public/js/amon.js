@@ -324,6 +324,7 @@ export class AmonGame {
     if (a.t === 'choice') { if (this.phase === 'choice' && (id === this.players[0].id || (!p.isBot && a.c === 'pvp'))) this.choose(a.c); return; }   // v1.0.1: any player can start the PvP
     if (a.t === 'pilot') { this.pilot(p, a.on ? a.u | 0 : 0); return; }
     if (a.t === 'pin') { const u = this.piloted(p); if (u) setPilotInput(u.pilot, a); return; }
+    if (a.t === 'speed') { if (this.phase === 'battle') this.voteSpeed(p); return; }
     if (this.phase !== 'shop') return;
     let ok = false;
     switch (a.t) {
@@ -337,6 +338,20 @@ export class AmonGame {
       case 'place': ok = this.place(p, a); break;
     }
     if (ok) { p.score = boardScore(computeArmy(p.board, this.cards.byId, p.level), p.level); this.dirty = true; }
+  }
+
+  // v1.2.13 (Devin): speed votes during a battle. More than half the players in the match voting steps the speed up one
+  // notch (2x, 3x, 4x) and clears the votes for the next notch. Bots never vote.
+  speedNeed() { const n = this.players.filter(p => !p.isBot && p.connected).length; return Math.floor(n / 2) + 1; }
+  voteSpeed(p) {
+    if ((this.speed || 1) >= AMON.maxSpeed || p.isBot || p.speedVote) return;
+    p.speedVote = true;
+    const votes = this.players.filter(q => q.speedVote && !q.isBot && q.connected).length;
+    if (votes >= this.speedNeed()) {
+      this.speed = (this.speed || 1) + 1; for (const q of this.players) q.speedVote = false;
+      this.emit({ t: 'speed', x: this.speed });
+    }
+    this.dirty = true;
   }
 
   // ---------------------------------------------------------------- personal control: a player takes over one of their own units
@@ -512,6 +527,7 @@ export class AmonGame {
   // ---------------------------------------------------------------- battle setup
   startBattle() {
     this.phase = 'battle'; this.phaseT = 0; this.fields = []; this.battleSeed = (this.rng() * 1e9) | 0;
+    this.speed = 1; for (const p of this.players) p.speedVote = false;   // v1.2.13: every battle starts at normal speed
     for (const p of this.players) { p.upCost = Math.max(0, p.upCost - AMON.upgradeDrop); p.ready = false; }
     const theme = THEMES[(this.round + this.seed) % THEMES.length];
     if (this.pvp && this.pvp.vs) {
@@ -633,26 +649,29 @@ export class AmonGame {
     return u;
   }
   sideValue(f, side) { let v = 0; for (const u of f.units) if (!u.dead && u.side === side) v += u.def.v * (u.vScale || 1); return v; }
-  // Versus: pair every player still in with someone from another team (not the same opponent as last time when there's a
-  // choice). Whoever is left over (odd numbers) fights a copy of a random enemy's board, chosen at random.
+  // Versus: pair every player still in with someone from another team. v1.2.13 (Devin): matchups rotate through everyone
+  // instead of being random: each player gets the opponent they've gone longest without fighting (never = first), and the
+  // order players are paired in shifts every round. Whoever is left over (odd numbers) fights a copy of the enemy board
+  // they've seen least recently.
   vsAlive() { return this.players.filter(p => !p.out); }
   vsTeamsLeft() { return new Set(this.vsAlive().map(p => p.team)).size; }
   planVs() {
-    const rng = this.rng, alive = this.vsAlive().slice(), pairs = [];
-    for (let i = alive.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [alive[i], alive[j]] = [alive[j], alive[i]]; }
-    const free = new Set(alive);
-    for (const a of alive) {
+    const alive = this.vsAlive(), pairs = [], n = (this.vsN = (this.vsN || 0) + 1);
+    const last = (a, b) => (a.vsMet && a.vsMet[b.id]) ?? -1, met = (a, b) => { (a.vsMet ||= {})[b.id] = n; };
+    const k = n % Math.max(1, alive.length), rot = [...alive.slice(k), ...alive.slice(0, k)], free = new Set(rot);
+    const pick = (a, pool) => pool.slice().sort((x, y) => last(a, x) - last(a, y))[0];   // (stable: ties keep the rotated order)
+    for (const a of rot) {
       if (!free.has(a)) continue;
-      const foes = [...free].filter(b => b !== a && b.team !== a.team);
+      const foes = rot.filter(b => free.has(b) && b !== a && b.team !== a.team);
       if (!foes.length) continue;
-      const fresh = foes.filter(b => a.lastOpp !== b.id), b = (fresh.length ? fresh : foes)[0];
-      free.delete(a); free.delete(b); pairs.push([a.id, b.id, false]); a.lastOpp = b.id; b.lastOpp = a.id;
+      const b = pick(a, foes);
+      free.delete(a); free.delete(b); pairs.push([a.id, b.id, false]); met(a, b); met(b, a); a.lastOpp = b.id; b.lastOpp = a.id;
     }
-    for (const a of free) {   // left over: a ghost of a random enemy's board
-      const foes = alive.filter(b => b.team !== a.team);
+    for (const a of free) {   // left over: a ghost of an enemy's board
+      const foes = rot.filter(b => b.team !== a.team);
       if (!foes.length) continue;
-      const b = foes[Math.floor(rng() * foes.length)];
-      pairs.push([a.id, b.id, true]); a.lastOpp = b.id;
+      const b = pick(a, foes);
+      pairs.push([a.id, b.id, true]); met(a, b); a.lastOpp = b.id;
     }
     return pairs;
   }
@@ -666,6 +685,7 @@ export class AmonGame {
 
   // ---------------------------------------------------------------- main step
   step(dt) {
+    if (this.phase === 'battle') dt *= this.speed || 1;   // v1.2.13 (Devin): players can vote the battle up to 4x speed
     this.time += dt; this.phaseT += dt;
     if (this.phase === 'shop') {
       for (const p of this.players) if ((p.isBot || !p.connected) && !p.ready && this.phaseT > 0.6 + (this.players.indexOf(p) % 5) * 0.25) { this.botShop(p); this.dirty = true; }
@@ -822,6 +842,7 @@ export class AmonGame {
     return {
       ph: this.phase, pt: Math.round(this.phaseT * 10) / 10, rd: this.round, fr: this.finalRound, ext: this.extensions, hp: this.health, mhp: this.maxHealth,
       lim: this.phase === 'shop' && this.settings.amonTimer ? AMON.shopTime : 0, bt: AMON.battleTime,
+      sp: [this.speed || 1, this.players.filter(q => q.speedVote && !q.isBot && q.connected).length, this.speedNeed(), ...this.players.filter(q => q.speedVote).map(q => q.id)],
       pvp: this.pvp ? { round: this.pvp.round, rounds: this.pvp.rounds, byes: this.pvp.byes || [], vs: !!this.pvp.vs } : null,
       vs: this.pvp && this.pvp.vs ? (this.vsPlan || []).map(([a, b, gh]) => [a, b, gh ? 1 : 0]) : null,
       res: this.result, ch: this.choice, df: { relaxed: 'easy', brutal: 'hard' }[this.settings.waveDifficulty] || this.settings.waveDifficulty || 'normal',

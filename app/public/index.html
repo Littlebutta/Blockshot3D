@@ -38,9 +38,10 @@
   <div id="lootPick" class="lootpick hidden"><div class="lphead">Choose a card <small>(press 1, 2 or 3)</small></div><div id="lootCards" class="lpcards"></div></div>
   <div id="crosshair" class="hidden"></div>
   <div id="hitMark"><svg viewBox="-20 -20 40 40" aria-hidden="true"><path d="M-13-13l6 6M13-13l-6 6M-13 13l6-6M13 13l-6-6"/></svg></div>
-  <div id="curAmmo" class="curammo hidden"><span id="curAmmoN"></span><div class="rl"><i id="curAmmoBar"></i></div></div>
+  <div id="curAmmo" class="curammo hidden"><div class="currow"><span id="curBlk" class="curblk" title="Block"></span><span id="curAmmoN"></span></div><div class="rl"><i id="curAmmoBar"></i></div></div>
   <div id="blockHaze"></div>
   <div id="dotVignette"></div>
+  <div id="deathLog" class="hidden"></div>
   <div id="spectate" class="hidden">You're out. Watching the rest of the round.</div>
   <div id="waiting" class="hidden"></div>
   <div id="lockHint" class="hidden">Click to aim</div>
@@ -87,7 +88,7 @@
     <button class="btn ghost" data-go="settings">Settings</button>
     <button class="btn ghost" id="quitBtn">Quit</button>
   </nav>
-  <div id="versionTag" class="versiontag">v1.2.10</div>
+  <div id="versionTag" class="versiontag">v1.2.13</div>
   <div id="updLine" class="updline hidden"></div>
   <label class="langcorner" title="Language"><span aria-hidden="true">🌐</span><select id="langCorner"></select></label>
 </section>
@@ -329,6 +330,8 @@
     <label class="check"><input type="checkbox" id="sHaze"> White screen-edge glow when your block is ready again</label>
     <label class="check"><input type="checkbox" id="sSlop"> AI slop filter ✨ (only changes what you see)</label>
     <label class="check"><input type="checkbox" id="sPillow"> Anime mode 💕 (every player becomes a body pillow; only you see it)</label>
+    <div class="field"><span>Settings file <small class="hint" id="sFileHint">(settings and key bindings; load one to copy them to another PC)</small></span>
+      <div class="row left"><button type="button" class="btn ghost small" id="sFileSave">Save to file</button><button type="button" class="btn ghost small" id="sFileLoad">Load from file</button><button type="button" class="btn ghost small hidden" id="sFileShow">Show my settings file</button><input type="file" id="sFileIn" accept=".json,application/json" class="hidden"></div></div>
   </div>
   <div class="panel settingsform hidden" id="setGraphics">
     <label class="field">Preset

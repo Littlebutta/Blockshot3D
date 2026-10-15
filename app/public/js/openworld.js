@@ -697,7 +697,7 @@ function lootOfferTick(g, dt) {
   }
 }
 function lootCard(g, p, tier, skip = []) {
-  const ok = c => !skip.includes(c.id) && !c.combo && c.rarity !== 'combo' && c.special !== 'modBreaker' && c.special !== 'repentance' && g.modeOK(c) && g.canTake(p, c) && !(c.unique && p.cards.includes(c.id));
+  const ok = c => !skip.includes(c.id) && !c.combo && c.rarity !== 'combo' && c.special !== 'modBreaker' && c.special !== 'repentance' && g.modeOK(c) && g.canTake(p, c) && !g.uniqueHeld(p, c);
   let pool;
   if (tier === 'mod') pool = g.allCards.filter(c => c.weaponMod && ok(c) && !p.cards.includes(c.id));
   else if (tier === 'shieldmod') pool = g.allCards.filter(c => c.shieldMod && ok(c) && !p.cards.includes(c.id));

@@ -1,4 +1,4 @@
-// Per-player settings, saved in this browser only.
+// Per-player settings, saved in this browser (and, in the desktop app, in Documents/Blockshot3D/settings.json too).
 const KEY = 'blockshot3d.settings';
 export const DEFAULT_SETTINGS = {
   name: 'Player',
@@ -53,7 +53,11 @@ const newClientId = () => Math.random().toString(36).slice(2, 10) + Date.now().t
 export function loadSettings() {
   let s;
   let first = false;
-  try { const raw = localStorage.getItem(KEY); first = !raw; s = { ...DEFAULT_SETTINGS, ...JSON.parse(raw || '{}') }; }
+  // v1.2.11: the desktop app's settings file wins over browser storage (which is lost when the game runs on another port)
+  let raw = null;
+  try { const b = typeof window !== 'undefined' && window.steamBridge; if (b && b.readSettings) { raw = b.readSettings(); JSON.parse(raw || 'x'); } } catch { raw = null; }
+  try { if (!raw) raw = localStorage.getItem(KEY); } catch { /* storage blocked */ }
+  try { first = !raw; s = { ...DEFAULT_SETTINGS, ...JSON.parse(raw || '{}') }; }
   catch { s = { ...DEFAULT_SETTINGS }; }
   Object.defineProperty(s, 'firstRun', { value: first, enumerable: false });   // v30: never saved; the quiet graphics check sets the defaults on a first run (main.js quietGfxCheck)
   // Lets a host recognize you if you drop out of a match and come back (your cards are restored).
@@ -62,17 +66,32 @@ export function loadSettings() {
   if (!(s.rev >= 1)) { if (s.gfxPreset === 'medium') s.bloom = 'off'; s.rev = 1; saveSettings(s); }
   return s;
 }
-export function saveSettings(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* storage blocked */ } }
+export function saveSettings(s) {
+  const text = JSON.stringify(s);
+  try { localStorage.setItem(KEY, text); } catch { /* storage blocked */ }
+  try { const b = typeof window !== 'undefined' && window.steamBridge; if (b && b.writeSettings) b.writeSettings(text); } catch { /* not the desktop app */ }
+}
+// v1.2.11: Settings > General "Save to file" / "Load from file": the whole settings object (key bindings included) as JSON.
+export function settingsFileText(s) { return JSON.stringify({ blockshot3dSettings: 1, ...s }, null, 2); }
+export function parseSettingsFile(text) {
+  const o = JSON.parse(text);
+  if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('not a settings file');
+  if (!o.blockshot3dSettings && !('binds' in o) && !('gfxPreset' in o)) throw new Error('not a Blockshot 3D settings file');
+  const out = {};
+  for (const k of Object.keys(DEFAULT_SETTINGS)) if (k in o && (DEFAULT_SETTINGS[k] === null || o[k] === null || typeof o[k] === typeof DEFAULT_SETTINGS[k])) out[k] = o[k];
+  for (const k of Object.keys(o)) if (!(k in DEFAULT_SETTINGS) && k !== 'blockshot3dSettings' && k !== 'clientId') out[k] = o[k];   // cash, cosmetics owned, revisions...
+  return out;
+}
 
 // Controls. Each action has two slots: a KeyboardEvent.code, or "Mouse0" / "Mouse1" / "Mouse2"... for mouse buttons.
 export const DEFAULT_BINDS = {
   up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
   jump: ['Space', ''], shoot: ['Mouse0', ''], block: ['Mouse2', 'ShiftLeft'], reload: ['KeyR', ''],
-  view: ['Tab', ''], use: ['KeyE', ''], crouch: ['KeyC', ''], cursor: ['AltLeft', 'AltRight'], practice: ['KeyP', ''], netstats: ['KeyN', 'F2'], netlog: ['F3', ''],
+  view: ['Tab', ''], use: ['KeyE', ''], crouch: ['KeyC', ''], cursor: ['AltLeft', 'AltRight'], practice: ['KeyP', ''], netstats: ['KeyN', 'F2'], netlog: ['F3', ''], dash: ['KeyF', ''],
 };
 export const BIND_LABELS = {
   up: 'Move forward', down: 'Move back', left: 'Move left', right: 'Move right', jump: 'Jump', shoot: 'Shoot (hold)',
-  block: 'Block (stops bullets)', reload: 'Reload', view: 'Switch first / third person', use: 'Use: vehicles (open world), carry props (core defense)', crouch: 'Open world: crouch (hold, harder to spot)', cursor: 'First person: free the cursor', practice: 'Practice range panel', netstats: 'Multiplayer: network status window', netlog: 'Network log: start recording, press again to save it to a file',
+  block: 'Block (stops bullets)', reload: 'Reload', view: 'Switch first / third person', use: 'Use: vehicles (open world), carry props (core defense)', crouch: 'Open world: crouch (hold, harder to spot)', cursor: 'First person: free the cursor', practice: 'Practice range panel', netstats: 'Multiplayer: network status window', netlog: 'Network log: start recording, press again to save it to a file', dash: 'Brawl: air dash (hold in the air to charge, let go to dash toward the mouse)',
 };
 export function bindsOf(s) {
   const out = {};

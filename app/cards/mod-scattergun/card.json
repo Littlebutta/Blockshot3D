@@ -2,7 +2,7 @@
   "id": "mod-scattergun",
   "name": "Scattergun",
   "rarity": "mod",
-  "icon": "💥",
+  "icon": "\ud83d\udca5",
   "description": "Every shot is a close-range blast of pellets.",
   "image": "art.png",
   "modifiers": [
@@ -19,5 +19,5 @@
   ],
   "weaponMod": "scattergun",
   "noCursed": true,
-  "details": "Every shot is a blast of 10 pellets in a tight cone. Each pellet flies as far as a normal bullet, but the cone spreads them out, so it's devastating up close. Extra knockback."
+  "details": "Every shot is a blast of 10 pellets in a tight cone. Each pellet flies as far as a normal bullet, but the cone spreads them out, so it's devastating up close. Extra Thrust: pellets shove whoever they hit."
 }

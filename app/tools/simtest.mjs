@@ -1173,9 +1173,9 @@ const { prepareLevel: prepLevel } = await J('physics.js');
   const g = freshGame(2); flat(g);
   const [a, b] = g.players; a.isBot = false; b.isBot = false;
   giveCard(g, a, 'shield-saiyan');
-  check('hair pool is 2x max health', a.smod === 'hair' && Math.abs(a.hairMax - 2 * a.stats.health) < 0.01);
+  check('hair pool is 3x max health', a.smod === 'hair' && Math.abs(a.hairMax - 3 * a.stats.health) < 0.01);
   giveCard(g, a, 'padded-vest');
-  check('hair pool updates after a card', Math.abs(a.hairMax - 2 * a.stats.health) < 0.01);
+  check('hair pool updates after a card', Math.abs(a.hairMax - 3 * a.stats.health) < 0.01);
   a.pos = { x: 0, y: 0, z: 0 }; b.pos = { x: 9, y: 0, z: 0 }; a.fx = {};
   a.input.block = true; a.input.mx = 1; a.input.shoot = true; a.input.blockSeq++;
   const ammo0 = a.ammo;
@@ -1492,6 +1492,88 @@ for (const [mode, extra] of [['tdm', {}], ['waves', {}], ['waves', { core: true 
   try { for (let i = 0; i < 900; i++) { if ((g.phase === 'play' || g.phase === 'countdown') && p.alive && !got) { p.blockCdT = 0; g.tryBlock(p); got = g.players.some(q => q.kind === 'mount' && q.alive); } g.step(1 / 60); g.takeEvents(); } JSON.stringify(g.snapshot()); }
   catch (x) { err = x; console.log(x.stack); }
   check('gun nest works in ' + mode + (extra.core ? ' core' : ''), !err && got, `${g.phase} ${err && err.message}`);
+}
+// ---- v1.2.11: card stacking fixes, death recap, settings file
+{
+  const g = freshGame(); flat(g); const [a, e] = g.players; a.isBot = false; e.isBot = false; e.reviving = true; e.reviveT = 999;
+  a.stats.encore = 3; a.stats.fireRate = 20; a.ammo = 5; a.fireT = 0; a.reloadT = 0; a.input.shoot = false; a.pos = { x: 0, y: 0, z: 0 }; a.aim = { x: 1, y: 0, z: 0 };
+  g.takeEvents(); g.tryShoot(a); for (let i = 0; i < 4; i++) g.step(1 / 60); a.fireT = 0; g.tryShoot(a);
+  let shots = 0; for (let i = 0; i < 40; i++) { g.step(1 / 60); } for (const ev of g.takeEvents()) if (ev.t === 'shoot' && ev.p === a.id) shots++;
+  check('encore: a quick next shot keeps the encores still waiting (2 shots + 6 encores)', shots === 8, 'shoot events ' + shots);
+}
+{
+  const g = freshGame(); const p = g.players[0];
+  p.cards = ['quick-hands', 'quick-hands', 'quick-hands', 'quick-hands', 'iron-lung']; g.recompute(p); const r1 = p.stats.reloadTime;
+  p.cards = ['iron-lung', 'quick-hands', 'quick-hands', 'quick-hands', 'quick-hands']; g.recompute(p); const r2 = p.stats.reloadTime;
+  check('stats: card order no longer matters at a stat limit', Math.abs(r1 - r2) < 1e-9 && r1 >= C.STAT_INFO.reloadTime.min, r1 + ' vs ' + r2);
+  p.cards = ['tiny-tank']; g.recompute(p); check('stats: Tiny Tank still cannot jump', p.stats.jump === 0);
+}
+{
+  const g = freshGame(); const p = g.players[0]; p.cards = []; g.recompute(p);
+  const ids = () => new Set(g.offerPool(p).map(c => c.id));
+  giveCard(g, p, 'squid'); let o = ids();
+  check('unique group: Squid blocks Bees, Squid and Holy Squid', !o.has('bees') && !o.has('squid') && !o.has('holy-squid') && !o.has('holy-bees'));
+  giveCard(g, p, 'scp'); giveCard(g, p, 'orbital-drop'); o = ids();
+  check('unique: SCP, Orbital Drop once', !o.has('scp') && !o.has('orbital-drop') && !o.has('holy-orbital-drop'));
+  p.cards = ['tommy-gun']; g.recompute(p); check('unique: holy / cursed Tommy Gun blocked by Tommy Gun', !ids().has('holy-tommy-gun') && !ids().has('cursed-tommy-gun'));
+}
+{
+  const g = freshGame(); flat(g); const [a] = g.players; a.cards = ['bees', 'shrapnel-rounds']; g.recompute(a);
+  const b = g.spawnBullet(a, { x: 0, y: 1, z: 0 }, { x: 1, y: 0, z: 0 }, 20, false); const n0 = g.bullets.length;
+  g.shrapnelBurst(b); const frags = g.bullets.slice(n0);
+  check('shrapnel fragments from bees are plain fragments', frags.length > 0 && frags.every(f => !f.swarm && !f.fx) && b.swarm === 'bee');
+}
+{
+  const g = freshGame(); flat(g); const [a] = g.players; a.cards = ['rebound-charge', 'volatile-payload']; g.recompute(a);
+  const b = g.spawnBullet(a, { x: 3, y: 1, z: 3 }, { x: 1, y: 0, z: 0 }, 20, false); g.takeEvents();
+  g.killBullet(b, true); const booms = g.takeEvents().filter(ev => ev.t === 'boom').length;
+  check('Rebound Charge last-hit blast also goes off with Volatile Payload', booms === 2, 'booms ' + booms);
+}
+{
+  const g = freshGame(); flat(g); const [a, e] = g.players; g.phase = 'play'; e.reviving = false; e.alive = true; e.hp = 60; e.fx = {}; e.cards = []; g.recompute(e);
+  g.takeEvents(); g.hurt(e, 30, a, { x: 1, y: 0, z: 0 }); g.explode({ ...e.pos, y: g.chest(e) }, 200, a, { noSelf: true });
+  const d = g.takeEvents().find(ev => ev.t === 'death' && ev.p === e.id);
+  check('death recap: killer, killing blow kind and damage by source', d && d.k === a.id && d.kk === 'blast' && d.dl.some(r => r[0] === a.id && r[1] === 'hit' && r[2] === 30) && d.dl.some(r => r[0] === a.id && r[1] === 'blast'), JSON.stringify(d));
+}
+{
+  const S = await J('settings.js');
+  const s = { ...S.DEFAULT_SETTINGS, name: 'Devin', fov: 90, binds: { ...S.DEFAULT_BINDS, jump: ['KeyF', ''] }, cash: 55, clientId: 'abc' };
+  const back = S.parseSettingsFile(S.settingsFileText(s));
+  check('settings file: round trip keeps settings, bindings and cash, not the client id', back.name === 'Devin' && back.fov === 90 && back.binds.jump[0] === 'KeyF' && back.cash === 55 && !('clientId' in back));
+  let bad = false; try { S.parseSettingsFile('{"hello":1}'); } catch { bad = true; }
+  check('settings file: rejects other JSON', bad);
+}
+// ---- v1.2.13 (Devin's list)
+{
+  // everyone's down but a living critter / turret / Space King: its owner takes the round
+  const g = freshGame(3); const [a, b, c] = g.players; g.roundWinner = null;
+  const u = g.spawnUnit('turret', b, { x: 4, y: 0, z: 4 }); u.alive = true;
+  for (const q of [a, b, c]) { q.alive = false; }
+  g.checkRoundEnd();
+  check('units: a dead player\'s turret wins the round for them', g.phase === 'roundEnd' && g.roundWinner === g.scoreKey(b), String(g.roundWinner));
+  const g2 = freshGame(3); for (const q of g2.players) q.alive = false; g2.checkRoundEnd();
+  check('units: nobody standing at all is still a draw', g2.phase === 'roundEnd' && g2.roundWinner == null);
+  const g3 = freshGame(2); g3.players[1].alive = false; const u3 = g3.spawnUnit('turret', g3.players[1], { x: 4, y: 0, z: 4 }); g3.checkRoundEnd();
+  check('units: a living player still beats a dead player\'s turret', g3.roundWinner === g3.scoreKey(g3.players[0]));
+}
+{
+  const g = freshGame(); flat(g); const p = g.players[0]; g.resetPlayer(p, { x: 0, y: 0, z: 0 });
+  check('spawn: a respawn mid-round gets a one-second shield', p.blockT === 1 && g.shielded(p));
+}
+{
+  const { AmonGame } = await J('amon.js'); const { AMON } = await J('amondata.js');
+  const ag = new AmonGame({ roster: roster(4, { human: true }).map((r, i) => ({ ...r, team: i, isBot: false })), settings: { mode: 'amon', amonVs: true }, cards });
+  const met = new Map(ag.players.map(p => [p.id, new Set()]));
+  for (let r = 0; r < 3; r++) for (const [x, y] of ag.planVs()) { met.get(x).add(y); met.get(y).add(x); }
+  check('AMON Versus: 3 rounds of 4 players, everyone has met everyone', [...met.values()].every(s => s.size === 3), JSON.stringify([...met].map(([k, v]) => [k, [...v]])));
+  check('AMON: no card level cap', AMON.maxRank > 9 && ag.canMerge({ id: 'x', rank: 12 }, { id: 'x', rank: 1 }));
+  ag.startBattle(); check('AMON: battles start at 1x', ag.speed === 1);
+  ag.action('p0', { t: 'speed' }); ag.action('p1', { t: 'speed' }); check('AMON: 2 of 4 votes is not enough', ag.speed === 1);
+  ag.action('p2', { t: 'speed' }); check('AMON: 3 of 4 votes speeds up to 2x', ag.speed === 2);
+  for (let k = 0; k < 6; k++) for (const p of ag.players) ag.action(p.id, { t: 'speed' });
+  check('AMON: speed stops at 4x', ag.speed === 4);
+  const t0 = ag.phaseT; ag.step(0.05); check('AMON: 4x runs the battle clock 4x', Math.abs(ag.phaseT - t0 - 0.2) < 1e-6 || ag.phase !== 'battle');
+  ag.startBattle(); check('AMON: the next battle is back to 1x', ag.speed === 1);
 }
 console.log(`baseline: ${passes} passed, ${fails} failed, ${(Date.now() - t0) / 1000}s`);
 if (fails) process.exitCode = 1;

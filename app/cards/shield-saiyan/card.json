@@ -41,5 +41,5 @@
   ],
   "shieldMod": "hair",
   "noCursed": true,
-  "details": "Your hat turns into towering spiky hair, and your block bubble is gone. Hold block to power up: you can't move or shoot while charging, but the hair fills a health pool worth 2× your max health that soaks damage before you do. While the hair is completely full you move twice as fast and deal twice the damage; the first hit you take ends it until you charge back up. Full hair is huge, golden and glowing; drained hair shrinks to a dull grey tuft. Faster with Block cooldown and Block duration cards. Starts empty every round."
+  "details": "Your hat turns into towering spiky hair, and your block bubble is gone. Hold block to power up: you can't move or shoot while charging, but the hair fills a health pool worth 3× your max health that soaks damage before you do. While the hair is completely full you move twice as fast and deal twice the damage; the first hit you take ends it until you charge back up. Full hair is huge, golden and glowing; drained hair shrinks to a dull grey tuft. Faster with Block cooldown and Block duration cards. Starts empty every round."
 }

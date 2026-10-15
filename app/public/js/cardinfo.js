@@ -37,7 +37,7 @@ export const STAT_TIPS = {
   blockShock: 'Each block sends a shock burst through the floor around you: enemies in the area take this much damage and are briefly slowed.',
   blockLeech: 'A share of the damage your block stops heals you.',
   blockConcrete: 'Blocking pours a tall concrete wall with this much health. Tall enough to hide behind.',
-  knockback: 'Pushes whoever your bullets hit. The push lasts a moment and grows with damage, so heavy hits shove harder.',
+  knockback: 'Thrust: whoever your bullets hit gets pushed along for a moment (a streak trails behind them). The push grows with damage, so heavy hits shove harder.',
   drill: 'Drill power lets your bullets tunnel through walls and objects instead of stopping. Each level bores through thicker cover faster before the bullet pops out the far side. Shields still bounce drilling bullets.',
   healAllies: 'A share of the damage you deal heals your nearby teammates.',
   summonTwin: 'An AI copy of you joins each round and fights on your side.',

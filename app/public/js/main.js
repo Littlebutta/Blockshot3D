@@ -27,7 +27,7 @@ import { owTake, owStateOf } from './owrender.js';
 import { owView, VEH_KINDS, owLootPick, LOOT_DISCARD } from './openworld.js';
 import { Sound } from './audio.js';
 import { Net, SteamNet } from './net.js';
-import { loadSettings, saveSettings, GFX_PRESETS, DEFAULT_BINDS, BIND_LABELS, bindsOf, codeLabel } from './settings.js';
+import { loadSettings, saveSettings, settingsFileText, parseSettingsFile, GFX_PRESETS, DEFAULT_BINDS, BIND_LABELS, bindsOf, codeLabel } from './settings.js';
 import { tipFor, TYPE_NOTES } from './cardinfo.js';
 import { PRICES, BET, priceOf, owns, initEconomy, buy, matchPay, fmtCash } from './economy.js';
 import { loadArtAssets } from './art.js';
@@ -81,6 +81,39 @@ function killFeed(e) {
   while (feed.children.length > 5) feed.firstChild.remove();
   setTimeout(() => el.classList.add('old'), 5000);
   setTimeout(() => el.remove(), 5500);
+}
+// v1.2.11 death recap (sim.js deathRecap): who killed you, everyone who hurt you in your last 8 s, and the killer's cards.
+const DMG_KIND = { hit: 'shots', blast: 'explosions', fire: 'fire', poison: 'poison', toxic: 'toxic cloud', drain: 'life drain', dot: 'damage over time' };
+let deathLogT = 0;
+function showDeathLog(e) {
+  const r = id => rosterOf(id), me = S.localId;
+  const who = id => {
+    if (id == null) return t('the arena');
+    if (id === me) return t('yourself');
+    const x = e.dl.find(d => d[0] === id), u = x && x[4] ? { name: x[4], ownerId: x[3] } : r(id), own = u.ownerId != null && u.ownerId !== id ? u.ownerId : null;
+    if (own == null) return u.name || '?';
+    return (own === me ? t('your') : (r(own).name || '?') + '\u2019s') + ' ' + (u.name || t('unit'));
+  };
+  const ownerOf = id => { const x = e.dl.find(d => d[0] === id); return x && x[4] ? x[3] : r(id).ownerId; };
+  const color = id => (id == null ? '#9aa5bd' : (ownerOf(id) != null ? r(ownerOf(id)).color : null) || r(id).color || '#fff');
+  const killer = e.k == null ? null : e.k;
+  const killerHero = killer != null && ownerOf(killer) != null && ownerOf(killer) !== killer ? ownerOf(killer) : killer;
+  const head = killer === me ? t('You took yourself out') : t('Killed by') + ` <b style="color:${color(killer)}">${esc(who(killer))}</b>` + (e.kk && DMG_KIND[e.kk] ? ` <span class="dlk">(${t(DMG_KIND[e.kk])})</span>` : '');
+  const total = e.dl.reduce((a, x) => a + x[2], 0) || 1;
+  const rows = e.dl.map(([s, k, a]) => `<div class="dlrow"><span class="dln" style="color:${color(s)}">${esc(who(s))}</span><span class="dlk">${esc(t(DMG_KIND[k] || k))}</span><span class="dlbar"><i style="width:${Math.round(a / total * 100)}%;background:${color(s)}"></i></span><span class="dla">${a}</span></div>`).join('');
+  const kc = killerHero != null && killerHero !== me ? (r(killerHero).cards || []).map(id => cardById.get(id)).filter(Boolean) : [];
+  const cards = kc.length ? `<div class="dlcards">${esc(t('Their cards'))}: ${kc.slice(0, 8).map(c => esc(`${c.icon || ''} ${c.name}`)).join(', ')}${kc.length > 8 ? ' +' + (kc.length - 8) : ''}</div>` : '';
+  const el = $('deathLog');
+  el.innerHTML = `<h4>${head}</h4>${rows}${cards}`;
+  el.classList.remove('hidden', 'fade');
+  deathLogT = 8;
+}
+function tickDeathLog(dt) {
+  if (!(deathLogT > 0)) return;
+  const me = S && S.view && S.view.players.find(p => p.id === S.localId);
+  if ((deathLogT -= dt) <= 0 || !S || !S.inGame || (me && me.alive) || (S.view && S.view.phase === 'picking')) {
+    deathLogT = 0; $('deathLog').classList.add('fade'); setTimeout(() => { if (!(deathLogT > 0)) $('deathLog').classList.add('hidden'); }, 450);
+  }
 }
 // ---- v1.2.0 game feel: hit-stop, slow motion, hit markers, the round win splash
 // Solo scales its own simulation (hit-stop on kills, slow motion on the round-winning kill); a host only does the
@@ -461,6 +494,13 @@ let lastPauseAt = 0;
 let altFree = false; // first person: Alt frees the cursor without pausing
 const locked = () => document.pointerLockElement === renderer.canvas;
 const inPlay = () => S && S.inGame && currentScreen === 'none';
+// v1.2.11: you're out and watching the overhead camera (not the open world's free camera, the 2D view or AMON):
+// move keys / dragging pan it, the scroll wheel zooms, Jump goes back to following the fight.
+const spectating = () => {
+  if (!inPlay() || S.amon || !S.view || S.matchSettings.mode === 'open' || S.matchSettings.side) return false;
+  const me = S.view.players.find(p => p.id === S.localId);
+  return !!me && !me.alive && (S.view.phase === 'play' || S.view.phase === 'roundEnd');
+};
 
 // Actions that fire once per press (keyboard or mouse button), using the player's bindings.
 function pressAction(code, e) {
@@ -476,7 +516,7 @@ function pressAction(code, e) {
     if (bound('block', code)) I.blockSeq++;
     if (bound('use', code)) I.useSeq++;
     const side = S.matchSettings.side;   // (2D: up also jumps; down + jump drops through instead)
-    if ((bound('jump', code) && !(side && held('down'))) || (side && bound('up', code))) I.jumpSeq++;
+    if ((bound('jump', code) && !(side && held('down'))) || (side && !S.matchSettings.brawl && bound('up', code))) I.jumpSeq++;   // (v1.2.13: not in Brawl)
     if (bound('shoot', code) && (settings.view !== 'first' || locked())) I.shotSeq++;
     // v28 Core Defense: Enter readies you for the next wave (press again to unready)
     if ((code === 'Enter' || code === 'NumpadEnter') && S.matchSettings.core && S.view && S.view.phase === 'countdown') {
@@ -519,7 +559,7 @@ function bindInput() {
     if (e.target && e.target.matches && e.target.matches('input[type=text], input:not([type]), textarea') && e.code !== 'Escape') return;
     keys[e.code] = true;
     if (e.code === 'Tab') e.preventDefault();
-    if (S && S.inGame && (e.code === 'Space' || e.code.startsWith('Arrow') || ['up', 'down', 'left', 'right', 'jump'].some(a => bound(a, e.code)))) e.preventDefault();
+    if (S && S.inGame && (e.code === 'Space' || e.code.startsWith('Arrow') || ['up', 'down', 'left', 'right', 'jump', 'dash'].some(a => bound(a, e.code)))) e.preventDefault();
     if (!e.repeat) pressAction(e.code, e);
     if (e.code === 'Escape' && S && S.inGame) { if (performance.now() - lastPauseAt > 250) togglePause(); }
     else if (e.code === 'Escape' && !e.repeat) menuBack();
@@ -534,11 +574,13 @@ function bindInput() {
   document.addEventListener('visibilitychange', () => { if (document.hidden) { for (const k in keys) keys[k] = false; peerNeutral(); } });
   renderer.canvas.addEventListener('mousedown', e => {
     if (!inPlay()) return;
-    if (settings.view === 'first' && !locked() && !S.amon) { altFree = false; renderer.canvas.requestPointerLock(); return; }   // (AMON: the mouse runs the store, never locked)
+    if (settings.view === 'first' && !locked() && !S.amon && !spectating()) { altFree = false; renderer.canvas.requestPointerLock(); return; }   // (AMON: the mouse runs the store, never locked)
     keys['Mouse' + e.button] = true;
     pressAction('Mouse' + e.button, e);
   });
   addEventListener('mouseup', e => { keys['Mouse' + e.button] = false; });
+  addEventListener('mousemove', e => { if ((e.buttons & 5) && spectating()) renderer.specDrag(e.movementX || 0, e.movementY || 0); });   // v1.2.11: drag to pan
+  addEventListener('wheel', e => { if (e.deltaY && spectating()) renderer.specZoom(e.deltaY); }, { passive: true });   // v1.2.11: scroll to zoom
   renderer.canvas.addEventListener('contextmenu', e => e.preventDefault());
   // v1.0.1 Core Defense: the scroll wheel turns the block you carry (45 degrees a notch)
   addEventListener('wheel', e => {
@@ -583,6 +625,7 @@ function gatherInput(local) {
   let r = (held('right') ? 1 : 0) - (held('left') ? 1 : 0);
   if (blocked) f = r = 0;
   renderer.owFlyInput = { f, r, up: blocked ? 0 : held('jump') ? 1 : held('crouch') ? -1 : 0, fast: !!(keys.ShiftLeft || keys.ShiftRight) };   // open world free camera after you're out
+  renderer.specInput = spectating() ? { f, r, fast: !!(keys.ShiftLeft || keys.ShiftRight), follow: held('jump') } : null;   // v1.2.11: spectator pan
   let mx, mz;
   const side = !!(S && S.matchSettings && S.matchSettings.side);
   if (side) { mx = r; mz = 0; }   // 2D side view: left / right only; up (W) also jumps
@@ -591,7 +634,7 @@ function gatherInput(local) {
   const l = Math.hypot(mx, mz); if (l > 1) { mx /= l; mz /= l; }
   const aim = local && local.alive && !blocked ? renderer.computeAim(local, S.localId) : null;
   return {
-    mx, mz, drop: !blocked && side && held('down') && held('jump'), jump: !blocked && !(side && held('down') && held('jump')) && (held('jump') || (side && held('up'))), shoot: !blocked && held('shoot') && (!fp || locked()),
+    mx, mz, drop: !blocked && side && held('down') && held('jump'), jump: !blocked && !(side && held('down') && held('jump')) && (held('jump') || (side && !S.matchSettings.brawl && held('up'))), dash: !blocked && !!S.matchSettings.brawl && held('dash'), shoot: !blocked && held('shoot') && (!fp || locked()),
     block: !blocked && held('block'),   // held block (Super Saiyan Hair, Pentagram)
     crouch: !blocked && held('crouch'),   // open world: sneak
     use: !blocked && held('use'),         // extraction: hold on a fallen teammate to revive them
@@ -1072,6 +1115,8 @@ function onHostMsg(m) {
       const pe = S.peerE ||= new Map(); if (Array.isArray(i.a)) pe.set(from, i.a[0]);   // v1.2.9: [match id, seq], or just seq for the match id last given
       const aq = Array.isArray(i.a) ? i.a[1] : typeof i.a === 'number' ? i.a : 0;
       if (a && aq && S.enc && pe.get(from) === S.enc.e && aq > a.q && aq <= S.enc.n) a.q = aq;
+      const ak = Array.isArray(i.a) && i.a.length > 2 ? i.a[2] : i.ak;   // v1.2.12: the newest event batch it applied in order (netcodec.js encodeFor ek)
+      if (a && ak > (a.k || 0) && S.enc && pe.get(from) === S.enc.e && ak <= S.enc.n) a.k = ak;
       if (S.game) { if (a) queueInput(S.game, a, from, i, performance.now()); else S.game.setInput(from, i); } if (S.hostNet) S.hostNet.onInput(from); break;
     }
     case 'ping': (S.hostNet ||= new HostNetStats()).onPing(from, msg, r => S.net.send({ t: 'toPeer', id: from, msg: r })); break;
@@ -1321,7 +1366,7 @@ function setModeTip(ms) {
   let h = '';
   if (!ms) h = '';
   else if (ms.mode === 'amon') h = `<b>AMON</b>: drag cards from the store onto storage or the board to buy; drop a card on another copy to upgrade; drag onto the money bag to sell. Scroll zooms, hold middle mouse to rotate, ${k('up')}${k('left')}${k('down')}${k('right')} pans, Q / E switch fields, Tab leaderboard. In battle, click one of your units and press Space to take control of it (left button attacks, right button blocks if it can).`;
-  else if (ms.brawl) h = `<b>Brawl</b>: ${k('jump')} again in the air for a second jump; hold it to charge a dash toward the mouse. Near a ledge you hang on: ${k('jump')} climbs up. While respawning, ${k('jump')} drops in early. ${k('down')} + ${k('jump')} drops through platforms.`;
+  else if (ms.brawl) h = `<b>Brawl</b>: ${k('jump')} again in the air for a second jump. In the air, hold ${k('dash')} to charge a dash toward the mouse and let go to dash (once per jump). Near a ledge you hang on: ${k('jump')} climbs up. While respawning, ${k('jump')} drops in early. ${k('down')} + ${k('jump')} drops through platforms.`;
   else if (ms.side) h = `<b>2D</b>: ${k('left')} / ${k('right')} move, ${k('up')} or ${k('jump')} jumps, ${k('down')} + ${k('jump')} drops through a platform. The mouse aims anywhere. Block as you touch the red wall to bounce off it.`;
   else if (ms.core) h = `<b>Core defense</b>: tap ${k('use')} to pick up a block, plank, slab, steel or spikes (or catch one as it falls). Hold ${k('use')} to show the hologram of where it goes (aim at a block to stack on top), scroll the mouse wheel to turn it, and let go to place it. Stack up to four high. No shooting while carrying; unsupported blocks fall. <b>Enter</b> readies you for the wave.`;
   else if (ms.mode === 'open') h = `<b>Open world</b>: ${k('jump')} leaves the bus and opens the chute. ${k('use')} gets in or out of vehicles${ms.owType === 'extract' ? ' and, held on a fallen teammate, revives them' : ''}. ${k('crouch')} crouches, ${k('view')} switches first / third person. Walk into an item to choose a card.`;
@@ -1462,7 +1507,9 @@ function hostFrame(dt, ts = 1) {
       for (const p of S.lobby.players) {
         if (p.isBot || p.id === S.localId) continue;
         let a = S.acks.get(p.id); if (!a) S.acks.set(p.id, a = { q: 0, since: q });
-        const m = enc.encodeFor(a.q, a.since);
+        // v1.2.12: unconfirmed events are resent about once a round trip (2-4 snapshots), not in every snapshot (netcodec.js)
+        const hn = S.hostNet && S.hostNet.peers.get(p.id), rtt = hn && hn.rtt > 0 ? hn.rtt : 150, rs = Math.min(4, Math.max(2, Math.ceil((rtt + 40) / 33)));
+        const m = enc.encodeFor(a.q, a.since, a.k || 0, rs);
         if (m) { const l = same.get(m); if (l) l.push(p.id); else same.set(m, [p.id]); }
       }
       for (const [m, ids] of same) S.net.send(ids.length > 1 ? { t: 'toPeerU', id: ids[0], ids, msg: { k: 'snap', s: m } } : { t: 'toPeerU', id: ids[0], msg: { k: 'snap', s: m } });
@@ -1650,19 +1697,19 @@ function peerFrame(dt) {
   // mask, so first-person mouse-look doesn't count)
   S.sendT -= dt;
   const mk = (held('up') ? 1 : 0) | (held('down') ? 2 : 0) | (held('left') ? 4 : 0) | (held('right') ? 8 : 0) | (held('crouch') ? 16 : 0);
-  const li = S.lastIn, edge = !li || mk !== S.lastMk || inp.shoot !== li.shoot || inp.jump !== li.jump || inp.block !== li.block || inp.blockSeq !== li.blockSeq || inp.reloadSeq !== li.reloadSeq || inp.useSeq !== li.useSeq || inp.jumpSeq !== li.jumpSeq || inp.shotSeq !== li.shotSeq || inp.rot !== li.rot;
+  const li = S.lastIn, edge = !li || mk !== S.lastMk || inp.shoot !== li.shoot || inp.jump !== li.jump || inp.dash !== li.dash || inp.block !== li.block || inp.blockSeq !== li.blockSeq || inp.reloadSeq !== li.reloadSeq || inp.useSeq !== li.useSeq || inp.jumpSeq !== li.jumpSeq || inp.shotSeq !== li.shotSeq || inp.rot !== li.rot;
   if (S.sendT <= 0 || edge) {
     if (S.sendT <= 0) S.sendT = S.sendT < -0.05 ? 1 / 60 : S.sendT + 1 / 60;
     S.lastMk = mk; inp.q = S.inQ = (S.inQ || 0) + 1; S.lastIn = inp;
     // v1.0.1: rounded and with the false / zero fields left out, an input is about half the bytes
     const r = (v, k) => Math.round(v * k) / k, w = { q: inp.q, mx: r(inp.mx, 1000), mz: r(inp.mz, 1000) };
     if (inp.blockSeq) w.blockSeq = inp.blockSeq; if (inp.reloadSeq) w.reloadSeq = inp.reloadSeq; if (inp.useSeq) w.useSeq = inp.useSeq;   // (v1.2.9: counters only once they've started; missing = 0 on the host)
-    for (const f of ['drop', 'jump', 'shoot', 'block', 'crouch', 'use', 'fp']) if (inp[f]) w[f] = 1;
+    for (const f of ['drop', 'jump', 'dash', 'shoot', 'block', 'crouch', 'use', 'fp']) if (inp[f]) w[f] = 1;
     if (inp.jumpSeq) w.js = inp.jumpSeq; if (inp.shotSeq) w.ss = inp.shotSeq;
     if (inp.ready) w.ready = inp.ready; if (inp.rot) w.rot = inp.rot;
     if (inp.aim) w.aim = { x: r(inp.aim.x, 1000), y: r(inp.aim.y, 1000), z: r(inp.aim.z, 1000) };
     if (inp.aimPoint) w.aimPoint = { x: r(inp.aimPoint.x, 100), y: r(inp.aimPoint.y, 100), z: r(inp.aimPoint.z, 100) };
-    if (S.dec) { const k = S.dec.ack(); if (k) { if (k[0] !== S.ackE) { S.ackE = k[0]; S.ackEn = 0; } w.a = S.ackEn++ >= 10 && inp.q % 30 ? k[1] : k; } }   // which snapshot we have, so the host sends only what changed since (v1.2.9: the match id only every 30th time, and the first 10 times after it changes)
+    if (S.dec) { const k = S.dec.ack(); if (k) { if (k[0] !== S.ackE) { S.ackE = k[0]; S.ackEn = 0; } w.a = S.ackEn++ >= 10 && inp.q % 30 ? k[1] : k; if (typeof w.a === 'number' && inp.q % 3 === 0 && k[2] !== S.ackK) { w.ak = S.ackK = k[2]; } } }   // (v1.2.12: ak / a[2] = events applied: on every 3rd input when it has changed, and in the full form)   // which snapshot we have, so the host sends only what changed since (v1.2.9: the match id only every 30th time, and the first 10 times after it changes)
     w.t = Math.round(performance.now());   // v1.2.9: when it was sent (host: queueInput)
     S.net.send({ t: 'toHostU', msg: { k: 'input', i: w } });
     (S.inHist ||= []).push({ q: inp.q, t: performance.now(), mx: inp.mx, mz: inp.mz, jump: inp.jump, js: inp.jumpSeq });
@@ -2163,6 +2210,7 @@ function handleEvent(e) {
       const r = rosterOf(e.p), hero = !r.transient;
       renderer.burst(e.x, e.y, e.z, r.color, hero ? 48 : 30, hero ? 11 : 9); renderer.deathPop(e.x, e.y, e.z, r.color, hero);
       sound.play('death', vol(e.x, e.z)); killFeed(e);
+      if (e.p === me && e.dl) showDeathLog(e);
       if (e.k === me && e.p !== me) { hitMarker(true); sound.play('kill', 0.9); renderer.addShake(0.22); }
       if (hero) { S.lastDeath = { x: e.x, y: e.y, z: e.z }; if (duelMode()) hitStop(0.075); }
       break;
@@ -2295,7 +2343,8 @@ function handleEvent(e) {
       const v = S.view.players.find(q => q.id === e.p); if (v) renderer.burst(v.pos.x, v.pos.y + 1, v.pos.z, '#ffd166', 40, 8);
       break;
     }
-    case 'reviveStart': renderer.holyBeam(e.x, e.y, e.z, e.dur || 1.6); sound.play('roundStart', vol(e.x, e.z)); break;
+    case 'reviveStart': if (e.p === me) renderer.reviveHold = performance.now() + (e.dur || 1.6) * 1000 + 600;   // v1.2.13: the camera stays on you
+      renderer.holyBeam(e.x, e.y, e.z, e.dur || 1.6); sound.play('roundStart', vol(e.x, e.z)); break;
     case 'fieldSpawn': renderer.healField(e.x, e.y, e.z, e.r, 1.0); sound.play('shield', vol(e.x, e.z) * 0.6); break;
     case 'fieldPulse': renderer.healPulse(e.x, e.y, e.z, e.r); sound.play('cardPick', vol(e.x, e.z)); break;
     case 'mine': sound.play('reload', vol(e.x, e.z) * 0.7); break;
@@ -2911,6 +2960,7 @@ function renderScoreboard(sc) {
 }
 let hudHealN = null, hudBlockFrac = 0, curAmmoKey = '';
 // Small ammo pips and reload bar beside the cursor (or under the crosshair in first person).
+let curBlkReady = true;
 function updateCursorAmmo(me) {
   const el = $('curAmmo');
   const on = settings.cursorAmmo && me && me.alive && currentScreen === 'none' && !S.matchSettings.commander && me.maxAmmo > 0 && !(settings.view === 'first' && !locked());
@@ -2924,6 +2974,12 @@ function updateCursorAmmo(me) {
   el.classList.toggle('reloading', reloading);
   el.classList.toggle('low', !reloading && me.ammo <= Math.max(1, Math.floor(me.maxAmmo / 4)));
   $('curAmmoBar').style.width = (reloading ? (1 - me.reloadFrac) * 100 : 0) + '%';
+  {   // v1.2.13 (Devin): block ready dot next to the ammo: a ring that fills while block recharges, lit up when it's ready
+    const bf = me.blockFrac || 0, b = $('curBlk'), ready = !(bf > 0);
+    b.style.setProperty('--p', Math.round((1 - bf) * 100) + '%'); b.classList.toggle('ready', ready);
+    if (ready && !curBlkReady) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
+    curBlkReady = ready;
+  }
   if (settings.view === 'first') { el.style.left = 'calc(50% + 14px)'; el.style.top = 'calc(50% + 10px)'; }
   else { el.style.left = ((renderer.mouse.x + 1) / 2 * innerWidth + 16) + 'px'; el.style.top = ((1 - renderer.mouse.y) / 2 * innerHeight + 14) + 'px'; }
 }
@@ -3059,7 +3115,7 @@ function updateHud() {
   $('waiting').classList.toggle('hidden', !waiting);
   if (waiting) $('waiting').textContent = pausedBy.length ? `Paused by ${pausedBy.join(', ')}` : t('Waiting for {n} player(s) to pick a card…', { n: v.waiting });
   const lateWait = me && !me.alive && S.lateJoined && v.phase !== 'picking';
-  $('spectate').textContent = lateWait ? 'You joined mid-match. You\'ll spawn when the next round starts.' : S.matchSettings.mode === 'open' ? t("You're out. Free camera: move keys fly, Space / C up and down, Shift faster. Tab follows a player.") : t("You're out. Watching the rest of the round.");
+  $('spectate').textContent = lateWait ? 'You joined mid-match. You\'ll spawn when the next round starts.' : S.matchSettings.mode === 'open' ? t("You're out. Free camera: move keys fly, Space / C up and down, Shift faster. Tab follows a player.") : t("You're out. Move keys or drag to look around, scroll to zoom, Jump to follow the fight.");
   if (lateWait) $('spectate').classList.remove('hidden');
   $('crosshair').classList.toggle('hidden', !(fp && alive && none));
   $('lockHint').classList.toggle('hidden', !(fp && alive && none && !locked()));
@@ -3230,6 +3286,28 @@ function bindSettings() {
     startBindCapture(b.dataset.bind, +b.dataset.slot);
   });
   $('bindReset').onclick = () => { cancelBindCapture(); settings.binds = null; BINDS = bindsOf(settings); saveSettings(settings); renderBinds(); renderKeysHelp(); toast('Controls reset'); };
+  // v1.2.11: settings file. The desktop app also keeps Documents/Blockshot3D/settings.json up to date on its own.
+  $('sFileSave').onclick = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([settingsFileText(settings)], { type: 'application/json' }));
+    a.download = 'blockshot3d-settings.json'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+  $('sFileLoad').onclick = () => $('sFileIn').click();
+  $('sFileIn').onchange = async e => {
+    const f = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    try {
+      const got = parseSettingsFile(await f.text());
+      Object.assign(settings, got); saveSettings(settings);
+      toast('Settings loaded'); setTimeout(() => location.reload(), 600);
+    } catch (err) { toast('That file is not a Blockshot 3D settings file'); }
+  };
+  if (window.steamBridge && window.steamBridge.showSettings) {
+    $('sFileShow').classList.remove('hidden');
+    $('sFileHint').textContent = '(saved automatically to Documents/Blockshot3D/settings.json; load one to copy your settings and key bindings from another PC)';
+    $('sFileShow').onclick = () => window.steamBridge.showSettings();
+  }
   renderKeysHelp();
   $('sLang').innerHTML = languageOptions(settings.language); $('langCorner').innerHTML = languageOptions(settings.language);
   $('sLang').onchange = e => applyLanguage(e.target.value);
@@ -3478,6 +3556,7 @@ function frameBody(now) {
   renderNetHud();
   const rawDt = Math.min(0.25, Math.max(0, now - last) / 1000), dt = Math.min(0.035, rawDt); last = now;   // (v1.2.6: the host sim runs on rawDt; drawing, effects and joiners on dt)
   if (toastT > 0 && (toastT -= dt) <= 0) $('toast').classList.remove('show');
+  tickDeathLog(dt);
   slopTick(dt);
   if (bannerT > 0 && (bannerT -= dt) <= 0) $('banner').classList.remove('show');
   if (splashT > 0 && (splashT -= dt) <= 0) hideSplash();

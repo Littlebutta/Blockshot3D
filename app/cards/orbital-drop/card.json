@@ -3,7 +3,7 @@
   "name": "Orbital Drop",
   "rarity": "rare",
   "icon": "☄️",
-  "description": "Your bullets fall from the sky above you onto the spot you aimed at, over any cover, and gently steer toward enemies near that spot.",
+  "description": "Your bullets fall from the sky above you onto the spot you aimed at, over any cover, and gently steer toward enemies near that spot. You can only own one (Guided Meteor counts).",
   "image": "art.png",
   "modifiers": [
     {
@@ -21,5 +21,6 @@
       "op": "mul",
       "value": 1.1
     }
-  ]
+  ],
+  "uniqueGroup": "skyfall"
 }

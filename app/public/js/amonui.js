@@ -224,6 +224,8 @@ const CSS = `
 #amFields{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;max-width:90vw}
 .am-chip{background:#0b0f18d0;border:1px solid #ffffff22;border-radius:12px;padding:3px 10px;font-size:15.6px;cursor:pointer}
 .am-chip.on{border-color:#fff;background:#1e2840}.am-chip.won{color:#7fe08a}.am-chip.lost{color:#ff8a7a}
+#amSpeed{font:inherit;font-size:14px;font-weight:700;color:#fff;background:#0b0f18d0;border:1px solid #ffffff33;border-radius:8px;padding:4px 12px;cursor:pointer;pointer-events:auto}
+#amSpeed.on{border-color:#7fd0ff;color:#7fd0ff}#amSpeed:disabled{cursor:default;opacity:.75}
 #amWave{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;font-size:15.6px;background:#0b0f18b0;border-radius:8px;padding:3px 10px;max-width:80vw}
 #amBoss{width:420px;background:#0b0f18d0;border:1px solid #ff6a3a80;border-radius:8px;padding:4px 8px;text-align:center;font-size:16.9px}
 #amBoss div{height:10px;background:#300;border-radius:5px;overflow:hidden;margin-top:3px}#amBoss i{display:block;height:100%;background:linear-gradient(90deg,#8a2ad0,#ff4a6a)}
@@ -248,7 +250,7 @@ const HTML = `
 <div id="amNext" class="am-hidden"></div>
 <div id="amPilot" class="am-p am-hidden"></div>
 <button id="amReset2" class="am-p am-hidden">Reset view</button>
-<div id="amBattle"><div id="amFields"></div><div id="amBoss" class="am-hidden"><span></span><div><i></i></div></div><div id="amWave"></div></div>
+<div id="amBattle"><div id="amFields"></div><button id="amSpeed" class="am-speed" title="Vote to speed up this battle (resets every round)"></button><div id="amBoss" class="am-hidden"><span></span><div><i></i></div></div><div id="amWave"></div></div>
 <div id="amShop">
   <div id="amLeft" class="col am-p">
     <button id="amReset" class="am-hidden">Reset view</button>
@@ -488,6 +490,7 @@ export class AmonClient {
     switch (e.t) {
       case 'shop': if (e.round > 1) this.banner(`Round ${e.round} — store open`, 'var(--accent)', 1.4); this.sound.play('roundStart'); break;
       case 'battle': { const fc = e.fac && FACTION_BY_ID.get(e.fac); this.banner(e.pvp ? 'PvP battle!' : e.boss ? e.boss + ' approaches!' : fc ? `Wave ${e.round}: ${fc.icon} ${fc.title}` : `Wave ${e.round}`, e.boss ? '#ff6a3a' : fc ? fc.color : '#ff8a5a', 1.6); break; }
+      case 'speed': this.banner(`Battle speed ${e.x}x`, '#7fd0ff', 1); break;   // v1.2.13
       case 'merge': if (e.p === me) { const c = this.ac.byId.get(e.id); this.toast(`${c ? c.name : 'Card'} combined: now Lv ${e.rank}`); this.sound.play('powerUp'); } break;
       case 'nope': if (e.p === me) this.nope(); break;
       case 'gain': if (e.p === me) { const c = this.ac.byId.get(e.id), w = e.with && this.ac.byId.get(e.with); this.toast(e.why === 'squad' ? `${c ? c.name : 'Card'} + ${w ? w.name : 'squadmate'}: +1 permanent unit` : `${c ? c.name : 'Card'} recruited +${e.n} unit${e.n === 1 ? '' : 's'}`); } break;
@@ -1151,8 +1154,13 @@ export class AmonClient {
       if (!pair || me.out) { el.classList.add('am-hidden'); return; }
       const oppId = pair[0] === me.id ? pair[1] : pair[0], opp = P.pl.find(p => p.id === oppId), ghost = pair[0] === me.id && pair[2];
       const seen = me.seen && me.seen[oppId], mine = this.army ? Math.round(this.army.total) : 0;
+      // v1.2.13 (Devin): the same army bar as against a wave, from the opponent's board as it stands now
+      let theirs = 0;
+      if (opp && opp.bo) { const ob = opp.bo.map(x => x ? { id: x[0], rank: x[1], grow: (x[2] || 0) / 100, bonus: x[3] || 0 } : null); try { theirs = Math.round(computeArmy(ob, this.ac.byId, opp.lv).total); } catch { theirs = 0; } }
+      const frac = mine + theirs ? mine / (mine + theirs) : 0.5;
       const html = `<div class="fh"><div style="width:44px;height:44px;border-radius:50%;background:${opp ? opp.color : '#888'};flex:none"></div><div><div class="ft">Next opponent · round ${P.rd}</div><div class="fl" style="color:${opp ? opp.color : '#fff'}">${esc(opp ? opp.name : '?')}${ghost ? ' <span style="font-size:13px;opacity:.75">(a copy of their board)</span>' : ''}</div><div class="ft">${opp ? `${opp.vh} health` : ''}</div></div></div>`
-        + `<div class="vs">${seen ? `Last army you saw from them: <b style="color:#ff8a7a">${seen.v}</b> pts <span style="opacity:.6">(round ${seen.r})</span>` : 'You haven\'t fought them yet: their army is a mystery.'}<br>Your army now: <b style="color:#7fe08a">${mine}</b> pts</div>`;
+        + `<div class="vs">Your army <b style="color:#7fe08a">${mine}</b> pts vs theirs <b style="color:#ff8a7a">${theirs}</b> pts<div class="vb"><i style="width:${Math.round(frac * 100)}%"></i></div>`
+        + `${seen ? `<span style="opacity:.6;font-size:13px">Last time you fought them (round ${seen.r}) they had ${seen.v} pts</span>` : ''}</div>`;
       if (html !== this.nextKey) { this.nextKey = html; el.innerHTML = html; el.style.setProperty('--fc', opp ? opp.color : '#888'); }
       el.classList.remove('am-hidden'); return;
     }
@@ -1274,6 +1282,13 @@ export class AmonClient {
         return `<span class="am-chip ${id === this.viewF ? 'on' : ''} ${cls}" data-f="${id}">${esc(nm)}${done ? (P.pvp ? ' ✓' : w === 0 ? ' ✓' : w === 1 ? ' ✗' : ' –') : ''}</span>`;
       }).join('');
       if (chips !== this.chipKey) { this.chipKey = chips; this.$('amFields').innerHTML = chips; }
+      {   // v1.2.13 (Devin): vote the battle faster, up to 4x; back to 1x every round
+        const sp = P.sp || [1, 0, 1], cur = sp[0], voted = sp.slice(3).includes(this.localId), sb = this.$('amSpeed');
+        const txt = cur >= AMON.maxSpeed ? `⏩ ${cur}x (max)` : `⏩ ${cur}x · vote ${cur + 1}x (${sp[1]}/${sp[2]})`;
+        if (sb.textContent !== txt) sb.textContent = txt;
+        sb.disabled = cur >= AMON.maxSpeed || voted; sb.classList.toggle('on', voted || cur > 1);
+        if (!sb.onclick) sb.onclick = () => this.act({ t: 'speed' });
+      }
       const fc = P.fac && FACTION_BY_ID.get(P.fac);
       const wave = P.wave ? (fc ? `<span style="color:${fc.color};font-weight:700"><img alt="" src="${fc.emblem}" style="width:20px;height:20px;vertical-align:-5px;margin-right:4px">${esc(fc.leader)} · ${esc(fc.title)}</span>` : '') + P.wave.map(([id, n, boss]) => { const d = unitDef(id); return `<span title="${esc(d.name)}">${boss ? '👑 ' + esc(boss) : `${esc(d.name)} ×${n}`}</span>`; }).join('') : '';
       if (wave !== this.waveKey) { this.waveKey = wave; this.$('amWave').innerHTML = wave; this.$('amWave').classList.toggle('am-hidden', !wave); }

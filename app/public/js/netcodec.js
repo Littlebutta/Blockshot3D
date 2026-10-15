@@ -142,7 +142,16 @@ function dnum(v, o) {
   const d = Math.round((v - o) * 100);
   return D100(o, d) === v && String(d).length < String(v).length ? d : null;
 }
-function deltaList(rows, base, pv, dt, gv) {   // (gv is given only for ON_PATH lists)   // base: Map id -> row (or undefined: send rows as-is); pv, dt, gv: see PRED, GRAV
+// v1.2.12: the change mask numbers fields in this order (the ones that change all the time first), so a typical player row's
+// mask is 4 digits instead of 6; and the third item of a [id, -mask - 1, ...] row now marks the fields sent as they are (mask
+// bits not in it are differences), which is usually 0, instead of the differences, which was another 6-digit number
+const ORDER = { pl: [1, 2, 3, 16, 17, 18, 4, 5, 6, 13, 14, 11, 7, 15, 10, 9, 24], bu: [1, 2, 3, 5] }, ordC = new Map();
+function ordOf(L, n) {
+  const k = L + n; let o = ordC.get(k); if (o) return o;
+  const f = (ORDER[L] || []).filter(i => i < n), seen = new Set(f); o = f.slice(); for (let i = 1; i < n; i++) if (!seen.has(i)) o.push(i);
+  ordC.set(k, o); return o;
+}
+function deltaList(rows, base, pv, dt, gv, L) {   // base: Map id -> row (or undefined: send rows as-is); pv, dt, gv: see PRED, GRAV (gv only for ON_PATH lists); L: ORDER
   if (!base) return rows;
   let sameIds = base.size === rows.length;
   if (sameIds) { let i = 0; for (const id of base.keys()) { if (rows[i] == null || rows[i][0] !== id) { sameIds = false; break; } i++; } }
@@ -150,9 +159,9 @@ function deltaList(rows, base, pv, dt, gv) {   // (gv is given only for ON_PATH 
   const delta = r => {
     const id = r[0], b = seen.has(id) ? null : base.get(id); seen.add(id);
     if (!b || b.length !== r.length) return [id, -1, ...r.slice(1)];
-    let mask = 0, dm = 0, bit = 1; const vals = [], a = ahead(b, pv, dt, gv), op = gv && a !== b;
-    for (let i = 1; i < r.length; i++, bit *= 2) if (!same(r[i], op ? a[i] : b[i])) { mask += bit; const d = dnum(r[i], a[i]); if (d === null) vals.push(r[i]); else { dm += bit; vals.push(d); } }
-    return mask ? dm ? [id, -mask - 1, dm, ...vals] : [id, mask, ...vals] : [id];
+    let mask = 0, raw = 0, dm = 0, bit = 1; const vals = [], a = ahead(b, pv, dt, gv), op = gv && a !== b;
+    for (const i of ordOf(L, r.length)) { if (!same(r[i], op ? a[i] : b[i])) { mask += bit; const d = dnum(r[i], a[i]); if (d === null) { raw += bit; vals.push(r[i]); } else { dm = 1; vals.push(d); } } bit *= 2; }
+    return mask ? dm ? [id, -mask - 1, raw, ...vals] : [id, mask, ...vals] : [id];
   };
   if (sameIds) { const d = []; for (const r of rows) { const x = delta(r); if (x.length > 1) d.push(x); } return { d }; }
   return rows.map(delta);
@@ -175,58 +184,76 @@ export class AckEncoder {
       // newest one: nu is the batch without its 'units' events, sent instead once a newer batch carries one ('split' only
       // adds units, so it always stays)
       const nu = all.some(e => e.t === 'units') ? [all.filter(e => e.t !== 'units'), K.filter(e => e.t !== 'units')] : null;
-      this.evLog.push([q, all, K, nu]); if (this.evLog.length > EV_KEEP) this.evLog.shift();
+      // v1.2.12: pk = the batch before it that had events to keep (the peer applies those in that order: AckDecoder);
+      // fx = its sound / particle events alone
+      const hasK = K.length > 0, pk = hasK ? this.lastK || 0 : -1, fx = hasK ? all.filter(e => FX.has(e.t)) : all;
+      if (hasK) this.lastK = q;
+      this.evLog.push([q, all, K, nu, pk, fx]); if (this.evLog.length > EV_KEEP) this.evLog.shift();
     }
     return q;
   }
   // The message for one player whose newest confirmed snapshot is `ack` (0 / unknown = keyframe). `since`: for a
   // player with no ack yet, the first snapshot they were sent (they get every event from then on until they ack).
-  encodeFor(ack, since) {
+  // v1.2.12: `ek` = the newest event batch that player has applied with everything before it (AckDecoder.ack()[2]; 0 / none
+  // yet: every unconfirmed batch goes in every snapshot, as before), `rs` = snapshots between resends of an unconfirmed one.
+  encodeFor(ack, since, ek, rs) {
     const q = this.n, cur = this.hist.get(q); if (!cur) return null;
     const base = ack && ack < q ? this.hist.get(ack) : null;
     // v1.2.9: players who confirmed the same snapshot get the very same message (one encode, and one deflate in the desktop app,
     // instead of one per player: a host with 9 joiners mostly encoded the same delta several times a tick)
-    const ck = base ? 'a' + ack : 'k' + (ack || 0) + '_' + (since || 0);
+    const ck = (base ? 'a' + ack : 'k' + (ack || 0) + '_' + (since || 0)) + (ek > 0 ? '_' + ek + '_' + rs : '');
     if (this.memo && this.memo.q === q) { const m = this.memo.m.get(ck); if (m) return m; } else this.memo = { q, m: new Map() };
-    const out = this.encodeNew(q, cur, base, ack, since); this.memo.m.set(ck, out); return out;
+    const out = this.encodeNew(q, cur, base, ack, since, ek, rs); this.memo.m.set(ck, out); return out;
   }
-  encodeNew(q, cur, base, ack, since) {
+  encodeNew(q, cur, base, ack, since, ek, rs) {
     const out = { q, e: this.e, b: base ? ack : 0 };
     if (!base) out.kf = 1;
     for (const [k, v] of Object.entries(cur.s)) if (!LISTS.includes(k) && !STICKY.includes(k) && k !== 'ev') out[k] = v;
     const dt = base && cur.s.tm > 0 && base.s.tm > 0 ? (cur.s.tm - base.s.tm) / 1000 : 0;
-    for (const L of LISTS) if (cur.lists[L]) out[L] = deltaList(cur.s[L], base ? base.lists[L] : null, PRED[L], dt, ON_PATH.has(L) ? GRAV[L] : null);
+    for (const L of LISTS) if (cur.lists[L]) out[L] = deltaList(cur.s[L], base ? base.lists[L] : null, PRED[L], dt, ON_PATH.has(L) ? GRAV[L] : null, L);
     let u = 0;   // v1.2.6: the unchanged side blocks as a bitmask (bit i = STICKY[i]), not a list of names
     for (let i = 0; i < STICKY.length; i++) {
       const k = STICKY[i]; if (!(k in cur.side)) continue;
       if (base && base.side[k] === cur.side[k]) u |= 1 << i; else out[k] = cur.s[k];
     }
     if (u) out.u = u;
-    // events: everything after what this player confirmed (a newcomer with no ack only gets this tick's);
-    // sound / particle events only while they're fresh (FX_TTL)
-    const from = ack || (since ? since - 1 : q - 1), eb = [];
+    // events: everything after what this player confirmed (a newcomer with no ack only gets this tick's); sound / particle
+    // events only while they're fresh (FX_TTL). v1.2.12: each batch goes out once, then the part worth keeping again every
+    // `rs` snapshots (about a round trip) until the player reports it applied (ek), instead of in every snapshot: a joiner
+    // 180 ms away used to get each hit, death and pick 6 times. Each entry is [seq, events] (sound / particle events only)
+    // or [seq, events, pk(, 1 = with its sound / particle events)]: pk lets the joiner put a resent batch back in order.
+    const from = ack || (since ? since - 1 : q - 1), fromK = ek > 0 ? Math.max(ek, since ? since - 1 : 0) : from, R = Math.max(1, rs | 0) || 1, eb = [];
+    const low = Math.min(from, fromK), first = this.evLog.length ? this.evLog[0][0] : 0;
     let lastU = 0;   // the newest batch going out that carries a unit roster: older batches go without theirs
-    for (let i = this.evLog.length - 1; i >= 0 && this.evLog[i][0] > from; i--) if (this.evLog[i][3]) { lastU = this.evLog[i][0]; break; }
-    for (const [bq, all, keep, nu] of this.evLog) if (bq > from) { const fresh = bq > q - FX_TTL, evs = nu && bq < lastU ? nu[fresh ? 0 : 1] : fresh ? all : keep; if (evs.length) eb.push([bq, evs]); }
+    for (let i = this.evLog.length - 1; i >= 0 && this.evLog[i][0] > low; i--) if (this.evLog[i][3]) { lastU = this.evLog[i][0]; break; }
+    for (const [bq, all, keep, nu, pk, fx] of this.evLog) {
+      if (bq <= low) continue;
+      const fr = bq > from && bq > q - FX_TTL, kp = pk >= 0 && bq > fromK && (!(ek > 0) || bq === q || (q - bq) % R === 0), U = nu && bq < lastU;
+      const p = pk >= first ? pk : 0;   // (its predecessor is no longer kept here: the joiner takes it as is)
+      if (fr && kp) { const evs = U ? nu[0] : all; eb.push(pk >= 0 ? [bq, evs, p, 1] : [bq, evs]); }
+      else if (fr) { if (fx.length) eb.push([bq, fx]); }
+      else if (kp) eb.push([bq, U ? nu[1] : keep, p]);
+    }
     if (eb.length) out.eb = eb;
     return out;
   }
 }
 
-function undelta(b, r, pv, dt, gv) {   // (gv: ON_PATH lists only: unchanged fields take the prediction)
-  const a = ahead(b, pv, dt, gv), full = gv && a !== b ? a.slice() : b.slice(); let mask = r[1], dm = 0, k = 2;
-  if (mask < -1) { mask = -mask - 1; dm = r[2]; k = 3; }
-  for (let i = 1; mask > 0; i++) { if (mask % 2) { const v = r[k++]; full[i] = dm % 2 ? D100(a[i], v) : v; } mask = Math.floor(mask / 2); dm = Math.floor(dm / 2); }
+function undelta(b, r, pv, dt, gv, L) {   // (gv: ON_PATH lists only: unchanged fields take the prediction)
+  const a = ahead(b, pv, dt, gv), full = gv && a !== b ? a.slice() : b.slice(); let mask = r[1], raw = mask, k = 2;
+  if (mask < -1) { mask = -mask - 1; raw = r[2]; k = 3; }
+  for (const i of ordOf(L, b.length)) { if (!(mask > 0)) break; if (mask % 2) { const v = r[k++]; full[i] = raw % 2 ? v : D100(a[i], v); } mask = Math.floor(mask / 2); raw = Math.floor(raw / 2); }
   return full;
 }
 
 export class AckDecoder {
-  constructor() { this.hist = new Map(); this.lastQ = 0; this.lastEv = 0; this.e = 0; }
-  ack() { return this.e ? [this.e, this.lastQ] : null; }   // sent back with every input
+  constructor() { this.hist = new Map(); this.lastQ = 0; this.e = 0; this.resetEv(); }
+  resetEv() { this.lastK = 0; this.kBoot = true; this.fxSeen = new Set(); this.pend = new Map(); }
+  ack() { return this.e ? [this.e, this.lastQ, this.lastK] : null; }   // sent back with every input (v1.2.12: [2] = events applied, AckEncoder ek)
   // Returns the full snapshot (with s.ev = events not seen before, in order), or null when the message is older
   // than one already applied or its base is gone (the host will send against an older ack or a keyframe).
   decode(m) {
-    if (m.e !== this.e) { if (!m.kf) return null; this.hist.clear(); this.lastQ = 0; this.lastEv = 0; this.e = m.e; this.rx = null; this.maxRx = 0; }
+    if (m.e !== this.e) { if (!m.kf) return null; this.hist.clear(); this.lastQ = 0; this.resetEv(); this.e = m.e; this.rx = null; this.maxRx = 0; }
     this.seen(m.q);
     if (m.q <= this.lastQ) return null;
     const base = m.kf ? null : this.hist.get(m.b);
@@ -256,7 +283,7 @@ export class AckDecoder {
           const b = bl.get(r[0]); if (!b) return null;
           const gv = ON_PATH.has(L) ? GRAV[L] : null;
           if (r.length === 1) full = gv ? ahead(b, PRED[L], dt, gv) : b;
-          else full = undelta(b, r, PRED[L], dt, gv);
+          else full = undelta(b, r, PRED[L], dt, gv, L);
         }
         next.set(full[0], full); out.push(full);
       }
@@ -266,10 +293,29 @@ export class AckDecoder {
     delete s.ov;
     this.lastQ = m.q;
     this.hist.set(m.q, { lists, side, tm: m.tm }); for (const k of this.hist.keys()) if (k < m.q - HIST) this.hist.delete(k);
-    const ev = [];
-    for (const [bq, evs] of m.eb || []) if (bq > this.lastEv) { ev.push(...evs); this.lastEv = bq; }
-    s.ev = ev;
+    s.ev = this.events(m.eb || []);
     return s;
+  }
+  // v1.2.12: event batches (AckEncoder encodeNew): sound / particle events play once, the rest are applied in order (a batch
+  // whose predecessor hasn't come yet waits for it; the host resends it about a round trip later)
+  events(eb) {
+    const ev = [], fxOf = evs => evs.filter(e => FX.has(e.t)), keepOf = evs => evs.filter(e => !FX.has(e.t));
+    const apply = (keep) => { ev.push(...keep); };
+    for (const ent of eb) {
+      const [bq, evs, pk, wfx] = ent;
+      if (ent.length < 3) { if (!this.fxSeen.has(bq)) { this.fxSeen.add(bq); ev.push(...evs); } continue; }
+      const fxNew = wfx === 1 && !this.fxSeen.has(bq); if (wfx === 1) this.fxSeen.add(bq);
+      if (bq <= this.lastK || this.pend.has(bq)) { if (fxNew) ev.push(...fxOf(evs)); continue; }
+      if (this.kBoot || pk <= this.lastK) {
+        this.kBoot = false;
+        if (wfx !== 1) apply(evs); else if (fxNew) ev.push(...evs); else apply(keepOf(evs));
+        this.lastK = bq;
+        for (let go = true; go && this.pend.size;) { go = false; let best = null; for (const [k, v] of this.pend) if (v[0] <= this.lastK && (best === null || k < best)) best = k; if (best !== null) { const v = this.pend.get(best); this.pend.delete(best); if (best > this.lastK) { apply(v[1]); this.lastK = best; } go = true; } }
+      } else { if (fxNew) ev.push(...fxOf(evs)); this.pend.set(bq, [pk, wfx === 1 ? keepOf(evs) : evs]); }
+    }
+    if (this.fxSeen.size > 300) for (const k of this.fxSeen) if (k < this.lastQ - 200) this.fxSeen.delete(k);
+    for (const k of this.pend.keys()) if (k <= this.lastK) this.pend.delete(k);
+    return ev;
   }
   // Loss = snapshot numbers that never arrived, over the last ~10 s (one arriving late and out of order still
   // counts as received; the newest 10 are left out since they may still be on the way).

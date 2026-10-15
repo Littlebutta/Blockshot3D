@@ -31,7 +31,11 @@ export function clampStats(s) {
 }
 
 // v1.1.4: multipliers that apply after all cards (Twin Barrel doubles your bullets whenever you took it).
+// v1.2.11: stats are clamped once here, after every card, so the order you took cards in doesn't change the result
+// (a stat pinned at its limit used to lose the cards taken before it hit the limit).
 export function finishStats(s) {
+  clampStats(s);
+  if (s.tank > 0) s.jump = 0;   // Tiny Tank: no jumping at all
   if (s.projMul > 1) s.projectiles = Math.min(STAT_INFO.projectiles.max, Math.max(1, Math.round(s.projectiles * s.projMul)));
   return s;
 }
@@ -51,9 +55,7 @@ export function applyCard(stats, card) {
       if (after > 0) stats[m.to] *= before / after;
     }
   }
-  clampStats(stats);
-  if (stats.tank > 0) stats.jump = 0;   // Tiny Tank: no jumping at all
-  return stats;
+  return stats;   // (clamped in finishStats, after the last card)
 }
 
 // Turns modifiers into display lines: [text, label, isGood, statKey]

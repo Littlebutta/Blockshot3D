@@ -3,7 +3,7 @@
   "name": "Scavenger",
   "rarity": "legendary",
   "icon": "🦴",
-  "description": "Whenever your bullets or their effects hurt an enemy's health, your gun reloads to full.",
+  "description": "Whenever your bullets or their effects hurt an enemy's health, your gun reloads to full. You can only own one.",
   "image": "art.png",
   "modifiers": [
     {
@@ -17,5 +17,6 @@
       "value": 1.25
     }
   ],
-  "details": "Works on players, bots, clones, critters and other spawned creatures, including damage from burns, poison and explosions. Hitting a shield, block bubble, Super Saiyan hair, sandbags, walls or turrets does not count."
+  "details": "Works on players, bots, clones, critters and other spawned creatures, including damage from burns, poison and explosions. Hitting a shield, block bubble, Super Saiyan hair, sandbags, walls or turrets does not count.",
+  "unique": true
 }

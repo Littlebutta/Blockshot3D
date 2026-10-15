@@ -137,7 +137,7 @@ export const STAT_INFO = {
   blockShock:    { label: 'Shock burst damage', min: 0, max: 400 },
   blockLeech:    { label: 'Blocked damage → health', percent: true, min: 0, max: 3 },
   blockConcrete: { label: 'Concrete wall health', min: 0, max: 8000 },
-  knockback:     { label: 'Knockback', min: 0, max: 20 },
+  knockback:     { label: 'Thrust', min: 0, max: 20 },   // v1.2.13 (Devin): shown as Thrust (the stat key stays knockback)
   drill:         { label: 'Drill power', min: 0, max: 5 },
   healAllies:    { label: 'Damage dealt → heals allies', percent: true, min: 0, max: 3 },
   summonTwin:    { label: 'AI twins', int: true, min: 0, max: 3 },

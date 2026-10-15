@@ -228,6 +228,22 @@ ipcMain.handle('app:saveLog', (_e, name, text) => {
   } catch (e) { return { ok: false, error: e && e.message }; }
 });
 
+// v1.2.11: settings and key bindings are also kept in Documents/Blockshot3D/settings.json. Browser storage belongs to the
+// page's address, so when port 3000 was taken and the game started on another port everything looked reset; the file
+// doesn't care, and it survives reinstalls and is easy to back up or copy to another PC.
+const settingsFile = () => path.join(app.getPath('documents'), 'Blockshot3D', 'settings.json');
+let setPending = null, setTimer = null;
+function flushSettings() {
+  clearTimeout(setTimer); setTimer = null;
+  if (setPending == null) return;
+  const f = settingsFile(), text = setPending; setPending = null;
+  try { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', text); fs.renameSync(f + '.tmp', f); }
+  catch (e) { console.warn('[settings] could not save', e && e.message); }
+}
+ipcMain.on('app:settingsRead', e => { flushSettings(); try { e.returnValue = fs.readFileSync(settingsFile(), 'utf8'); } catch { e.returnValue = null; } });
+ipcMain.on('app:settingsWrite', (_e, text) => { setPending = String(text || ''); if (!setTimer) setTimer = setTimeout(flushSettings, 400); });
+ipcMain.handle('app:settingsShow', () => { flushSettings(); const f = settingsFile(); if (fs.existsSync(f)) shell.showItemInFolder(f); return f; });
+
 function createWindow(isMain = true) {
   const win = new BrowserWindow({
     width: 1400, height: 860, backgroundColor: '#121826', title: 'Blockshot 3D', autoHideMenuBar: true, icon: path.join(__dirname, 'icons', 'icon.png'),   // v28: the default character's face
@@ -244,6 +260,7 @@ let stopServer = null, quitting = false;
 function shutdown() {
   if (quitting) return;
   quitting = true;
+  try { flushSettings(); } catch { /* ignore */ }
   try { leaveLobby(); } catch { /* ignore */ }
   clearInterval(pollTimer);
   try { if (timeEndPeriod) timeEndPeriod(1); } catch { /* ignore */ }

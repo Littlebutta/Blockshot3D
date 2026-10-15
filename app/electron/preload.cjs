@@ -12,5 +12,8 @@ contextBridge.exposeInMainWorld('steamBridge', {
   updateCheck: () => ipcRenderer.send('app:updateCheck'),
   updateRestart: () => ipcRenderer.send('app:updateRestart'),
   onUpdate: cb => { const f = (_e, m) => cb(m); ipcRenderer.on('app:update', f); return () => ipcRenderer.removeListener('app:update', f); },
+  readSettings: () => ipcRenderer.sendSync('app:settingsRead'),   // v1.2.11: Documents/Blockshot3D/settings.json
+  writeSettings: text => ipcRenderer.send('app:settingsWrite', text),
+  showSettings: () => ipcRenderer.invoke('app:settingsShow'),
   saveLog: (name, text) => ipcRenderer.invoke('app:saveLog', name, text),   // v1.2.10: network log (F3) -> Documents/Blockshot3D/netlogs   // launch-time graphics options (v-sync)
 });

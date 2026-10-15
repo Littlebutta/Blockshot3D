@@ -3,7 +3,7 @@
   "name": "SCP",
   "rarity": "rare",
   "icon": "🛡️",
-  "description": "Secure. Contain. Protect. Your own bullets and explosions can't hurt you.",
+  "description": "Secure. Contain. Protect. Your own bullets and explosions can't hurt you. You can only own one.",
   "image": "art.png",
   "modifiers": [
     {
@@ -11,5 +11,6 @@
       "op": "add",
       "value": 1
     }
-  ]
+  ],
+  "unique": true
 }
