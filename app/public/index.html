@@ -38,7 +38,7 @@
   <div id="lootPick" class="lootpick hidden"><div class="lphead">Choose a card <small>(press 1, 2 or 3)</small></div><div id="lootCards" class="lpcards"></div></div>
   <div id="crosshair" class="hidden"></div>
   <div id="hitMark"><svg viewBox="-20 -20 40 40" aria-hidden="true"><path d="M-13-13l6 6M13-13l-6 6M-13 13l6-6M13 13l-6-6"/></svg></div>
-  <div id="curAmmo" class="curammo hidden"><div class="currow"><span id="curBlk" class="curblk" title="Block"></span><span id="curAmmoN"></span></div><div class="rl"><i id="curAmmoBar"></i></div></div>
+  <div id="curAmmo" class="curammo hidden"><div class="currow"><span id="curBlk" class="curblk" title="Block"></span><span id="curAmmoN"></span><span id="curNc" class="curnc"></span></div><div class="rl"><i id="curAmmoBar"></i></div></div>
   <div id="blockHaze"></div>
   <div id="dotVignette"></div>
   <div id="deathLog" class="hidden"></div>
@@ -72,7 +72,10 @@
 <div id="hurt"></div>
 <div id="banner"></div>
 <div id="wipe" class="hidden" aria-hidden="true"></div>
-<div id="roundSplash" class="hidden" aria-live="polite"><div class="rsBand"><div class="rsSmall"></div><div class="rsBig"></div><div class="rsPips"></div></div></div>
+<div id="roundSplash" class="hidden" aria-live="polite"><div class="rsBand"><div class="rsSmall"></div><div class="rsBig"></div><div class="rsPips"></div><div class="rsText"></div></div></div>
+<div id="rmodTag" class="hidden"></div>
+<div id="emoteWheel" class="hidden"></div>
+<div id="killCam" class="hidden"><div class="kcBar"><b>● KILL CAM</b> <span class="kcName"></span></div></div>
 <div id="toast"></div>
 
 <section id="title" class="screen">
@@ -88,7 +91,7 @@
     <button class="btn ghost" data-go="settings">Settings</button>
     <button class="btn ghost" id="quitBtn">Quit</button>
   </nav>
-  <div id="versionTag" class="versiontag">v1.2.13</div>
+  <div id="versionTag" class="versiontag">v1.2.15</div>
   <div id="updLine" class="updline hidden"></div>
   <label class="langcorner" title="Language"><span aria-hidden="true">🌐</span><select id="langCorner"></select></label>
 </section>
@@ -151,6 +154,8 @@
             <select id="setTeams"><option value="ffa">Off: free for all</option><option value="tdm">On: team deathmatch</option></select></label>
           <label class="field" data-modes="ffa tdm waves core open brawl"><span id="roundsText">Rounds to win</span>
             <select id="setRounds"><option>3</option><option selected>5</option><option>7</option><option>10</option></select></label>
+          <label class="field" data-modes="ffa tdm waves"><span>Round modifiers</span>
+            <select id="setRoundMods" title="A special rule for every round, shown on the round splash"><option value="off">Off</option><option value="random">Random every round</option><optgroup label="Always one" id="rmodList"></optgroup></select></label>
           </div>
           <details class="arena gensettings">
             <summary>General settings</summary>
@@ -201,7 +206,7 @@
             <summary>Arena</summary>
             <div class="twocol">
               <label class="field">Maps
-                <select id="setMaps"><option value="mixed">Mixed</option><option value="generated">Random generated</option><option value="classic">Classic layouts</option><option value="lava">Lava Lake only</option><option value="ice">Ice Sheets only</option></select></label>
+                <select id="setMaps"><option value="mixed">Mixed</option><option value="generated">Random generated</option><option value="classic">Classic layouts</option><option value="traps">Trap arenas only</option><option value="lava">Lava Lake only</option><option value="ice">Ice Sheets only</option></select></label>
               <label class="field">Map themes
                 <select id="setThemes"><option value="standard">Standard</option><option value="experimental" title="Castle, western, candy, forest, tundra, neon, sakura, tropical, lunar, volcano">Experimental</option><option value="all">All</option>
                   <optgroup label="Only one"><option value="forest">Forest</option><option value="tundra">Tundra</option><option value="neon">Neon</option><option value="castle">Castle</option><option value="western">Western</option><option value="candy">Candy</option><option value="sakura">Sakura</option><option value="tropical">Tropical</option><option value="lunar">Lunar</option><option value="volcano">Volcano</option></optgroup></select></label>
@@ -322,6 +327,7 @@
       <select id="sEffects"><option value="high">High</option><option value="low">Low</option><option value="off">Off</option></select></label>
     <label class="check"><input type="checkbox" id="sShake"> Screen shake</label>
     <label class="check"><input type="checkbox" id="sFeel"> Hit-stop and slow motion on kills</label>
+    <label class="check"><input type="checkbox" id="sKillCam"> Kill cam (replay the round-winning kill from the killer's eyes)</label>
     <label class="check"><input type="checkbox" id="sProps"> Grass and pebbles (applies next round)</label>
     <label class="field">Color-blind mode
       <select id="sCB"><option value="off">Off</option><option value="protan">Protanopia (red-weak)</option><option value="deutan">Deuteranopia (green-weak)</option><option value="tritan">Tritanopia (blue-yellow)</option></select></label>

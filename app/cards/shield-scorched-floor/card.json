@@ -1,0 +1,23 @@
+{
+  "id": "shield-scorched-floor",
+  "name": "Scorched Floor",
+  "rarity": "shieldmod",
+  "icon": "🔥",
+  "description": "Blocking floods the floor around you with fire for 4 s. You and your team are immune.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "scorch",
+      "op": "add",
+      "value": 4
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.1
+    }
+  ],
+  "details": "The fire covers 3.5 m around you (bigger with Block size) and burns harder with your bullet damage.",
+  "shieldMod": "scorch",
+  "variants": true
+}

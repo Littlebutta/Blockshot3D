@@ -1,0 +1,30 @@
+{
+  "id": "gilded-phoenix",
+  "name": "Gilded Phoenix",
+  "rarity": "combo",
+  "icon": "🐦",
+  "description": "A gold shell and a second life.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "shell",
+      "op": "add",
+      "value": 2
+    },
+    {
+      "stat": "revive",
+      "op": "add",
+      "value": 0.5
+    },
+    {
+      "stat": "health",
+      "op": "mul",
+      "value": 0.95
+    }
+  ],
+  "details": "Two shells each round, and once per round a killing blow leaves you standing at half health.",
+  "combo": [
+    "gilded-shell",
+    "phoenix-protocol"
+  ]
+}

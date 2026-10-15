@@ -1,0 +1,16 @@
+{
+  "id": "bounty-mark",
+  "name": "Bounty Mark",
+  "rarity": "rare",
+  "icon": "🏴",
+  "description": "The player with the most round wins is marked. Your hits on them deal +40% and heal you for 10% of the damage.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "bounty",
+      "op": "add",
+      "value": 0.4
+    }
+  ],
+  "details": "Everyone sees the mark while someone holds this card. Players tied for the lead are all marked. Not in co-op."
+}

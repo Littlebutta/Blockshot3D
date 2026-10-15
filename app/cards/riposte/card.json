@@ -1,0 +1,25 @@
+{
+  "id": "riposte",
+  "name": "Riposte",
+  "rarity": "combo",
+  "icon": "🤺",
+  "description": "Parry and punish.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "parry",
+      "op": "add",
+      "value": 0.2
+    },
+    {
+      "stat": "reflectBoost",
+      "op": "add",
+      "value": 0.8
+    }
+  ],
+  "details": "A wider parry window, and bullets you bounce back later in the block hit much harder.",
+  "combo": [
+    "perfect-parry",
+    "mirror-edge"
+  ]
+}

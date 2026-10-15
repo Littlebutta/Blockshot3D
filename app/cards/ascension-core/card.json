@@ -1,0 +1,16 @@
+{
+  "id": "ascension-core",
+  "name": "Ascension Core",
+  "rarity": "legendary",
+  "icon": "🌟",
+  "description": "It grows stronger the longer you keep it. After 5 rounds it adds +30% health and damage, and after 10 rounds +60% with a bigger model.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "ascend",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "details": "Counts rounds played since you took it. More health also makes you bigger. Extra copies add to both bonuses."
+}

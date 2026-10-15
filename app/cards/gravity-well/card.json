@@ -1,0 +1,16 @@
+{
+  "id": "gravity-well",
+  "name": "Gravity Well",
+  "rarity": "legendary",
+  "icon": "🌀",
+  "description": "Your bullets pull nearby enemies toward the impact point for 0.5 s. It sets up follow-up shots and pulls people off ledges in Brawl.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "gravWell",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "details": "Every impact (players, walls, the floor) pulls enemies within 4 m. Extra copies pull harder."
+}

@@ -1,0 +1,16 @@
+{
+  "id": "gilded-shell",
+  "name": "Gilded Shell",
+  "rarity": "common",
+  "icon": "🥚",
+  "description": "The first hit you take each round does nothing and shatters a gold shell around you. It comes back when you respawn.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "shell",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "details": "A shell soaks one whole hit of any size (bullets, blasts, melee), then breaks with a gold flash. Burn and poison ticks don't break it. Extra copies add more shells."
+}

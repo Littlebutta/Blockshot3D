@@ -1,0 +1,16 @@
+{
+  "id": "ammo-leech",
+  "name": "Ammo Leech",
+  "rarity": "uncommon",
+  "icon": "🧛",
+  "description": "Every 3 hits remove a round from the target's mag. Their reload starts early if the mag runs dry.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "ammoLeech",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "details": "Counts your hits on any enemy. Extra copies steal faster (2 copies: 2 rounds per 3 hits)."
+}

@@ -1,0 +1,35 @@
+{
+  "id": "featherweight",
+  "name": "Featherweight",
+  "rarity": "combo",
+  "icon": "🎈",
+  "description": "Small, light and bouncy.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "hitScale",
+      "op": "mul",
+      "value": 0.8
+    },
+    {
+      "stat": "jump",
+      "op": "mul",
+      "value": 1.3
+    },
+    {
+      "stat": "moveSpeed",
+      "op": "mul",
+      "value": 1.1
+    },
+    {
+      "stat": "health",
+      "op": "mul",
+      "value": 0.85
+    }
+  ],
+  "details": "A smaller hitbox, higher jumps and quicker feet.",
+  "combo": [
+    "light-frame",
+    "spring-heels"
+  ]
+}

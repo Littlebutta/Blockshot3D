@@ -1,0 +1,21 @@
+{
+  "id": "chain-encore",
+  "name": "Chain Encore",
+  "rarity": "legendary",
+  "icon": "⛓️",
+  "description": "Every Encore shot has a 25% chance to fire another Encore, and the chain can keep going. A counter shows the chain.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "chainEncore",
+      "op": "add",
+      "value": 0.25
+    },
+    {
+      "stat": "encore",
+      "op": "add",
+      "value": 0.4
+    }
+  ],
+  "details": "Comes with a 40% Encore chance of its own so it works alone. Chains stop at 20."
+}

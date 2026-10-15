@@ -123,6 +123,7 @@ function isGood(m) {
 // Cards that never get cursed / holy versions: mods, combos, specials (Regretful Pact, Repentance),
 // and cards that are already cursed or holy.
 export function variantEligible(c) {
+  if (c.variants && !variantBase(c) && c.rarity !== 'combo' && !c.special) return true;   // v1.2.15: mods that opt in get holy / cursed versions too
   return !(c.rarity === 'cursed' || c.rarity === 'holy' || c.rarity === 'mod' || c.rarity === 'shieldmod' || c.rarity === 'combo' ||
     c.weaponMod || c.shieldMod || c.special || c.combo);
 }

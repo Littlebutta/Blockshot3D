@@ -1,0 +1,30 @@
+{
+  "id": "jackhammer",
+  "name": "Jackhammer",
+  "rarity": "combo",
+  "icon": "🔨",
+  "description": "Fast fire that keeps piling on.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "pressure",
+      "op": "add",
+      "value": 0.12
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 1.4
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.9
+    }
+  ],
+  "details": "Rapid shots build Pressure Stack quickly: each repeat hit adds 12%.",
+  "combo": [
+    "pressure-stack",
+    "rapid-cycler"
+  ]
+}

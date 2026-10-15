@@ -1,0 +1,16 @@
+{
+  "id": "battle-rhythm",
+  "name": "Battle Rhythm",
+  "rarity": "rare",
+  "icon": "🥁",
+  "description": "Every 5 hits charge an overcharged shot: your next bullet is huge, pierces players and deals triple damage. The ammo pip glows when it's ready.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "rhythm",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "details": "Every bullet of that shot is overcharged. Extra copies need fewer hits (2 copies: 3 hits)."
+}

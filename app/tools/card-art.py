@@ -873,6 +873,173 @@ def rework(cid, d):
     else: return False
     return True
 
+# ---------------------------------------------------------------- v1.2.15 round-2 cards (Devin): same flat glyph style
+GOLD = '#ffd23a'
+def tcg_art(cid, d):
+    a, w = d.a, d.w
+    if cid == 'gilded-shell':
+        d.ellipse(350, 255, 150, 180, fill=GOLD); d.ellipse(350, 255, 120, 150, fill=mix(GOLD, '#ffffff', 0.35))
+        d.figure(350, 270, 0.85, DARK)
+        zig(d, [(250, 150), (300, 205), (275, 240), (330, 290)], DARK, 6)
+        for x, y in ((520, 140), (180, 380), (540, 360)): d.star(x, y, 24, 9, 4, GOLD)
+    elif cid == 'backpedal-boots':
+        d.crosshair(560, 250, 48, a)
+        d.figure(330, 250, 1.0, w)
+        for y in (200, 250, 300): d.line([(250, y), (120, y)], mix(a, DARK, 0.3), 8); d.chevron(110, y, 0.35, a, 9)
+        d.rect(270, 315, 330, 350, fill=WOOD, r=8); d.rect(330, 315, 395, 350, fill=WOOD, r=8)
+    elif cid == 'opening-salvo':
+        d.poly([(140, 210), (260, 180), (260, 320), (140, 290)], fill=GOLD); d.ellipse(270, 250, 30, 80, fill=mix(GOLD, DARK, 0.2))
+        for k in range(3): d.bullet(400 + k * 80, 180 + k * 60, 110, 20, a, ang=0.1 * (k - 1))
+        d.arc(240, 250, 120, -40, 40, w, 6); d.arc(240, 250, 160, -35, 35, w, 6)
+    elif cid == 'tight-chamber':
+        d.circle(330, 250, 150, fill=mix(w, DARK, 0.35)); d.circle(330, 250, 40, fill=DARK)
+        for k in range(6):
+            ang = k * math.pi / 3; x, y = 330 + math.cos(ang) * 95, 250 + math.sin(ang) * 95
+            d.circle(x, y, 32, fill=DARK if k else a)
+        d.bullet(560, 250, 150, 36, a); d.star(330 + 95, 250, 55, 20, 8, YEL)
+    elif cid == 'cold-barrel':
+        d.rect(100, 225, 420, 275, fill=mix('#bfe8ff', DARK, 0.2), r=12); d.rect(140, 270, 190, 350, fill=mix(w, DARK, 0.4), r=8)
+        for k in range(5): d.line([(150 + k * 60, 225), (150 + k * 60, 205 - 10 * (k % 2))], '#e8f6ff', 6)
+        for x, y in ((200, 150), (330, 140), (260, 380)):
+            for k in range(3): ang = k * math.pi / 3; d.line([(x - math.cos(ang) * 26, y - math.sin(ang) * 26), (x + math.cos(ang) * 26, y + math.sin(ang) * 26)], '#e8f6ff', 6)
+        d.bullet(560, 250, 170, 30, a)
+    elif cid == 'light-frame':
+        d.figure(260, 250, 1.25, mix(w, DARK, 0.6), outline=True)
+        d.figure(260, 265, 0.95, w)
+        feather(d, 470, 330, 260, -1.0, a, mix(a, DARK, 0.5))
+    elif cid == 'pressure-stack':
+        d.figure(520, 260, 1.0, mix(w, DARK, 0.2))
+        for k in range(5): d.rect(120 + k * 62, 360 - k * 45, 170 + k * 62, 380, fill=mix(a, '#ff6a2a', k / 4), r=6)
+        d.line([(130, 330), (420, 150)], w, 8); d.poly([(440, 135), (395, 150), (430, 185)], fill=w)
+    elif cid == 'last-stand-rig':
+        d.rect(170, 330, 530, 360, fill=DARK, r=10); d.rect(175, 335, 300, 355, fill=RED, r=8)
+        d.figure(350, 220, 0.95, w); d.circle(350, 220, 130, outline=a, width=10)
+        for y in (180, 230, 280): d.line([(150, y), (210, y)], a, 7)
+    elif cid == 'ammo-leech':
+        for k in range(3): d.bullet(470 + k * 30, 200 + k * 50, 120, 20, mix(w, DARK, 0.3 * k), ang=-0.2)
+        d.ellipse(240, 250, 110, 80, fill=PURP); d.circle(300, 230, 14, fill=w)
+        fangs(d, 330, 260, 0.9, PURP)
+        d.dashed([(350, 250), (460, 210)], a, 6, 12, 8)
+    elif cid == 'afterimage':
+        for k, t in enumerate((0.8, 0.6, 0.35)): d.figure(180 + k * 90, 255, 1.0, mix(a, DARK, t), outline=k < 2)
+        d.figure(500, 255, 1.1, w)
+        for k in range(3): d.critter(200 + k * 10, 120 + k * 15, 0.25, YEL)
+    elif cid == 'overpen-rounds':
+        d.figure(300, 255, 1.0, mix(w, DARK, 0.3)); d.figure(520, 265, 0.9, mix(w, DARK, 0.5))
+        d.line([(80, 250), (620, 250)], a, 10); d.bullet(620, 250, 90, 18, a)
+        d.star(300, 250, 40, 16, 7, YEL)
+    elif cid == 'spite-charge':
+        d.ellipse(350, 360, 190, 40, outline=RED, width=8); d.ellipse(350, 360, 130, 26, outline=mix(RED, DARK, 0.4), width=6)
+        d.bomb(350, 250, 1.2, DARK); d.star(372, 140, 30, 12, 6, ORANGE)
+        d.circle(330, 250, 12, fill=RED); d.circle(370, 250, 12, fill=RED)
+    elif cid == 'running-gun':
+        d.figure(330, 250, 1.0, w)
+        for y in (200, 250, 300): d.line([(240, y), (130, y)], mix(a, DARK, 0.3), 8)
+        d.rect(370, 235, 520, 260, fill=mix(w, DARK, 0.3), r=6)
+        for k in range(3): d.bullet(560 + k * 40, 210 + k * 35, 60, 12, a)
+    elif cid == 'ground-pound':
+        d.wall(110, 380, 590, 400, w)
+        d.figure(350, 230, 1.0, w); d.line([(350, 60), (350, 140)], a, 10); d.poly([(320, 130), (380, 130), (350, 160)], fill=a)
+        for s in (-1, 1):
+            for k in range(3): d.arc(350 + s * (120 + k * 55), 380, 40 + k * 10, 200 if s < 0 else 290, 250 if s < 0 else 340, a, 7)
+        for x in (170, 530): d.figure(x, 290, 0.5, mix(w, DARK, 0.5))
+    elif cid == 'perfect-parry':
+        d.shield(300, 250, 1.1, w, inner=mix(a, DARK, 0.3))
+        d.star(420, 220, 90, 26, 4, '#ffffff', rot=0.3)
+        d.bullet(560, 220, 110, 20, mix(w, DARK, 0.5), ang=math.pi)
+        for k in range(6): ang = k * math.pi / 3; d.line([(420 + math.cos(ang) * 100, 220 + math.sin(ang) * 100), (420 + math.cos(ang) * 130, 220 + math.sin(ang) * 130)], w, 5)
+    elif cid == 'battle-rhythm':
+        d.ellipse(230, 300, 120, 50, fill=mix(a, DARK, 0.4)); d.rect(110, 230, 350, 300, fill=RED, r=4); d.ellipse(230, 230, 120, 50, fill=w)
+        d.line([(160, 120), (210, 220)], WOOD, 12); d.line([(300, 120), (250, 220)], WOOD, 12)
+        for k in range(5): d.circle(410 + k * 40, 380, 12, fill=a)
+        d.bullet(520, 220, 190, 52, YEL)
+    elif cid == 'gamblers-mag':
+        for k, (x, y, rot) in enumerate(((240, 260, -0.2), (430, 230, 0.25))):
+            c, s = math.cos(rot), math.sin(rot); T = lambda u, v: (x + u * c - v * s, y + u * s + v * c)
+            d.poly([T(-80, -80), T(80, -80), T(80, 80), T(-80, 80)], fill=w)
+            for (u, v) in (((-40, -40), (40, 40), (0, 0)) if k == 0 else ((-40, -40), (40, -40), (-40, 40), (40, 40), (0, 0))): d.circle(*T(u, v), 14, fill=RED if k else DARK)
+        d.star(580, 120, 40, 15, 5, a); d.star(120, 380, 30, 11, 5, a)
+    elif cid == 'payback':
+        d.figure(250, 255, 1.0, w); d.star(250, 210, 38, 14, 6, RED)
+        d.arc(390, 250, 110, 200, 340, a, 12); d.poly([(500, 210), (470, 265), (530, 255)], fill=a)
+        d.bullet(530, 330, 160, 34, RED, ang=0.2)
+    elif cid == 'bounty-mark':
+        d.figure(380, 270, 1.0, mix(w, DARK, 0.15)); d.crosshair(380, 230, 70, RED, 8)
+        d.line([(200, 380), (200, 100)], WOOD, 10); d.poly([(205, 100), (300, 125), (205, 160)], fill=a)
+        for k in range(3): d.star(520 + k * 30, 120, 18, 7, 5, GOLD)
+    elif cid == 'overdrive-core':
+        d.circle(350, 250, 140, fill=mix(a, DARK, 0.55)); d.circle(350, 250, 105, fill=DARK)
+        d.bolt(350, 250, 1.4, YEL)
+        for k in range(3): d.circle(160 + k * 0, 150 + k * 100, 22, fill=YEL if k == 0 else mix(w, DARK, 0.6))
+    elif cid == 'blood-volley':
+        d.drop(200, 230, 1.0, RED)
+        for k in range(7): ang = -0.6 + k * 0.2; d.bullet(330 + math.cos(ang) * 210, 250 + math.sin(ang) * 210, 80, 14, mix(RED, a, 0.4), ang=ang)
+        for k in range(7): ang = -0.6 + k * 0.2; d.dashed([(270, 250), (270 + math.cos(ang) * 200, 250 + math.sin(ang) * 200)], mix(RED, DARK, 0.4), 4, 10, 8)
+    elif cid == 'snare-plate':
+        d.ellipse(350, 330, 200, 60, fill=mix(a, DARK, 0.5)); d.ellipse(350, 320, 170, 46, fill=mix(w, DARK, 0.5))
+        for k in range(9): x = 200 + k * 37; d.poly([(x - 14, 320), (x, 250 + (k % 2) * 20), (x + 14, 320)], fill=w)
+        d.figure(350, 170, 0.6, mix(w, DARK, 0.2))
+    elif cid == 'ascension-core':
+        for k in range(3): d.rect(170 + k * 70, 360 - k * 90, 530 - k * 70, 390 - k * 90, fill=mix(a, DARK, 0.6 - 0.2 * k), r=6)
+        d.figure(350, 120, 0.6, w); d.star(350, 70, 40, 15, 5, GOLD)
+    elif cid == 'chain-encore':
+        for k in range(4): d.ellipse(170 + k * 110, 250, 70, 40, outline=mix(a, w, k / 4), width=14)
+        d.bullet(620, 250, 70, 16, a)
+    elif cid == 'gravity-well':
+        for k in range(5): d.circle(350, 250, 40 + k * 32, outline=mix(a, DARK, k / 6), width=7)
+        d.circle(350, 250, 28, fill=DARK); d.circle(350, 250, 12, fill=a)
+        for x, y in ((130, 150), (570, 340), (560, 140)): d.figure(x, y, 0.45, w); d.line([(x + (350 - x) * 0.2, y + (250 - y) * 0.2), (x + (350 - x) * 0.45, y + (250 - y) * 0.45)], a, 6)
+    elif cid == 'shield-scorched-floor':
+        d.ellipse(350, 360, 230, 50, fill=mix(ORANGE, DARK, 0.4))
+        for x in (170, 250, 330, 410, 490): flame(d, x, 350, 0.55 + 0.25 * ((x // 80) % 2))
+        d.figure(350, 230, 0.9, w); d.circle(350, 230, 120, outline=a, width=8)
+    elif cid == 'shield-purge-pulse':
+        for k in range(3): d.circle(350, 250, 80 + k * 55, outline=mix(w, a, k / 3), width=10 - k * 2)
+        d.figure(350, 255, 0.7, w)
+        for x, y, r in ((120, 130, -0.5), (590, 140, 0.4), (130, 390, 0.3), (580, 380, -0.3)): d.rect(x - 30, y - 18, x + 30, y + 18, fill=mix(WOOD, DARK, 0.3), r=4); d.star(x, y, 30, 10, 6, ORANGE, rot=r)
+    elif cid == 'shield-swap-shot':
+        d.figure(180, 255, 0.9, w); d.figure(520, 255, 0.9, mix(RED, w, 0.2))
+        d.arc(350, 220, 170, 200, 340, a, 10); d.poly([(510, 140), (500, 195), (540, 175)], fill=a)
+        d.arc(350, 290, 170, 20, 160, a, 10); d.poly([(190, 365), (200, 310), (160, 330)], fill=a)
+        d.circle(350, 250, 34, fill=a); d.circle(350, 250, 18, fill=w)
+    elif cid == 'mod-squad-caller':
+        for k, x in enumerate((210, 350, 490)):
+            d.figure(x, 280, 0.7, mix(w, a, 0.3 * k)); d.rect(x - 32, 200, x + 32, 214, fill='#4a5a2a', r=6); d.ellipse(x, 198, 34, 16, fill='#4a5a2a')
+            d.rect(x + 20, 270, x + 80, 282, fill=mix(w, DARK, 0.5), r=4)
+        d.star(350, 110, 36, 14, 5, YEL)
+    # combos
+    elif cid == 'gilded-phoenix':
+        feather(d, 250, 320, 200, -2.2, ORANGE, RED); feather(d, 450, 320, 200, -0.95, ORANGE, RED)
+        d.ellipse(350, 270, 90, 110, fill=GOLD); d.ellipse(350, 270, 70, 88, fill=mix(GOLD, '#ffffff', 0.4)); d.figure(350, 280, 0.55, DARK)
+    elif cid == 'jackhammer':
+        d.rect(300, 90, 400, 250, fill=GREY, r=10); d.rect(330, 250, 370, 380, fill=mix(w, DARK, 0.3), r=6); d.poly([(330, 380), (370, 380), (350, 420)], fill=w)
+        d.line([(260, 120), (440, 120)], DARK, 12)
+        for k in range(4): d.rect(450 + k * 40, 330 - k * 40, 480 + k * 40, 390, fill=mix(a, ORANGE, k / 3), r=4)
+        for s in (-1, 1): d.arc(350, 410, 60, 200 if s < 0 else 290, 250 if s < 0 else 340, a, 6)
+    elif cid == 'riposte':
+        d.shield(250, 250, 0.9, w, inner=mix(a, DARK, 0.3))
+        d.line([(330, 340), (600, 120)], '#dfe6f2', 12); d.rect(300, 330, 350, 350, fill=WOOD, r=4)
+        d.star(470, 230, 40, 12, 4, '#ffffff')
+    elif cid == 'crescendo':
+        for k in range(5): d.circle(170 + k * 90, 360 - k * 50, 26 + k * 6, fill=mix(a, YEL, k / 4)); d.line([(196 + k * 90 + k * 6, 360 - k * 50), (196 + k * 90 + k * 6, 260 - k * 50)], w, 6)
+    elif cid == 'trappers-kit':
+        d.ellipse(230, 330, 130, 40, fill=mix(w, DARK, 0.5))
+        for k in range(7): x = 130 + k * 33; d.poly([(x - 12, 330), (x, 280 + (k % 2) * 16), (x + 12, 330)], fill=w)
+        for k in range(2): d.mine(440 + k * 120, 320, 0.7, DARK, RED)
+    elif cid == 'implosion-rounds':
+        for k in range(4): d.circle(350, 250, 60 + k * 40, outline=mix(a, DARK, k / 5), width=7)
+        d.star(350, 250, 90, 40, 10, ORANGE); d.star(350, 250, 55, 24, 8, YEL)
+        for x, y in ((120, 120), (590, 380)): d.dashed([(x, y), (x + (350 - x) * 0.5, y + (250 - y) * 0.5)], w, 6, 12, 8)
+    elif cid == 'patient-hunter':
+        d.circle(220, 230, 90, fill=WOOD); d.circle(185, 215, 26, fill=YEL); d.circle(255, 215, 26, fill=YEL); d.circle(185, 215, 10, fill=DARK); d.circle(255, 215, 10, fill=DARK)
+        d.poly([(210, 245), (230, 245), (220, 270)], fill=ORANGE)
+        d.rect(320, 240, 560, 262, fill='#bfe8ff', r=8); d.bullet(620, 251, 100, 20, a)
+    elif cid == 'featherweight':
+        d.circle(330, 190, 110, fill=RED); d.line([(330, 300), (330, 400)], w, 4)
+        d.figure(330, 200, 0.6, w); feather(d, 520, 350, 200, -1.2, a, mix(a, DARK, 0.5))
+    else: return False
+    return True
+
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]; force = '--force' in sys.argv
@@ -884,7 +1051,7 @@ def main():
         if os.path.exists(out) and not force and not args: continue
         c = json.load(open(f, encoding='utf-8'))
         d = D(cid, c.get('rarity', 'common'))
-        if rework(cid, d) or art(cid, d): d.save(out); done.append(cid)
+        if tcg_art(cid, d) or rework(cid, d) or art(cid, d): d.save(out); done.append(cid)
     print('drew', len(done), 'cards:', ' '.join(done))
 
 if __name__ == '__main__': main()

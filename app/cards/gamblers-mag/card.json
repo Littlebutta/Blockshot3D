@@ -1,0 +1,16 @@
+{
+  "id": "gamblers-mag",
+  "name": "Gambler's Mag",
+  "rarity": "rare",
+  "icon": "🎲",
+  "description": "Each reload rolls a random magazine bonus: double damage, +50% bullets, bouncy rounds or homing. The roll shows above your head.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "gamble",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "details": "Each round starts with a roll too. The bonus lasts until your next reload. Extra copies make every bonus bigger."
+}

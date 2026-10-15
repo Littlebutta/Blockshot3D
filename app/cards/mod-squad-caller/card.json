@@ -1,0 +1,18 @@
+{
+  "id": "mod-squad-caller",
+  "name": "Squad Caller",
+  "rarity": "mod",
+  "icon": "🪖",
+  "description": "Each kill spawns a small soldier on your side that walks forward and fires weak bullets, up to 3 at once. They vanish at the end of the round.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "squad",
+      "op": "add",
+      "value": 3
+    }
+  ],
+  "details": "Your gun stays the same. Soldiers have 40 health and fire at 35% of your damage. Kills by soldiers call more soldiers.",
+  "weaponMod": "squad",
+  "variants": true
+}

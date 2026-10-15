@@ -450,6 +450,11 @@ button.bindkey:hover{border-color:var(--fg)}
 .curammo.pips #curAmmoN{display:flex;gap:2px}
 #curAmmoN i{width:3px;height:8px;border-radius:1px;transform:skewX(-12deg);box-shadow:0 0 0 1px rgba(0,0,0,.45)}
 #curAmmoN i.empty{background:rgba(255,255,255,.22)}
+/* v1.2.15 round-2 card chips by the reticle (Pressure Stack, Battle Rhythm, Cold Barrel, Tight Chamber, shells, Overdrive...) */
+.curnc{display:flex;gap:3px;margin-left:4px;font:700 10px system-ui;color:#fff;text-shadow:0 1px 2px #000;white-space:nowrap}
+.curnc b{padding:0 3px;border-radius:3px;background:rgba(0,0,0,.45)}
+.curnc b.hot{background:#ff6a2a;box-shadow:0 0 8px #ffb347}
+.curnc b.rhy{background:linear-gradient(90deg,#ffd166 var(--p),rgba(0,0,0,.45) var(--p))}
 .curammo.low #curAmmoN i.empty{background:rgba(255,90,90,.45)}
 .curammo .rl{width:26px;height:3px;border-radius:2px;background:rgba(0,0,0,.45);overflow:hidden;display:none}
 .curammo.reloading .rl{display:block}
@@ -825,3 +830,24 @@ body:not([data-screen=title]) .updline{display:none}
 .curblk.pop{animation:curblkPop .35s ease-out}
 @keyframes curblkPop{0%{transform:scale(1.8)}100%{transform:scale(1)}}
 .curammo .currow{display:flex;align-items:center}
+/* v1.2.15 round modifiers */
+.rsText{font-weight:600;font-size:18px;margin-top:6px;opacity:.85}
+.rsText:empty{display:none}
+#rmodTag{position:fixed;top:56px;left:50%;transform:translateX(-50%);padding:3px 12px;border-radius:999px;background:rgba(196,139,255,.22);border:1px solid rgba(196,139,255,.6);color:#e6d3ff;font-weight:700;font-size:13px;letter-spacing:.04em;pointer-events:auto;z-index:5}
+body:not([data-screen="none"]) #rmodTag{display:none}
+/* v1.2.15 kill cam */
+#killCam{position:fixed;inset:0;pointer-events:none;z-index:8;box-shadow:inset 0 0 0 4px rgba(255,70,70,.55),inset 0 0 120px rgba(0,0,0,.55)}
+#killCam .kcBar{position:absolute;top:18px;left:50%;transform:translateX(-50%);padding:6px 16px;border-radius:6px;background:rgba(10,12,20,.75);color:#fff;font-weight:700;letter-spacing:.08em;font-size:16px}
+#killCam .kcBar>b:first-child{color:#ff5a5a;animation:kcBlink 1s steps(2) infinite}
+@keyframes kcBlink{50%{opacity:.35}}
+body:not([data-screen="none"]) #killCam{display:none}
+/* v1.2.15 emote and ping wheel */
+#emoteWheel{position:fixed;left:50%;top:50%;width:300px;height:300px;margin:-150px 0 0 -150px;border-radius:50%;background:radial-gradient(circle,rgba(12,15,24,.35) 0 22%,rgba(12,15,24,.72) 23% 70%,transparent 71%);pointer-events:none;z-index:12}
+#emoteWheel .ewSlot{position:absolute;width:74px;margin:-30px 0 0 -37px;text-align:center;color:#fff;transition:transform .08s}
+#emoteWheel .ewSlot b{display:block;font-size:30px;line-height:38px}
+#emoteWheel .ewSlot span{display:block;font-size:11px;font-weight:700;opacity:.8;white-space:nowrap}
+#emoteWheel .ewSlot.ping span{color:#9fd8ff}
+#emoteWheel .ewSlot.sel{transform:scale(1.25)}
+#emoteWheel .ewSlot.sel span{opacity:1;color:var(--accent,#ffd23a)}
+#emoteWheel .ewSlot.off{opacity:.25}
+#emoteWheel .ewCenter{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#cfd6e6;text-align:center;width:70px}

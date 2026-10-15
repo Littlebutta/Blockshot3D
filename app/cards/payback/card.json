@@ -1,0 +1,16 @@
+{
+  "id": "payback",
+  "name": "Payback",
+  "rarity": "rare",
+  "icon": "↩️",
+  "description": "Damage you took in the last 2 seconds is added to your next shot, up to +100%.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "payback",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "details": "Only damage from enemies counts, and the shot spends it. Extra copies raise the cap."
+}

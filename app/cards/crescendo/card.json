@@ -1,0 +1,30 @@
+{
+  "id": "crescendo",
+  "name": "Crescendo",
+  "rarity": "combo",
+  "icon": "🎼",
+  "description": "Rhythm and echoes build to a big finish.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "rhythm",
+      "op": "add",
+      "value": 1.5
+    },
+    {
+      "stat": "encore",
+      "op": "add",
+      "value": 0.6
+    },
+    {
+      "stat": "damage",
+      "op": "mul",
+      "value": 0.9
+    }
+  ],
+  "details": "Encore hits count toward the overcharged shot.",
+  "combo": [
+    "battle-rhythm",
+    "encore-engine"
+  ]
+}

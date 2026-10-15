@@ -1,0 +1,22 @@
+{
+  "id": "overdrive-core",
+  "name": "Overdrive Core",
+  "rarity": "rare",
+  "icon": "⚡",
+  "description": "+60% damage for the round you take it and every third round after. On the rounds in between, block and reload are 30% slower.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "overdrive",
+      "op": "add",
+      "value": 0.6
+    },
+    {
+      "stat": "overdriveLag",
+      "op": "add",
+      "value": 0.3
+    }
+  ],
+  "details": "A lightning chip on your HUD shows an overdrive round.",
+  "holyDescription": "+60% damage for the round you take it and every third round after."
+}

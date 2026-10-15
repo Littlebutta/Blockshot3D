@@ -1,0 +1,16 @@
+{
+  "id": "running-gun",
+  "name": "Running Gun",
+  "rarity": "uncommon",
+  "icon": "🏃",
+  "description": "While moving you fire 20% faster. While standing still you reload 20% faster.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "runGun",
+      "op": "add",
+      "value": 0.2
+    }
+  ],
+  "details": "Extra copies add another 20% to both."
+}

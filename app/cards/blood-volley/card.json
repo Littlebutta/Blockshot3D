@@ -1,0 +1,16 @@
+{
+  "id": "blood-volley",
+  "name": "Blood Volley",
+  "rarity": "rare",
+  "icon": "🩸",
+  "description": "Hold Reload to spend 25% of your current health on an instant full-mag fan of piercing shots. It can't kill you, since it stops at 1 health.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "bloodVolley",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "details": "Hold Reload for a third of a second. It fires as many shots as your mag holds, free, then needs a second before the next one. Extra copies make the shots hit harder."
+}

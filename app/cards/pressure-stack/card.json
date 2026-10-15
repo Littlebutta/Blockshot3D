@@ -1,0 +1,16 @@
+{
+  "id": "pressure-stack",
+  "name": "Pressure Stack",
+  "rarity": "uncommon",
+  "icon": "📈",
+  "description": "Each hit on the same enemy within 1 s adds +10% damage, up to +80%. A miss resets it, and a number by your reticle shows the stack.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "pressure",
+      "op": "add",
+      "value": 0.1
+    }
+  ],
+  "details": "Switching targets starts again at 1. A bullet that ends without hitting anyone resets the stack, unless you landed a hit in the last 0.3 s (so spread shots don't wipe it)."
+}

@@ -1,0 +1,22 @@
+{
+  "id": "backpedal-boots",
+  "name": "Backpedal Boots",
+  "rarity": "common",
+  "icon": "🥾",
+  "description": "Moving away from where you aim is 40% faster, and moving toward it is 10% slower. Good for kiting.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "backpedal",
+      "op": "add",
+      "value": 0.4
+    },
+    {
+      "stat": "advanceSlow",
+      "op": "add",
+      "value": 0.1
+    }
+  ],
+  "details": "The bonus follows the angle: straight back gets all of it, sideways gets none. Moving straight at your aim gets the full slowdown.",
+  "holyDescription": "Moving away from where you aim is much faster."
+}

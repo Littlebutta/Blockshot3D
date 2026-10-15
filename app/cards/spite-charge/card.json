@@ -1,0 +1,16 @@
+{
+  "id": "spite-charge",
+  "name": "Spite Charge",
+  "rarity": "uncommon",
+  "icon": "💣",
+  "description": "When you die, you explode where you fell for 60 damage after a 0.5 s fuse with a warning ring.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "spite",
+      "op": "add",
+      "value": 60
+    }
+  ],
+  "details": "The blast hits enemies only. Extra copies add 60 damage (and a bigger blast)."
+}

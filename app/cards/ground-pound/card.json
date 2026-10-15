@@ -1,0 +1,16 @@
+{
+  "id": "ground-pound",
+  "name": "Ground Pound",
+  "rarity": "uncommon",
+  "icon": "⬇️",
+  "description": "Landing from a high jump sends a small shockwave that pops nearby enemies upward.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "pound",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "details": "Any fall faster than a normal jump's landing counts (jump off a ledge or a crate). The wave reaches 3 m, pops enemies up and deals 8 damage. Extra copies hit harder and wider."
+}

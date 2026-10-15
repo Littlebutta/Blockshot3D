@@ -1,0 +1,16 @@
+{
+  "id": "snare-plate",
+  "name": "Snare Plate",
+  "rarity": "legendary",
+  "icon": "🪤",
+  "description": "Blocking also drops a hidden plate on the ground. The first enemy to step on it is rooted for 1.25 s. You can have up to 2.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "snare",
+      "op": "add",
+      "value": 1.25
+    }
+  ],
+  "details": "Only you and your team can see your plates. They last the whole round. Extra copies root for longer."
+}

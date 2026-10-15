@@ -28,6 +28,7 @@ export const DEFAULT_SETTINGS = {
   netPredict: true,     // v30: move your own character instantly when you join someone's game (client-side prediction)
   hiModels: true,       // v28: extra model detail (squid bullet tentacles)       // v28: FPS counter in the top-right corner
   screenShake: true,
+  killCam: true,        // v1.2.15: replay the round-winning kill from the killer's eyes
   feel: true,           // v1.2.0: hit-stop on kills and slow motion on the round-winning kill
   props: true,          // grass and pebbles
   slop: false,
@@ -38,6 +39,7 @@ export const DEFAULT_SETTINGS = {
   cursorAmmo: true,     // small ammo count + reload bar next to the cursor
   shieldHaze: true,     // brief white screen-edge glow when your block is ready again
   binds: null,          // custom controls (see DEFAULT_BINDS); null = defaults     // card screen: gently point out cards that fit your build
+  topZoom: 1,           // v1.2.13: top-down camera zoom (scroll wheel in a match), 0.6-2.2
   previewSpin: false,   // Customize: spin the character preview
   color: null,          // preferred player color (free-for-all), one of ART.ffaColors
   cosmetics: { model: 'classic', hat: 'none', face: 'none', eyes: 'none', neck: 'none', body: 'none', gun: 'cube' }, // chosen in Customize
@@ -87,11 +89,11 @@ export function parseSettingsFile(text) {
 export const DEFAULT_BINDS = {
   up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
   jump: ['Space', ''], shoot: ['Mouse0', ''], block: ['Mouse2', 'ShiftLeft'], reload: ['KeyR', ''],
-  view: ['Tab', ''], use: ['KeyE', ''], crouch: ['KeyC', ''], cursor: ['AltLeft', 'AltRight'], practice: ['KeyP', ''], netstats: ['KeyN', 'F2'], netlog: ['F3', ''], dash: ['KeyF', ''],
+  view: ['Tab', ''], use: ['KeyE', ''], crouch: ['KeyC', ''], cursor: ['AltLeft', 'AltRight'], practice: ['KeyP', ''], netstats: ['KeyN', 'F2'], netlog: ['F3', ''], dash: ['KeyF', ''], emote: ['KeyQ', 'Mouse1'],
 };
 export const BIND_LABELS = {
   up: 'Move forward', down: 'Move back', left: 'Move left', right: 'Move right', jump: 'Jump', shoot: 'Shoot (hold)',
-  block: 'Block (stops bullets)', reload: 'Reload', view: 'Switch first / third person', use: 'Use: vehicles (open world), carry props (core defense)', crouch: 'Open world: crouch (hold, harder to spot)', cursor: 'First person: free the cursor', practice: 'Practice range panel', netstats: 'Multiplayer: network status window', netlog: 'Network log: start recording, press again to save it to a file', dash: 'Brawl: air dash (hold in the air to charge, let go to dash toward the mouse)',
+  block: 'Block (stops bullets)', reload: 'Reload', view: 'Switch first / third person', use: 'Use: vehicles (open world), carry props (core defense)', crouch: 'Open world: crouch (hold, harder to spot)', cursor: 'First person: free the cursor', practice: 'Practice range panel', netstats: 'Multiplayer: network status window', netlog: 'Network log: start recording, press again to save it to a file', dash: 'Brawl: air dash (hold in the air to charge, let go to dash toward the mouse)', emote: 'Emote and ping wheel (hold, move the mouse, let go)',
 };
 export function bindsOf(s) {
   const out = {};
