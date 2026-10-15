@@ -22,7 +22,7 @@ function target() {
 }
 async function upload(t, rel, text) {
   const r = await fetch(`https://api.github.com/repos/${t.repo}/contents/${rel.split('/').map(encodeURIComponent).join('/')}`, {
-    method: 'PUT', headers: { Authorization: `Bearer ${t.token}`, 'User-Agent': 'Blockshot3D', Accept: 'application/vnd.github+json' },
+    method: 'PUT', headers: { Authorization: `Bearer ${t.token}`, 'User-Agent': 'Blockshot3D', Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
     body: JSON.stringify({ message: 'Suggestion: ' + rel, content: Buffer.from(text).toString('base64') }),
   });
   if (!r.ok) throw new Error('GitHub ' + r.status);

@@ -1,6 +1,6 @@
 {
  "version": "1.2.16",
- "built": "2026-10-15T21:01:16.496Z",
+ "built": "2026-10-15T21:08:29.085Z",
  "files": {
   ".gitignore": [
    "0068ba7ed54e738118cfb5244ca651fe18f44c4ef3e5236241677de513dfaa9d",
@@ -1583,8 +1583,8 @@
    5124
   ],
   "electron/suggest.cjs": [
-   "bf378764cf9d5c792436433c09bbd297e2ba267e2c76924bfc43634c12db8ec9",
-   3557
+   "a1ca82d47302319f763602b33ff96effcf5e5b0383a10687ba35743c5744c22b",
+   3593
   ],
   "electron/updater.cjs": [
    "585568a16768c507ea40ac41b4d29791b81495aed0cb1c17be359fb211727db7",
