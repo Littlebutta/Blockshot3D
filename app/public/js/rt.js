@@ -12,17 +12,22 @@ import { Pass, FullScreenQuad } from '/vendor/three/examples/jsm/postprocessing/
 const RT_Q = { on: { steps: 24, dist: 3.2, strength: 0.42 }, ultra: { steps: 48, dist: 5, strength: 0.5 } };
 
 export class RTShadowPass extends Pass {
-  constructor(scene, camera, sun, w, h, quality = 'on') {
+  // v1.2.17: depthSrc() hands over the depth the scene pass already drew (post.js), so the scene is no longer drawn a
+  // second time just for depth (that doubled the draw calls: the main cost of ray tracing on Windows)
+  constructor(scene, camera, sun, w, h, quality = 'on', depthSrc = null) {
     super();
-    this.scene = scene; this.camera = camera; this.sun = sun;
+    this.scene = scene; this.camera = camera; this.sun = sun; this.depthSrc = depthSrc;
     const Q = RT_Q[quality] || RT_Q.on;
-    this.depthTarget = new THREE.WebGLRenderTarget(w, h, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
-    this.depthTarget.depthTexture = new THREE.DepthTexture(w, h, THREE.UnsignedIntType);
+    this.L = new THREE.Vector3();
+    if (!depthSrc) {
+      this.depthTarget = new THREE.WebGLRenderTarget(w, h, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+      this.depthTarget.depthTexture = new THREE.DepthTexture(w, h, THREE.UnsignedIntType);
+    }
     this.depthMat = new THREE.MeshBasicMaterial({ colorWrite: false });
     this.quad = new FullScreenQuad(new THREE.ShaderMaterial({
       defines: { STEPS: Q.steps, PERSP: camera.isPerspectiveCamera ? 1 : 0 },
       uniforms: {
-        tDiffuse: { value: null }, tDepth: { value: this.depthTarget.depthTexture },
+        tDiffuse: { value: null }, tDepth: { value: this.depthTarget ? this.depthTarget.depthTexture : null },
         uProj: { value: new THREE.Matrix4() }, uInvProj: { value: new THREE.Matrix4() },
         uLight: { value: new THREE.Vector3() }, uDist: { value: Q.dist }, uStrength: { value: Q.strength },
         uThick: { value: 0.35 }, uFrame: { value: 0 },
@@ -63,6 +68,7 @@ export class RTShadowPass extends Pass {
     }));
   }
   setSize(w, h) {   // a fresh target (depth textures don't always follow a resize)
+    if (this.depthSrc) return;
     const old = this.depthTarget;
     this.depthTarget = new THREE.WebGLRenderTarget(w, h, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
     this.depthTarget.depthTexture = new THREE.DepthTexture(w, h, THREE.UnsignedIntType);
@@ -71,21 +77,24 @@ export class RTShadowPass extends Pass {
   }
   render(renderer, writeBuffer, readBuffer) {
     // depth of the scene from this camera (color writes off, so it is cheap)
-    const ov = this.scene.overrideMaterial, bg = this.scene.background;
-    this.scene.overrideMaterial = this.depthMat; this.scene.background = null; const back = hideSoft(this.scene);
-    renderer.setRenderTarget(this.depthTarget); renderer.clear(); renderer.render(this.scene, this.camera); back();
-    this.scene.overrideMaterial = ov; this.scene.background = bg;
     const u = this.quad.material.uniforms, cam = this.camera;
+    if (this.depthSrc) u.tDepth.value = this.depthSrc();
+    else {
+      const ov = this.scene.overrideMaterial, bg = this.scene.background;
+      this.scene.overrideMaterial = this.depthMat; this.scene.background = null; const back = hideSoft(this.scene);
+      renderer.setRenderTarget(this.depthTarget); renderer.clear(); renderer.render(this.scene, this.camera); back();
+      this.scene.overrideMaterial = ov; this.scene.background = bg;
+    }
     u.tDiffuse.value = readBuffer.texture;
     u.uProj.value.copy(cam.projectionMatrix); u.uInvProj.value.copy(cam.projectionMatrixInverse);
     // direction toward the sun, in view space
-    const L = new THREE.Vector3().subVectors(this.sun.position, this.sun.target.position).normalize();
+    const L = this.L.subVectors(this.sun.position, this.sun.target.position).normalize();
     u.uLight.value.copy(L.transformDirection(cam.matrixWorldInverse));
     u.uFrame.value = (u.uFrame.value + 1) % 64;
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
     this.quad.render(renderer);
   }
-  dispose() { this.depthTarget.dispose(); this.depthMat.dispose(); this.quad.material.dispose(); this.quad.dispose(); }
+  dispose() { if (this.depthTarget) this.depthTarget.dispose(); this.depthMat.dispose(); this.quad.material.dispose(); this.quad.dispose(); }
 }
 
 // FSR 1-style upscale, in two steps like AMD's FSR 1 (v28: sharper edges, was a Catmull-Rom blur + a light sharpen):

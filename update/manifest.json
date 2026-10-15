@@ -1,6 +1,6 @@
 {
- "version": "1.2.16",
- "built": "2026-10-15T21:08:29.085Z",
+ "version": "1.2.17",
+ "built": "2026-10-15T21:56:26.042Z",
  "files": {
   ".gitignore": [
    "0068ba7ed54e738118cfb5244ca651fe18f44c4ef3e5236241677de513dfaa9d",
@@ -1559,24 +1559,48 @@
    28753
   ],
   "electron/main.cjs": [
-   "1d182466ac4ae2f9c7b4d2709ba04584c72b94bafe25f649b26d2c74bba2edcf",
-   21116
+   "fb60cc6fe0027e835396aeb40bce72df35ce1fdf69d1f688ef961fe98e65f806",
+   21627
   ],
   "electron/p2pwire.cjs": [
    "7129454bf1074232898eda71047b5695656bc2a40dacf0c549b0db4a3a25367c",
    5942
   ],
   "electron/preload.cjs": [
-   "9506ec124796742d322c0be92a5fa6d7fe64903d09fe1466c6a64d7f897ad4a5",
-   1774
+   "1ef9ec71eb58d4581928183c15e724026c9a95310b0f788294a43013d5cc6ab5",
+   1845
   ],
   "electron/snapdict.txt": [
    "6f78870e77b69aff8053393bf257322d26e2c9f0be12b914b749e990bddcf3b5",
    29277
   ],
+  "electron/steam-art/capsule.png": [
+   "2afee6143554d0803ec1315429ea5b6b7709095039d4a45d6bb920c530875f05",
+   259600
+  ],
+  "electron/steam-art/hero.png": [
+   "73b82e8650e684c4ea8d18028704bf0ad08c982087f391e62648acba37b727d1",
+   337699
+  ],
+  "electron/steam-art/icon.png": [
+   "52ff713ed746a8927c89ef8c3c00905c0ecd70dce2a0587175e43704e0df25df",
+   28753
+  ],
+  "electron/steam-art/logo.png": [
+   "76fc719cc6d11a3d912e7a694a72d9df00edbfe7710e3cfd26a0a7152c82b023",
+   104877
+  ],
+  "electron/steam-art/wide.png": [
+   "f41754f28bff1310848b3771c4c1ce87592d8a15101fcbe15835fcd9b6bf6d4d",
+   189792
+  ],
   "electron/steamfriends.cjs": [
    "04d2648d18ab118e25bc6fad2c89a9e1e38005bed847010d78fd025a81f9c7cb",
    4536
+  ],
+  "electron/steamshortcut.cjs": [
+   "e47a31a0199b472ca9b5def6c9e42fd55ef5ae0062ce5416f0cec8cff3105f3b",
+   6234
   ],
   "electron/steamtune.cjs": [
    "ebeb9921004c9d82a668779d9fe713c5a7794f68c814b65fcef46d16b9b30c64",
@@ -2087,16 +2111,16 @@
    554
   ],
   "package.json": [
-   "c573b5310ea5a395ae3061cce93d86c66338ac293872210c02f5a12e43aa0809",
+   "d6dce90d4077fcfa765d26f83ba3ccee9fd0bd2028bfdeb815c01147da9499dc",
    345
   ],
   "public/css/style.css": [
-   "27f8a81235b3a4168c44bc2122ce9eafed0c0a845d0564d559e80ba4eab0a891",
-   75076
+   "260276f78c6482c683cb58056c99d9d77639241a97cd1f8fce23a0e8366fe64d",
+   75638
   ],
   "public/index.html": [
-   "9e4128ad9f266d684a3949de2c7583324c61d64f1b9e6cf4a36bbfdd92e17db1",
-   42920
+   "a3a8f7f4447c4f4c6d90e587bbf0997a6601035810f78c4626ff966ad189835a",
+   43219
   ],
   "public/js/a11y.js": [
    "01493123a592d8868fe91a15be7a72b6c8687f8deac62c1aff7898c1aca4b8c3",
@@ -2123,8 +2147,8 @@
    115900
   ],
   "public/js/art.js": [
-   "4e76c62c2226fa51c4ccb4ce7024966ad7f4f9a663ed81af7b7de9ef39eeffbb",
-   91049
+   "c080ff1d5c9b7c4d7bc0ce55f614e79a3e1ebebdcf6cfc5a55299c08c344d1f5",
+   91063
   ],
   "public/js/audio.js": [
    "8ef3cf4615f7b156750f9cc52096868ad6937582e5ea88cb026b6bcf97190370",
@@ -2187,8 +2211,8 @@
    27996
   ],
   "public/js/main.js": [
-   "7e6347c80d3f5de5ac9851aee124ef6089d7552db80afde6262f717555843830",
-   291773
+   "a03ee2b4ffc8f548d0da355caf8eecc8a881592f4063230cb971ca1d3f3d7132",
+   293636
   ],
   "public/js/net.js": [
    "d415f683a93c1c3320d56977ba98fe00506efc8dacc6d989f8826a6d8c86a2de",
@@ -2211,32 +2235,32 @@
    27697
   ],
   "public/js/patchnotes.js": [
-   "c726f0c8fc28a47c6002465435081ab5c3ab417f893b1fda586b553cbc6fbcbd",
-   3571
+   "589123a43a0b11698e8a6802ed5602f2d21906fdca5a3e9dde58ccb5dad31b68",
+   4727
   ],
   "public/js/physics.js": [
    "967a5160bf233a9f4b18abffed3adec65974568ad243ce7117d75e995cf26216",
    17929
   ],
   "public/js/post.js": [
-   "866a0a7bd8eab1bee43cf419162cd8ce8881d69bc5a34fe3c614f2ee8292154f",
-   10712
+   "26dbbdae1d4875239c72b3442cd57208336d4926aba58c4b6781d63e91bb74a6",
+   18006
   ],
   "public/js/render.js": [
-   "153543c620dd2b9844ecf5be3305177ecd91856c567b396b02d2c03cdf033ad4",
-   259808
+   "066b6b5ed22569124422f43acd900c1a81fc3d8a90bbc32e110780c5ae72fc91",
+   261522
   ],
   "public/js/rt.js": [
-   "27da677421fb6d539b91c04feda574eb9ace7f57f74c99b37cceda721eeb4ecc",
-   9646
+   "68f0d19eb699b5354e1e85708e3623fe01797c728db60d260b3e644b35cb9741",
+   10124
   ],
   "public/js/scenery.js": [
    "14b0030fd9ea016b658179f9d5b43f770af21d249268300b5b39264435e3ff6c",
    30454
   ],
   "public/js/settings.js": [
-   "61d5fc8a2df405258433f6576cbb8ebf785d6843c49c11136ad7952c907d9707",
-   8662
+   "cf1f52a3aa8cddeffc351f272f2ff31ac69f8a0261cfa2d941b6970249a0e143",
+   8715
   ],
   "public/js/side.js": [
    "b9a3915b6085365e0ffadc8a589603a70ade68d62383e425f04b9695afeac523",
@@ -2247,8 +2271,8 @@
    17528
   ],
   "public/js/sim.js": [
-   "4584f7d6f0650d98eb2b590b2ce990ffc9ae5f6708c15de08f2940ca9055961f",
-   267971
+   "61b7ab02281f24cd6a87b7d1b36ff4d24e0f939f616cf06c0dccaaf8ea0384bc",
+   268471
   ],
   "public/js/slop.js": [
    "9dc85c181fa4b81008b22eeb11ad788a5774e5e7f4526200377d6ec34d6f9932",

@@ -180,7 +180,7 @@ function setRmodTag(id) {
   el.classList.toggle('hidden', !m); if (m) { el.textContent = '✦ ' + t(m.name); el.title = t(m.text); }
 }
 // ---- v1.2.15 kill cam: the last few seconds of views are kept; when the host says the round ended on a kill
-// (roundEnd e.kc), the 2 s around the winning kill are replayed from the killer's eyes, then the round splash.
+// (roundEnd e.kc), the 2 s around the winning kill are replayed from the killer's view (v1.2.17: e.kc.v), then the round splash.
 const KC = { buf: [], death: null, dur: 2000, lead: 330 };
 const kcCopy = o => { const c = { ...o }; for (const k in c) { const v = c[k]; if (v && typeof v === 'object' && !Array.isArray(v)) c[k] = { ...v }; } return c; };
 const kcMode = () => duelMode() && S.matchSettings.mode !== 'brawl' && !S.matchSettings.side && settings.killCam !== false;
@@ -207,11 +207,12 @@ function kcFrame(dt) {
   let i = 0; while (i < K.frames.length - 1 && K.frames[i + 1].t <= at) i++;
   const f = K.frames[i], v = f.players.find(p => p.id === K.k);
   if (!K.popped && at >= K.dt) { K.popped = true; const r = rosterOf(K.p); renderer.burst(K.d.x, K.d.y, K.d.z, r.color, 48, 11); renderer.deathPop(K.d.x, K.d.y, K.d.z, r.color || '#fff', true); sound.play('kill', 0.9); sound.play('slowmo', 0.6); }
-  const rs = renderer.settings, keep = [rs.view, renderer.yaw, renderer.pitch];
-  if (v && v.aim) { const a = v.netAim || v.aim; renderer.yaw = Math.atan2(a.x, a.z); renderer.pitch = Math.asin(Math.max(-1, Math.min(1, a.y || 0))); }
-  rs.view = 'first';
+  // v1.2.17 (Devin): from the winner's own view: first person, over the shoulder, or the overhead view (bots: overhead)
+  const rs = renderer.settings, keep = [rs.view, rs.ots, renderer.yaw, renderer.pitch], fpv = K.v === 'first' || K.v === 'shoulder';
+  if (fpv && v && v.aim) { const a = v.netAim || v.aim; renderer.yaw = Math.atan2(a.x, a.z); renderer.pitch = Math.asin(Math.max(-1, Math.min(1, a.y || 0))); }
+  rs.view = fpv ? 'first' : 'third'; rs.ots = K.v === 'shoulder';
   renderer.update({ ...S.view, players: f.players, bullets: f.bullets }, K.k, dt);
-  [rs.view, renderer.yaw, renderer.pitch] = keep;
+  [rs.view, rs.ots, renderer.yaw, renderer.pitch] = keep;
   if (K.t >= K.span) kcEnd(true);
 }
 function kcEnd(splash) {
@@ -779,7 +780,7 @@ function gatherInput(local) {
     crouch: !blocked && held('crouch'),   // open world: sneak
     use: !blocked && held('use'),         // extraction: hold on a fallen teammate to revive them
     reload: !blocked && held('reload'),   // v1.2.15 Blood Volley: hold Reload
-    blockSeq: I.blockSeq, reloadSeq: I.reloadSeq, useSeq: I.useSeq, jumpSeq: I.jumpSeq, shotSeq: I.shotSeq, ready: I.ready, rot: I.rot, aim: aim ? aim.aim : null, aimPoint: aim ? aim.aimPoint : null, fp,
+    blockSeq: I.blockSeq, reloadSeq: I.reloadSeq, useSeq: I.useSeq, jumpSeq: I.jumpSeq, shotSeq: I.shotSeq, ready: I.ready, rot: I.rot, aim: aim ? aim.aim : null, aimPoint: aim ? aim.aimPoint : null, fp, ots: fp && !!settings.ots,
   };
 }
 
@@ -1848,7 +1849,7 @@ function predWorld(s) {
 function peerNeutral() {
   if (!S || !S.inGame || S.role !== 'peer' || !S.net || S.amon) return;
   const q = S.inQ = (S.inQ || 0) + 1, w = { q, mx: 0, mz: 0, blockSeq: I.blockSeq, reloadSeq: I.reloadSeq, useSeq: I.useSeq, js: I.jumpSeq, ss: I.shotSeq };
-  if (I.ready) w.ready = I.ready; if (I.rot) w.rot = I.rot; if (settings.view === 'first') w.fp = 1;
+  if (I.ready) w.ready = I.ready; if (I.rot) w.rot = I.rot; if (settings.view === 'first') { w.fp = 1; if (settings.ots) w.ots = 1; }
   if (S.dec) w.a = S.dec.ack(); w.t = Math.round(performance.now());
   S.net.send({ t: 'toHost', msg: { k: 'input', i: w } });
   (S.inHist ||= []).push({ q, t: performance.now(), mx: 0, mz: 0, jump: false, js: I.jumpSeq });
@@ -1871,7 +1872,7 @@ function peerFrame(dt) {
     // v1.0.1: rounded and with the false / zero fields left out, an input is about half the bytes
     const r = (v, k) => Math.round(v * k) / k, w = { q: inp.q, mx: r(inp.mx, 1000), mz: r(inp.mz, 1000) };
     if (inp.blockSeq) w.blockSeq = inp.blockSeq; if (inp.reloadSeq) w.reloadSeq = inp.reloadSeq; if (inp.useSeq) w.useSeq = inp.useSeq;   // (v1.2.9: counters only once they've started; missing = 0 on the host)
-    for (const f of ['drop', 'jump', 'dash', 'shoot', 'block', 'crouch', 'use', 'reload', 'fp']) if (inp[f]) w[f] = 1;
+    for (const f of ['drop', 'jump', 'dash', 'shoot', 'block', 'crouch', 'use', 'reload', 'fp', 'ots']) if (inp[f]) w[f] = 1;
     if (inp.jumpSeq) w.js = inp.jumpSeq; if (inp.shotSeq) w.ss = inp.shotSeq;
     if (inp.ready) w.ready = inp.ready; if (inp.rot) w.rot = inp.rot;
     if (inp.aim) w.aim = { x: r(inp.aim.x, 1000), y: r(inp.aim.y, 1000), z: r(inp.aim.z, 1000) };
@@ -2251,6 +2252,18 @@ function showPatches(i = 0) {
   el.classList.remove('hidden');
 }
 $('patchBtn').onclick = () => { sound.play('ui'); showPatches(0); };
+// v1.2.17 Add to Steam (desktop app): adds the game to the Steam library with its artwork (electron/steamshortcut.cjs)
+if (window.steamBridge && window.steamBridge.addToSteam) {
+  $('steamAddBtn').classList.remove('hidden');
+  $('steamAddBtn').onclick = async () => {
+    const b = $('steamAddBtn'), m = $('steamAddMsg'); sound.play('ui');
+    b.disabled = true; m.classList.remove('hidden'); m.textContent = t('Adding to Steam… (Steam closes and opens again if it is running)');
+    let r; try { r = await window.steamBridge.addToSteam(); } catch (err) { r = { ok: false, error: String(err && err.message || err) }; }
+    b.disabled = false;
+    m.textContent = r && r.ok ? (r.restarted ? t('Added! Steam is starting again; Blockshot 3D is in your library.') : t('Added! Start Steam and Blockshot 3D is in your library.')) : t("Couldn't add it: ") + ((r && r.error) || '?');
+    setTimeout(() => m.classList.add('hidden'), 12000);
+  };
+}
 // v1.2.16 Suggestions (title screen, next to the Patch list): saved by category on this PC and uploaded to the suggestions
 // repo, or a filled-in GitHub issue opens when there's no key (electron/suggest.cjs; the browser version uses the local server)
 let sgCat = 'bug';
@@ -2541,7 +2554,7 @@ function handleEvent(e) {
         break;
       }
       if (S.matchSettings.core && !mine) { banner('The core is destroyed!', '#ff6a4a', 3); sound.play('roundLose'); break; }   // v28
-      if (e.kc && kcMode() && KC.death && KC.death.p === e.kc.p) { S.kcWait = { at: performance.now() + KC.lead + 60, k: e.kc.k, p: e.kc.p, w: e.w, mine }; break; }   // v1.2.15 kill cam
+      if (e.kc && kcMode() && KC.death && KC.death.p === e.kc.p) { S.kcWait = { at: performance.now() + KC.lead + 60, k: e.kc.k, p: e.kc.p, v: e.kc.v, w: e.w, mine }; break; }   // v1.2.15 kill cam
       if (duelMode()) {   // v1.2.0: slow motion and a zoom on the winning kill, then the round splash in the winner's color
         slowMo(1.25); sound.play('slowmo', 0.8);
         const d = S.lastDeath; if (d) renderer.punch(d.x, d.y, d.z, 1.7);
@@ -3807,10 +3820,13 @@ function gfxTick(ms) {
 // v1.2.6: in-match load guard. When frames stay slow (average over 24 ms for 3 s) the picture drops to a lower resolution
 // for a while (0.15 at a time, down to 0.6; never saved), and comes back after 10 s under 18 ms. Most useful on the host,
 // whose frame rate everyone's match depends on. Off with the Custom graphics preset; reset when the match ends.
-const LG = { ema: 16.7, k: 1, hi: 0, lo: 0, at: 0 };
+// v1.2.17: it used to see-saw (Devin: ray tracing "drops to 40, creeps back up to 60", again and again): back at full
+// resolution the frames were slow again, so it dropped again. Now it waits 20 s before trying a higher resolution, and
+// a resolution that turned slow again within 15 s of coming back is not tried again this match (LG.cap).
+const LG = { ema: 16.7, k: 1, hi: 0, lo: 0, at: 0, cap: 1, upAt: 0 };
 function loadGuard(ms, now) {
   const on = !!(S && S.inGame) && settings.gfxPreset !== 'custom' && !document.hidden;
-  if (!on) { if (LG.k !== 1) { LG.k = 1; if (renderer.setLoadScale) renderer.setLoadScale(1); } LG.hi = LG.lo = 0; LG.ema = 16.7; return; }
+  if (!on) { if (LG.k !== 1) { LG.k = 1; if (renderer.setLoadScale) renderer.setLoadScale(1); } LG.hi = LG.lo = 0; LG.ema = 16.7; if (!(S && S.inGame)) { LG.cap = 1; LG.upAt = 0; } return; }
   ms = Math.min(Math.max(ms, 0), 100);
   const cap = +settings.fpsCap || 0, floor = cap ? 1000 / cap : 0;   // a frame cap is not slowness
   LG.ema += (ms - LG.ema) * (1 - Math.exp(-ms / 250));
@@ -3818,8 +3834,10 @@ function loadGuard(ms, now) {
   LG.lo = LG.ema < Math.max(18, floor + 2) ? LG.lo + ms : 0;   // 18: a 60 Hz screen (16.7 ms frames) can recover too
   if (now - LG.at < 3000 || !renderer.setLoadScale) return;
   let k = LG.k;
-  if (LG.hi >= 3000 && k > 0.6) k = Math.max(0.6, Math.round((k - 0.15) * 100) / 100);
-  else if (LG.lo >= 10000 && k < 1) k = Math.min(1, Math.round((k + 0.15) * 100) / 100);
+  if (LG.hi >= 3000 && k > 0.6) {
+    if (now - LG.upAt < 15000) LG.cap = Math.min(LG.cap, k - 0.01);   // just came up to this and it's slow again: stay below it
+    k = Math.max(0.6, Math.round((k - 0.15) * 100) / 100);
+  } else if (LG.lo >= 20000 && k < 1 && k + 0.15 <= LG.cap) { k = Math.min(1, Math.round((k + 0.15) * 100) / 100); LG.upAt = now; }
   if (k === LG.k) return;
   LG.k = k; LG.at = now; LG.hi = LG.lo = 0;
   renderer.setLoadScale(k);

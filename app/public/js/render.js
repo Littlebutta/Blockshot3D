@@ -48,7 +48,7 @@ function mergeInto(B, geo, mats, x, y, z, cast) {
 export class Renderer {
   constructor(container, opts = {}) {
     // Native MSAA can only be chosen when the canvas is created; other AA modes switch live (see applyGraphics).
-    this.ctxMSAA = !opts.aa || opts.aa === 'msaa';
+    this.ctxMSAA = !opts.aa || opts.aa === 'msaa' || opts.aa === 'ssaa';
     // v1.2.6: ask for the discrete GPU on dual-GPU laptops / Macs (the desktop app also passes a launch switch)
     const r = this.r = new THREE.WebGLRenderer({ antialias: this.ctxMSAA, powerPreference: 'high-performance' });
     this.loadScale = 1;   // v1.2.6: setLoadScale (frame-time guard in main.js), never saved
@@ -213,7 +213,7 @@ export class Renderer {
     console.warn('[graphics] WebGL was lost and not given back: rebuilt the drawing surface');
   }
   afterGLReset() {
-    if (this.post) { try { this.post.dispose(); } catch { /* lost */ } this.post = null; }
+    if (this.post) { try { this.post.dispose(); } catch { /* lost */ } this.post = null; } this.freeOldPosts();
     this.gfxKey = ''; this.warmSig = null; this.needWarm = true; this.envDirty = true;
     try { this.applyGraphics(); } catch (err) { console.warn('[graphics reset]', err); }
     this.resize();
@@ -240,26 +240,34 @@ export class Renderer {
     if (refl && this.envTex) this.scene.environment = this.envTex;
     this.applyGloss();
     const aa = s.aa || 'msaa';
-    const cfg = { bloom: s.bloom || 'off', ao: !!s.ao || rtOn, ssr: s.reflections === 'ssr', aa, rt: rtOn ? s.raytracing : 'off', upscale };
-    const need = cfg.bloom !== 'off' || cfg.ao || cfg.ssr || rtOn || upscale < 1 || aa === 'fxaa' || aa === 'smaa' || (aa === 'msaa' && !this.ctxMSAA);
+    const cfg = { bloom: s.bloom || 'off', ao: !!s.ao || rtOn, ssr: s.reflections === 'ssr', aa, rt: rtOn ? s.raytracing : 'off', upscale, light: lk < 0.95 };
+    const need = cfg.bloom !== 'off' || cfg.ao || cfg.ssr || rtOn || upscale < 1 || aa === 'fxaa' || aa === 'smaa' || aa === 'msaa8' || ((aa === 'msaa' || aa === 'ssaa') && !this.ctxMSAA);
     const key = need ? JSON.stringify(cfg) : '';
     if (key === this.gfxKey) return;
     this.gfxKey = key;
-    if (this.post) { this.post.dispose(); this.post = null; }
-    if (!need) return;
+    // v1.2.17: the old effect chain is freed only after the new one has drawn a frame. Freeing it first deleted every
+    // shader they share (three drops a shader when nothing uses it any more), so changing one setting compiled the
+    // whole chain again: the big hitch on every small graphics change.
+    const old = this.post; this.post = null;
+    if (old) (this.oldPosts ||= []).push(old);
+    if (!need) { this.freeOldPosts(); return; }
     const ticket = this.postTicket = (this.postTicket || 0) + 1;
     import('./post.js').then(({ buildPost }) => {
       if (ticket !== this.postTicket) return;
       this.post = buildPost(this.r, this.scene, this.camera, { ...cfg, selects: this.reflectMeshes, sun: this.sun });
+      this.freeOldAfter = 2;
       this.needWarm = true;   // v1.2.8: the effect chain loads after the level when it changes: warm up its passes too (skipped if nothing changed)
     }).catch(e => { console.warn('[graphics] post effects unavailable', e); this.gfxKey = ''; });
   }
+  freeOldPosts() { for (const p of this.oldPosts || []) { try { p.dispose(); } catch { /* already gone */ } } this.oldPosts = []; }
   // v1.2.6: drawing-buffer scale. Low / Medium / High cap the pixel count on high-DPI screens (never below the
   // window's own CSS resolution), and the in-match frame-time guard's load scale multiplies on top of everything.
   pixelRatio() {
     const s = this.settings, dpr = Math.min(devicePixelRatio || 1, 2), cap = PIXEL_CAP[s.gfxPreset];
     const base = cap ? Math.min(dpr, Math.max(Math.min(1, dpr), Math.sqrt(cap / Math.max(1, innerWidth * innerHeight)))) : dpr;
-    return base * (UPSCALE[s.upscaler] ? 1 : clamp(+s.renderScale || 1, 0.5, 1)) * this.loadScale;
+    // v1.2.17 supersampling (Anti-aliasing: SSAA): about twice the pixels each way, then scaled down, capped at ~8.3 MP
+    const ss = s.aa === 'ssaa' ? Math.max(1, Math.min(2, Math.sqrt(8.3e6 / Math.max(1, innerWidth * innerHeight)) / Math.max(1, base))) : 1;
+    return base * ss * (UPSCALE[s.upscaler] ? 1 : clamp(+s.renderScale || 1, 0.5, 1)) * this.loadScale;
   }
   applyPixelRatio() {   // true when the ratio changed (canvas and effect targets resized)
     const pr = this.pixelRatio();
@@ -1816,7 +1824,13 @@ export class Renderer {
     if (hairMod) {
       hair = buildSaiyanHair();
       if (tank) { hair.group.position.y = 0.75; hair.group.scale.setScalar(0.8); }
-      else if (model.fit) { hair.group.position.set(0, model.fit.hat[0] - 1.52, model.fit.hat[2] || 0); }   // other characters: sit on their head
+      else if (model.fit && model.fit.hat) {   // other characters: placed and scaled like a hat (fitCosmetics: p' = target + k * (p - anchor))
+        // v1.2.17: it used to drop the hair's own height above the anchor (1.38 of 1.52) and ignore the hat scale, so on
+        // most characters it sat sunk into the body or floated beside the head
+        const [y, k, z] = model.fit.hat, ks = Array.isArray(k) ? k[0] : k || 1;
+        hair.group.position.set(0, y + ks * (1.38 - 1.52), z || 0); hair.group.scale.setScalar(ks);
+        for (const m of hair.bangs || []) m.visible = false;   // (the bangs are cut for the default dome; on other faces they covered the eyes)
+      }
       (tank ? model.root : model.headNode || model.root).add(hair.group);
     }
     for (const m of model.hitMeshes) m.userData.player = v.id;
@@ -3457,18 +3471,20 @@ export class Renderer {
   drawFrame() {
     this.syncParts();
     if (this.post) this.post.render(); else this.r.render(this.scene, this.camera);
+    if (this.freeOldAfter > 0 && --this.freeOldAfter === 0) this.freeOldPosts();
+    else if (!this.post && !this.gfxKey && this.oldPosts && this.oldPosts.length) this.freeOldPosts();
   }
   render() {
     if (this.envDirty && this.level) this.buildEnvProbe();
     // a different camera (e.g. an orthographic one) needs the effect chain rebuilt for it
-    if (this.post && this.post.camera !== this.camera) { this.post.dispose(); this.post = null; this.gfxKey = ''; this.applyGraphics(); }
+    if (this.post && this.post.camera !== this.camera) { (this.oldPosts ||= []).push(this.post); this.post = null; this.gfxKey = ''; this.applyGraphics(); }
     if (this.owCullObjs) owCull(this);
     if (this.needWarm && this.level) {
       // v1.2.6: only when something that changes shaders changed since the last warm-up (compiled shaders stay cached,
       // so warming up again after every round only cost a long frame)
       this.needWarm = false;
       const s = this.settings, sig = [s.lighting, this.rim.visible, this.sun.castShadow, this.r.shadowMap.enabled, this.r.shadowMap.type, !!this.scene.environment,
-        this.scene.fog ? (this.scene.fog.isFogExp2 ? 2 : 1) : 0, this.post ? this.gfxKey : '', this.camera.type, !!s.pillow, s.hiModels !== false].join('|');
+        this.scene.fog ? (this.scene.fog.isFogExp2 ? 2 : 1) : 0, this.post ? 'post' : '', this.camera.type, !!s.pillow, s.hiModels !== false].join('|');   // (v1.2.17: was the whole effect key; the world's shaders only change with the chain on/off)
       if (sig !== this.warmSig) { this.warmSig = sig; try { this.warmUp(); } catch (err) { console.warn('[warm-up]', err); } }
     }
     this.drawFrame();

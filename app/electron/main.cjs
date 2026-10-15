@@ -218,6 +218,12 @@ ipcMain.on('app:newWindow', () => createWindow(false));
 ipcMain.on('app:quit', () => shutdown());
 // v1.2.10: automatic updates (electron/updater.cjs). The game window asks for the state when it loads and gets live status after.
 const updater = require('./updater.cjs');
+// v1.2.17 Add to Steam (electron/steamshortcut.cjs): the packaged game's own .exe, with the artwork in electron/steam-art
+ipcMain.handle('app:addToSteam', () => {
+  if (!app.isPackaged) return { ok: false, error: 'Only the installed game can be added to Steam.' };
+  return require('./steamshortcut.cjs').addToSteam({ exe: process.execPath, artDir: path.join(__dirname, 'steam-art'), openExternal: u => shell.openExternal(u) })
+    .catch(err => ({ ok: false, error: String(err && err.message || err) }));
+});
 // v1.2.16 Suggestions (electron/suggest.cjs)
 const suggest = require('./suggest.cjs');
 ipcMain.handle('app:suggest', async (_e, s) => {

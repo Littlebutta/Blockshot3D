@@ -1239,9 +1239,9 @@ export function buildSaiyanHair() {
     const a = Math.PI * 0.45 + (i / 6) * Math.PI * 1.1;
     spike(0.6 + (i % 2) * 0.15, 0.12, -1.55, a, 0, Math.sin(a) * 0.33, -0.12, Math.cos(a) * 0.33);
   }
-  for (const x of [-0.13, 0.05]) spike(0.3, 0.07, 2.3, 0, 0.3 * Math.sign(x || 1), x, -0.06, 0.36);   // a couple of bangs over the brow
+  const bangs = [-0.13, 0.05].map(x => spike(0.3, 0.07, 2.3, 0, 0.3 * Math.sign(x || 1), x, -0.06, 0.36));   // a couple of bangs over the brow
   g.position.y = 1.38;   // on top of the head dome of the default model; scaling grows up and out from here
-  return { group: g, mat };
+  return { group: g, mat, bangs };
 }
 
 // ---------------------------------------------------------------------

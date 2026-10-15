@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('steamBridge', {
   updateRestart: () => ipcRenderer.send('app:updateRestart'),
   setZoom: k => webFrame.setZoomFactor(Math.max(0.5, Math.min(2, +k || 1))),   // v1.2.16 GUI scale
   suggest: s => ipcRenderer.invoke('app:suggest', s),   // v1.2.16
+  addToSteam: () => ipcRenderer.invoke('app:addToSteam'),   // v1.2.17
   onRefocus: cb => ipcRenderer.on('app:refocus', () => cb()),   // v1.2.16
   onUpdate: cb => { const f = (_e, m) => cb(m); ipcRenderer.on('app:update', f); return () => ipcRenderer.removeListener('app:update', f); },
   readSettings: () => ipcRenderer.sendSync('app:settingsRead'),   // v1.2.11: Documents/Blockshot3D/settings.json
