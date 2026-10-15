@@ -1,6 +1,6 @@
 {
- "version": "1.2.18",
- "built": "2026-10-15T22:02:43.084Z",
+ "version": "1.2.19",
+ "built": "2026-10-15T22:10:53.273Z",
  "files": {
   ".gitignore": [
    "0068ba7ed54e738118cfb5244ca651fe18f44c4ef3e5236241677de513dfaa9d",
@@ -1599,8 +1599,8 @@
    4536
   ],
   "electron/steamshortcut.cjs": [
-   "5573188893177592819d5d0c186b0dd5574310d6c7a4b283eee1ca2f53ae06c6",
-   7922
+   "cbe8f21b7573e6d676e686d4d2739ab2cefa600b46e8e994564f49adf62c7f4e",
+   9602
   ],
   "electron/steamtune.cjs": [
    "ebeb9921004c9d82a668779d9fe713c5a7794f68c814b65fcef46d16b9b30c64",
@@ -2111,7 +2111,7 @@
    554
   ],
   "package.json": [
-   "ca3dc9a36c5275bf46d4c472001f4953da174cd9efdafc773494066fdd661b80",
+   "1fb29c7b27d93f471e7b56e769ac378e37f67fefa4b11e6aeface8e1398304ea",
    345
   ],
   "public/css/style.css": [
@@ -2119,7 +2119,7 @@
    75638
   ],
   "public/index.html": [
-   "bdbd5dee9fdf6e0cadc4780971ac4382f9cebd6dbb83f327a4c29742c237e89a",
+   "16ff13273e3b78e06fec0b3b4d6b5bc58ef4fa4931d729ce3b0c1c15c09fcc2c",
    43219
   ],
   "public/js/a11y.js": [
@@ -2211,8 +2211,8 @@
    27996
   ],
   "public/js/main.js": [
-   "2def28f609853ace5745988f7f74f353208158fc19f65c91e2cf3878aa6ed7be",
-   293652
+   "5c1f7178c9718748b0cac9a31d95fb6e9b45909252f1df6781794cefdfeed762",
+   293941
   ],
   "public/js/net.js": [
    "d415f683a93c1c3320d56977ba98fe00506efc8dacc6d989f8826a6d8c86a2de",
@@ -2235,8 +2235,8 @@
    27697
   ],
   "public/js/patchnotes.js": [
-   "b9fb147e16e86713f847999396813bf791a3475f653ad1ef1d32733211a154d6",
-   5013
+   "099587482ac71e67427cddd964fa1070762317832f5467fc005ba451973ab8cc",
+   5529
   ],
   "public/js/physics.js": [
    "967a5160bf233a9f4b18abffed3adec65974568ad243ce7117d75e995cf26216",

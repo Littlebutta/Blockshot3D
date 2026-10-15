@@ -1,6 +1,14 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.19', date: 'Oct 15', notes: {
+    Fixed: [
+      'Add to Steam: Play said "launch unavailable". The Steam that the button restarted could not launch the game; it now restarts normally. Press Add to Steam once more to fix an existing entry.',
+    ],
+    Changed: [
+      'Pressing Add to Steam again checks the Steam entry (right .exe, folder and artwork) and repairs it, or tells you it is already linked. An entry from a folder the game was moved out of gets pointed at the current one.',
+    ],
+  } },
   { v: '1.2.18', date: 'Oct 15', notes: {
     Fixed: [
       'Add to Steam: it closed Steam and added nothing. The game is now added first, then Steam restarts on its own and shows it with its artwork. Restart Blockshot 3D afterwards so multiplayer reconnects to Steam.',

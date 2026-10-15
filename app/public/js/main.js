@@ -2260,7 +2260,9 @@ if (window.steamBridge && window.steamBridge.addToSteam) {
     b.disabled = true; m.classList.remove('hidden'); m.textContent = t('Adding to Steam…');
     let r; try { r = await window.steamBridge.addToSteam(); } catch (err) { r = { ok: false, error: String(err && err.message || err) }; }
     b.disabled = false;
-    m.textContent = r && r.ok ? (r.restarted ? t('Added! Steam is restarting to show it (about 10-30 seconds). Restart Blockshot 3D afterwards so multiplayer reconnects to Steam.') : t('Added! Start Steam and Blockshot 3D is in your library.')) : t("Couldn't add it: ") + ((r && r.error) || '?');
+    // v1.2.19: pressing it again checks the Steam entry and repairs it (state: added / fixed / ok)
+    const head = r && r.ok ? (r.state === 'ok' ? t('Already in Steam and linked to ') + r.exe + '.' : r.state === 'fixed' ? t('Fixed the Steam entry, it now opens ') + r.exe + '.' : t('Added!')) : '';
+    m.textContent = r && r.ok ? head + ' ' + (r.restarted ? t('Steam is restarting (about 10-30 seconds). Restart Blockshot 3D afterwards so multiplayer reconnects to Steam.') : t('Start Steam and Blockshot 3D is in your library.')) : t("Couldn't add it: ") + ((r && r.error) || '?');
     setTimeout(() => m.classList.add('hidden'), 20000);
   };
 }
