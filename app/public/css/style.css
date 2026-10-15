@@ -420,6 +420,7 @@ details.arena[open] summary{margin-bottom:8px}
 .cdstats{list-style:none;margin:0;padding:0;display:grid;gap:7px;font-size:13px}
 .cdstats li{display:grid;gap:2px;padding-left:9px;border-left:3px solid var(--line)}
 .cdstats li.up{border-left-color:var(--good)} .cdstats li.down{border-left-color:var(--bad)}
+.cdsyn{margin:0 0 6px;padding-left:16px;font-size:13px;display:grid;gap:4px} .cdamp{margin-top:6px;padding-left:9px;border-left:3px solid var(--line);font-size:13px} .cdamp h6{margin:0 0 2px;font-size:13px} .cdamp p{margin:0;line-height:1.4} .cdamp i,section.syn p i{opacity:.75;font-style:normal;font-weight:600}
 .cdstats span{color:var(--muted);line-height:1.4}
 .cdhint{color:var(--muted);font-size:13px;margin:0}
 .stattip{position:fixed;z-index:70;max-width:280px;background:var(--panel-solid);border:1px solid var(--line);border-left:3px solid var(--accent);
@@ -840,6 +841,14 @@ body:not([data-screen="none"]) #rmodTag{display:none}
 #killCam .kcBar{position:absolute;top:18px;left:50%;transform:translateX(-50%);padding:6px 16px;border-radius:6px;background:rgba(10,12,20,.75);color:#fff;font-weight:700;letter-spacing:.08em;font-size:16px}
 #killCam .kcBar>b:first-child{color:#ff5a5a;animation:kcBlink 1s steps(2) infinite}
 @keyframes kcBlink{50%{opacity:.35}}
+/* v1.2.20 replay wipe + replay look (scanlines and a faint red tint) */
+#killCam{background:repeating-linear-gradient(0deg,rgba(0,0,0,.09) 0 2px,transparent 2px 4px),rgba(255,50,50,.035)}
+#kcWipe{position:fixed;inset:0;pointer-events:none;z-index:9;overflow:hidden}
+#kcWipe>div{position:absolute;top:-10%;bottom:-10%;left:-20%;width:140%;transform:translateX(-130%) skewX(-14deg);background:linear-gradient(90deg,#ff4a4a 0 1.5%,#10131c 1.5% 98.5%,#ff4a4a 98.5%);display:flex;align-items:center;justify-content:center}
+#kcWipe span{transform:skewX(14deg);color:#fff;font-weight:800;font-size:44px;letter-spacing:.3em}
+#kcWipe.go>div{animation:kcWipe .48s cubic-bezier(.6,0,.4,1) forwards}
+@keyframes kcWipe{0%{transform:translateX(-130%) skewX(-14deg)}45%,55%{transform:translateX(0) skewX(-14deg)}100%{transform:translateX(130%) skewX(-14deg)}}
+body:not([data-screen="none"]) #kcWipe{display:none}
 body:not([data-screen="none"]) #killCam{display:none}
 /* v1.2.15 emote and ping wheel */
 #emoteWheel{position:fixed;left:50%;top:50%;width:300px;height:300px;margin:-150px 0 0 -150px;border-radius:50%;background:radial-gradient(circle,rgba(12,15,24,.35) 0 22%,rgba(12,15,24,.72) 23% 70%,transparent 71%);pointer-events:none;z-index:12}

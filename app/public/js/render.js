@@ -2556,6 +2556,12 @@ export class Renderer {
       e.holyShell.visible = !!v.holyShield && v.alive;
       if (e.holyShell.visible && e.holyShell.material.uniforms) e.holyShell.material.uniforms.opacity.value = 0.14 + Math.sin(performance.now() / 250) * 0.04;
     }
+    // v1.2.20 Gun Nest: a small shield on whoever mans the turret (hits on it hurt the turret)
+    if (v.mount && !e.nestShell) { e.nestShell = buildShieldBubble(0.95, 0x9fd8ff); e.nestShell.position.y = 0.75; e.root.add(e.nestShell); }
+    if (e.nestShell) {
+      e.nestShell.visible = !!v.mount && v.alive;
+      if (e.nestShell.visible && e.nestShell.material.uniforms) e.nestShell.material.uniforms.opacity.value = 0.12 + Math.sin(performance.now() / 300) * 0.03;
+    }
     if (e.model.wings) { const t = performance.now() / 1000; for (const w of e.model.wings.children) w.rotation.y = w.userData.side * (0.35 + Math.sin(t * 7) * 0.35); }
     if (v.kind === 'angel' && v.alive && Math.random() < 0.15) this.mote(v.pos.x + (Math.random() - 0.5) * 0.6, v.pos.y + 0.3, v.pos.z + (Math.random() - 0.5) * 0.6);
   }
@@ -2706,11 +2712,14 @@ export class Renderer {
         m.scale.set(b.r * 0.85, b.r * 0.85, b.r * 1.35); if (v) m.lookAt(m.position.x + v.x, m.position.y + v.y, m.position.z + v.z);
         m.position.y += Math.sin(age * 40 + b.id) * 0.03;
         this.beeParts(m, age);
+        // v1.2.20 (Devin): bees chasing you turn red (on your screen only)
+        const hunt = !!b.tgt && b.tgt === this.localId;
+        if (m.userData.hunt !== hunt) { m.userData.hunt = hunt; m.material.color.set(hunt ? '#ff2e2e' : '#ffd23a'); }
       } else if (m.userData.fx === 'squid') {   // Squid: squashes and stretches with each stroke
         const v = b.vel, sp = v ? Math.hypot(v.x, v.y, v.z) : 0, k = Math.min(1, sp / 13);
         m.scale.set(b.r * (1.5 - 0.5 * k), b.r * (1.5 - 0.5 * k), b.r * (1 + 1.2 * k)); if (v && sp > 0.1) m.lookAt(m.position.x + v.x, m.position.y + v.y, m.position.z + v.z);
         if (m.userData.c !== b.color) { m.material.color.set(b.color); m.userData.c = b.color; }   // (a blocked squid changes owner)
-        this.squidArms(m, k, b.id, b.color);
+        this.squidArms(m, k, b.id, b.color, b.r);
       }
       else {
         m.scale.setScalar(b.r); if (!m.userData.fx && m.userData.c !== b.color) { m.material.color.set(b.color); m.userData.c = b.color; }
@@ -2761,7 +2770,7 @@ export class Renderer {
     if (!mat) { mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color || '#c46bff').multiplyScalar(0.8) }); cache.set(color, mat); }
     return mat;
   }
-  squidArms(m, k, id, color) {
+  squidArms(m, k, id, color, r = 0.2) {
     const want = !!this.settings.hiModels;
     let arms = m.userData.arms;
     if (!want) { if (arms) { m.remove(arms); m.userData.arms = null; } return; }
@@ -2784,9 +2793,13 @@ export class Renderer {
     } else if (arms.userData.c !== color) {   // owner changed: recolor the tentacles
       arms.userData.c = color; const mat = this.squidArmMat(color); arms.traverse(o => { if (o.isMesh) o.material = mat; });
     }
+    // v1.2.20 (Devin: tentacles didn't scale with bullet size): they already grew with the body, but stayed short and thin
+    // next to a big one; now they also get longer and thicker as Bullet size grows (up to 2x at the largest size)
+    const g = clamp(Math.pow(Math.max(0.1, r) / 0.2, 0.45), 1, 2);   // (on each root, so they stay attached to the body)
     const t = performance.now() / 1000;
     for (let i = 0; i < 6; i++) {
       const root = arms.userData.list[i], a = root.userData.a, spread = 0.75 - 0.55 * k;
+      root.scale.set(g, g, g * 1.15);
       // flare outward from the body's axis, then each joint curls a little more, in a travelling wave
       root.rotation.set(-Math.sin(a) * spread, Math.cos(a) * spread, 0);
       let seg = root.children[0], s = 0;
