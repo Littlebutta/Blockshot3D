@@ -1,6 +1,6 @@
 {
- "version": "1.2.13",
- "built": "2026-10-15T05:29:25.187Z",
+ "version": "1.2.15",
+ "built": "2026-10-15T07:17:58.932Z",
  "files": {
   "README.md": [
    "093714591df80a725b8f8ed50b1914d19f7ae06f20854c059bf8906ceedd6226",
@@ -198,6 +198,22 @@
    "016e5f0793306a0b55a3236830e87b557457ac6e36eff7a4506a54d2ead59c6c",
    487
   ],
+  "cards/afterimage/art.png": [
+   "b3909af08c0373d73fdf7de556f3307de71c92b07eee7b6414bba4088fc6a0ae",
+   19627
+  ],
+  "cards/afterimage/card.json": [
+   "6039f2eb98a0688ab05349b2049688da79f77633614950ddb36c88a433debcf1",
+   458
+  ],
+  "cards/ammo-leech/art.png": [
+   "f431edd379428d41b3eae6884b5ce9a460876b24d344547a00a570df9d40b6c4",
+   26021
+  ],
+  "cards/ammo-leech/card.json": [
+   "2df9018f240faa3dde13d07855bd08d2c13096c003704440c119de0d97a3a4fa",
+   433
+  ],
   "cards/arc-rounds/art.png": [
    "9addf2dc690f109a22c517204199c4aaa3f170911898c8ec87f51614405acab2",
    10374
@@ -205,6 +221,22 @@
   "cards/arc-rounds/card.json": [
    "d45788e918ced50c6a12fef04b1f6d8fcd3f899f289bce8a81f07fcbd91a860b",
    349
+  ],
+  "cards/ascension-core/art.png": [
+   "d39183c9e671861a9bf3791cd7fe7b453a3cb4a10c58fcade5b9457b8feec7b5",
+   8944
+  ],
+  "cards/ascension-core/card.json": [
+   "31b046dd2d4f83c539b2f787e4070a8f00fca4731c2a4f58dcf066f316584c06",
+   495
+  ],
+  "cards/backpedal-boots/art.png": [
+   "58bb5b78bee94b5ca148e09c34e61b50cccc38727b93b3b29653eddb2885cdec",
+   19897
+  ],
+  "cards/backpedal-boots/card.json": [
+   "b8d8dccdaa38ff37735d2754d66014e6aca147ecd5ea2bc98786e63b16c216d6",
+   636
   ],
   "cards/bank-shot/art.png": [
    "fc45f127f4ac4d6e3f95563586a18c44da8f80e205e3641685a28285566a6b3b",
@@ -229,6 +261,14 @@
   "cards/battering-ram/card.json": [
    "c205eaf5d6e4aab927d21dcc8c20f606886e2ff27ab1cfcd26d5055573ff80aa",
    586
+  ],
+  "cards/battle-rhythm/art.png": [
+   "b43789e875a293e9592b27af5e85cb3604ee6f8c33cedac79dd5951170a277a3",
+   18452
+  ],
+  "cards/battle-rhythm/card.json": [
+   "3d9a7a8964f6f31eac145c6051ceee13f7be29c9b6ee6f1b734588c912ddd7ec",
+   479
   ],
   "cards/bees/art.png": [
    "4f1620f32922c5859c6f60afac30c28c81d979e64962ea38ca23e9dd48694716",
@@ -262,6 +302,14 @@
    "d70e82b0b4459736875052a1376737f2f5f982c39530bb7af1fcb943464e26d3",
    567
   ],
+  "cards/blood-volley/art.png": [
+   "2c576b8e447891c65b58511ac1634d17664a3e21c9d9308f0ddca1505fab10d4",
+   42487
+  ],
+  "cards/blood-volley/card.json": [
+   "9d811c6a32a70036ba7be11872e7f5344aa61455dd201765ef28ca31fc006a88",
+   554
+  ],
   "cards/bloodforge/art.png": [
    "1a1b81c8ecca8a32368c171df5ffec6585a7d0a563969320888d0755679e6272",
    14638
@@ -269,6 +317,14 @@
   "cards/bloodforge/card.json": [
    "aed82801a63f8eac392917fe49df43047f4dd89e27c0644a1b0a1c25a5959e5e",
    371
+  ],
+  "cards/bounty-mark/art.png": [
+   "80cb0db2ecc257b9a32a6e8cd17167edab990945b45d1cf87fc232b8cd99c959",
+   20642
+  ],
+  "cards/bounty-mark/card.json": [
+   "af359a04ee82cfdb93e957339acb5f42e39aad2464be836a296fdc4b09f55774",
+   463
   ],
   "cards/bulk-up/art.png": [
    "6266259a032db02229eaafb1f000bf34612e2bbba4b9ede3b73bf8cd9fab8f3e",
@@ -310,6 +366,22 @@
    "9df301c3e6f4d500644dc4efe5dedc5acceca8fff9c0c4f6586ab0363e687f87",
    608
   ],
+  "cards/chain-encore/art.png": [
+   "e67f7e8e0f6860ee62870e743064b83aa001b0cb82126ed69eb028e515654f1e",
+   27136
+  ],
+  "cards/chain-encore/card.json": [
+   "e49669abc8c9c612c10f96630a38fe1fbea82f75700ac3d97cab380ad2965f10",
+   528
+  ],
+  "cards/cold-barrel/art.png": [
+   "c9562dd42f41f1188cf41f6ca71b056d3d8877f93ad952f598147764a526ce90",
+   16634
+  ],
+  "cards/cold-barrel/card.json": [
+   "9ee84a223314bce402445fcdf76f50cc34a3040dba5522a621b08160bc74b2d3",
+   447
+  ],
   "cards/concrete-barrier/art.png": [
    "9e6b22bedbe44ade5410bc1ee09571b856a1069803040a8199e8bd8b6deb293a",
    7626
@@ -325,6 +397,14 @@
   "cards/counter-pulse/card.json": [
    "067d9abc10c9523d16db5a6787e1607e5ee60c9c79d283aaf44c4990705a7576",
    372
+  ],
+  "cards/crescendo/art.png": [
+   "c337829e2e864979327f61c387bbe0ea23b43fdb0973f9625a8c6c201406b017",
+   19413
+  ],
+  "cards/crescendo/card.json": [
+   "c41f3b8c5f6bfc5f8210f4f3a5805d2f22ef036e76cf6a3ff0156d5f85a50dd4",
+   536
   ],
   "cards/curse-eater/art.png": [
    "22ed9b349e722832423c64464fcd6d6eed8384d9294c6e0253ac569c6690154e",
@@ -390,6 +470,14 @@
    "e45a7069563cbc8c889cd0b27dafc9d56f1533cee9819397b53108cf62906e94",
    335
   ],
+  "cards/featherweight/art.png": [
+   "70a3487886f5dd33ca1e0f194cd0659221fc16e5f03c4c5a67efec269e077b76",
+   22770
+  ],
+  "cards/featherweight/card.json": [
+   "bd026e5a380728066a69a41b324d827ed0660559be7cc297a3efe150772d024a",
+   606
+  ],
   "cards/field-medic/art.png": [
    "9129eb957e2e7e7a35b0f86dc027cde2c07f644500c09b08ce734e48a87f7f6f",
    7430
@@ -430,6 +518,30 @@
    "291d78211133dcd31eab066d4d12a0188dcf2a6e315e2f64fc2ac809e71807d2",
    339
   ],
+  "cards/gamblers-mag/art.png": [
+   "36f32588b4e3a56370a13119d322815796b036053ed4aef96925f9e3a3c9deab",
+   29632
+  ],
+  "cards/gamblers-mag/card.json": [
+   "a37e6522c89b515fe41aa2559f49dac27062753f06cb70a68709898f98246e4f",
+   485
+  ],
+  "cards/gilded-phoenix/art.png": [
+   "07c0acaf2031e1d61a13ce4c5ce9a5a8330d7ce3c13f94b0beaedd2dd03d955e",
+   29028
+  ],
+  "cards/gilded-phoenix/card.json": [
+   "d0fedccc829c467e25234f52114f8f50e93a11752988a2fcd5af930568a47622",
+   583
+  ],
+  "cards/gilded-shell/art.png": [
+   "792ae5172b2f41f80926c841c75e47591a4896fd1fa3fb44c8930ba6174ef263",
+   30493
+  ],
+  "cards/gilded-shell/card.json": [
+   "cbca8b9653c072a99daed9a9c3aa39807a0990c70e5379b579af6973bb64ee6f",
+   525
+  ],
   "cards/glass-core/art.png": [
    "9644a0f704bd2030cf20b918c5aac54fbddf541a1ea37fb765260b29add07d84",
    21854
@@ -437,6 +549,22 @@
   "cards/glass-core/card.json": [
    "c8eb685a25fa56bb5f845c198a9c33e071c0129d784d3cc4f1b6ffc79ace346d",
    356
+  ],
+  "cards/gravity-well/art.png": [
+   "7e5ac53db1b34a576b865d5b05e7d1f188e609feeb55241ff5bebcda3b93a6c3",
+   71416
+  ],
+  "cards/gravity-well/card.json": [
+   "59eef9689b75d1542bc6f50c041102189cbf85af1487082c1f64dbe9979d49a8",
+   475
+  ],
+  "cards/ground-pound/art.png": [
+   "b8d54a997783e96970811fd15cdb8d99f6607f74b1763d732ec5cc77ffbb2c6b",
+   16764
+  ],
+  "cards/ground-pound/card.json": [
+   "72d933871a24929582e1e45af87efd68255c35b4a8e3b19de36b22e11753203b",
+   505
   ],
   "cards/guided-meteor/art.png": [
    "56e1a6967c0f5bdfa9d6de56de51c771fda33a0cd917bab340ea1b8ca9d572ca",
@@ -494,6 +622,14 @@
    "7373da6c9a7e02fe2eaa64aa8200a4f134f6308406d4f2685db9b5c7aa51bfe0",
    462
   ],
+  "cards/implosion-rounds/art.png": [
+   "2e52ae15139fd8d9d00e8e98da834c47aa742a9503219a946eb162249dd13042",
+   74282
+  ],
+  "cards/implosion-rounds/card.json": [
+   "95a403ea5557aebe16f7eb32f5e85da4f6814109cfbd7c7e8fb246687a7c81b1",
+   555
+  ],
   "cards/incendiary-rounds/art.png": [
    "13bc3aeab8512388cd38a9adc180ff513d5ddd9183aad37d4ce1e0cbcfe64ada",
    22111
@@ -518,6 +654,14 @@
    "b8a42f2a93f2d19b8582f3de0c8472d24ac6d02977b65e5280fbe12562ad9e15",
    369
   ],
+  "cards/jackhammer/art.png": [
+   "97a1d106dc4bbf393b69c1090f596788788c1712794a605d75e32e14fc8982d4",
+   10437
+  ],
+  "cards/jackhammer/card.json": [
+   "99a9e8ee85f87fe455f9015ec4811090288cab66ad0613edef7eb18f4324e914",
+   555
+  ],
   "cards/kinetic-rebound/art.png": [
    "9a7a54a71085cac598e03492db0600f03a0c356252b1238b9319ac9d9ed61e63",
    20588
@@ -526,6 +670,14 @@
    "5c9367ef4cdf18d56614fa8ed5bf7288a293420de3be0fcc80a6972188cb6c9a",
    342
   ],
+  "cards/last-stand-rig/art.png": [
+   "951c46068b89ea420c813a8cdb2c6686e3c42a3edcdedf3c0eca477b340eb25d",
+   25890
+  ],
+  "cards/last-stand-rig/card.json": [
+   "b4e7b8cfa98764db8c0e7faa64e1d7dc505df91cd3c61bc07cf7a5aa7a200b71",
+   475
+  ],
   "cards/leech-rounds/art.png": [
    "ef504c7cb70bf5b94d2345662df9a28cfaea9e16f4d929a83a57b063e99bb4f0",
    12033
@@ -533,6 +685,14 @@
   "cards/leech-rounds/card.json": [
    "be9b02a18e913e6deb96efb6112553219ca94bbd350ba6a2a09c91b23df74e99",
    274
+  ],
+  "cards/light-frame/art.png": [
+   "5da4dd425ef25014270bacb5585355e033f026d51843cda969ed371d2a92f84c",
+   25785
+  ],
+  "cards/light-frame/card.json": [
+   "30b99ce1847fa73b78ec85da774d0dbe307c27f8ffd786ea2d47fef80b9508aa",
+   554
   ],
   "cards/long-guard/art.png": [
    "84a26032d4cf26001c2ea5521494b71ab78dbc6f767814621f206c36d85a5a3e",
@@ -654,6 +814,14 @@
    "d7fc96f02df80fd593fcfadb83346f7f468999ab90246fc2b3a2bd7c5fb94961",
    632
   ],
+  "cards/mod-squad-caller/art.png": [
+   "c95d93e8117115cb6eacdccce28337527d0eaf064900439a1caeec7c65fce3ae",
+   14505
+  ],
+  "cards/mod-squad-caller/card.json": [
+   "3199fa9195e63c4ca22ab470a67dfd35f9c8e062d65e269e58ec243acbc8cf71",
+   550
+  ],
   "cards/nanite-repair/art.png": [
    "67036e0a4a0b3a191e3799417d124ea63d167a15dc2aae095e4c7194af50e9aa",
    27176
@@ -669,6 +837,14 @@
   "cards/napalm-rounds/card.json": [
    "18e5b374301ef8619a4b8d4b1aaba2453eea6a8b90b2a4b776ca927b6997896a",
    552
+  ],
+  "cards/opening-salvo/art.png": [
+   "ec09e5edd8d0815110c1b4bbe597e38cd3928b6d6f3c14cf85f6f7ec777c951f",
+   22196
+  ],
+  "cards/opening-salvo/card.json": [
+   "0937e53ed65d774fa928cd7649b51479dd8599f1332ea0904cec7fbd11d4798d",
+   466
   ],
   "cards/orbital-drop/art.png": [
    "feeeb168157f491024e26a708e1f8ff80fb453c87549784fff055489006a28c2",
@@ -686,6 +862,22 @@
    "96d753399e40acc736cfc3a21f36468613ec9c535cea7c94501ef0de13ec0580",
    341
   ],
+  "cards/overdrive-core/art.png": [
+   "d88edce76d1b3064bef29b61d146850a306b41e663914bdfba6f6bdaffd2958e",
+   25247
+  ],
+  "cards/overdrive-core/card.json": [
+   "df73912be8ca22ef42d6c5f81304d3d68fed175a4303f055441e285bf909898f",
+   603
+  ],
+  "cards/overpen-rounds/art.png": [
+   "08c9adeec43dc7587947ed7b4e190f726c9ee458f75e19e9310e0d0575deadde",
+   14724
+  ],
+  "cards/overpen-rounds/card.json": [
+   "99a410c84bfe87bb0817ef978f1e5f8ecc6b8d82c947783795fa14a483aeae20",
+   474
+  ],
   "cards/overture/art.png": [
    "f2cbb7144234e64c0ee8c6251f3f70ec8b63e2541bf439f28c12e1d778cbf502",
    19097
@@ -701,6 +893,30 @@
   "cards/padded-vest/card.json": [
    "4db673aadcb181706e18ccd6bd1c7ed9a74e0a9c50ac65f364957d8e82a5a0a1",
    267
+  ],
+  "cards/patient-hunter/art.png": [
+   "d7a324bca7f0fdd381ebff22bc63d372493b2f9c627f8e20edeeba565d349a7f",
+   14437
+  ],
+  "cards/patient-hunter/card.json": [
+   "55b9aeeda5281381894e7ff5bc4b19fbe774585b17d67480591211a4a15add95",
+   567
+  ],
+  "cards/payback/art.png": [
+   "60bab88f7bdb57e0b34ebc71708abb2689afcade0ab5214b4cba889df8cecb55",
+   20578
+  ],
+  "cards/payback/card.json": [
+   "64ab0b31f3dd0948ba2be033ccae0d08808f4a67f55d556be7a5ec3358a548e7",
+   399
+  ],
+  "cards/perfect-parry/art.png": [
+   "44de5e6067160b5382e4dacad273a8400e8f60268db6bf17bd52de59b547c878",
+   23725
+  ],
+  "cards/perfect-parry/card.json": [
+   "e83ddffabe744bc14374401d6d889db79895aefca3726d053c7f1d0a33f55983",
+   455
   ],
   "cards/phase-step/art.png": [
    "3c21a846bcd0da8b096b94e188c131d03b5d035c38aa3948ffb1c8a26c56df6a",
@@ -733,6 +949,14 @@
   "cards/plague-doctor/card.json": [
    "d5c3316ae34b43b82091ce55f70383e0341fc5757a75c068d1d7551dbbcfbf9a",
    651
+  ],
+  "cards/pressure-stack/art.png": [
+   "14e3a90721b4f9668cc7c837346c98c29cf90adaeaa17c687da116f48228ab2b",
+   19384
+  ],
+  "cards/pressure-stack/card.json": [
+   "1c13cf5e22510d49d291f08fdf5c541583cdfa9e05caf9d0866584cc2a0370da",
+   558
   ],
   "cards/quick-guard/art.png": [
    "bdd58f0dc4b7711158bee7b3ef19ac2e0d3cf71d105356ab7f590ce9c447d489",
@@ -822,6 +1046,14 @@
    "06e997f059d4bf615bfd71bf4af689c8d3b220f9c1c6229d59b3c76aa055b786",
    356
   ],
+  "cards/riposte/art.png": [
+   "35bb79c114a3f6c5cce479fdf252cb70e5217789631668f35f8778d6fea54546",
+   23934
+  ],
+  "cards/riposte/card.json": [
+   "35f8271d6b5a6b272e1ee92d98126df4b115b92f4afa09da7ce4f8b4259e0130",
+   476
+  ],
   "cards/rolling-thunder/art.png": [
    "a460e92f60832d4156811b724b29ea4dbda9fedb1ced81961c1ea3ae3b770278",
    17305
@@ -829,6 +1061,14 @@
   "cards/rolling-thunder/card.json": [
    "88ebaaba64793d6be86e1222267064b506cc611af6b626e6176b8cb240acd1c8",
    523
+  ],
+  "cards/running-gun/art.png": [
+   "20cb7a51372419badd56c8ec764311877620d31bfbef4fd301c33549b36a8f74",
+   11407
+  ],
+  "cards/running-gun/card.json": [
+   "fb088f402c34d16bc1b2e97c7f9a6b618b446f42b3d636c57272bdde383b456e",
+   362
   ],
   "cards/sanctuary/art.png": [
    "d0a559c4e7463204e1e29fdc039c6dce2408854691a23bb6f948c4538efa0e2a",
@@ -950,6 +1190,14 @@
    "dd37185ba3be58a12c9ab49ef41e16db5673e54016b86b4a020725016018597d",
    793
   ],
+  "cards/shield-purge-pulse/art.png": [
+   "cee77cd32102592f188d8dc98b4a092452edf8f66670061c052bbf26933404b0",
+   75964
+  ],
+  "cards/shield-purge-pulse/card.json": [
+   "5de4a668163a9408b6b6d563de7679b83607f078cacb6d371614bb1155022484",
+   567
+  ],
   "cards/shield-rewind/art.png": [
    "64ec468ff18de47596fbb69483a5264c08e60b3b5bddea8421e56b79974e1651",
    18251
@@ -966,6 +1214,14 @@
    "74cea1b63589a9f87b98f93cde44ccc7fddca0351c5159e3898c917b567d0176",
    1466
   ],
+  "cards/shield-scorched-floor/art.png": [
+   "b7d419b19cd1fbab2f8994fa607b95dd140f37f0dc35f9c666393cedfea2b8e5",
+   34629
+  ],
+  "cards/shield-scorched-floor/card.json": [
+   "65f12178eee09bd83faca64c1cc3543549c7c77612222cc4e680b195a3966f16",
+   571
+  ],
   "cards/shield-slam/art.png": [
    "8ded014b40b208a095a225a9466cb163d3d6efcb3802722fd14120de12486b5f",
    26855
@@ -981,6 +1237,14 @@
   "cards/shield-spaceking/card.json": [
    "0636a5f5e3fa699edfa32630a4b1479e63824d3b7181fa072228c119e547acf0",
    1214
+  ],
+  "cards/shield-swap-shot/art.png": [
+   "3a4d421f337f79234f847870e5a49d8182616b92684dfd14289c72f6e5cc0519",
+   34840
+  ],
+  "cards/shield-swap-shot/card.json": [
+   "4bfee8a3ab8ca4350bbbf9317beac48e4411e9b68df2addea69ca63cbfa45a87",
+   474
   ],
   "cards/shield-turret/art.png": [
    "0d5f3a8cc725c2a7208e9ac372ba3ab94801e975e041fb818b959729d7597b3e",
@@ -1014,6 +1278,14 @@
    "70be76a823ab743d55c3a50dd397b1f25b7f187129464cd71d8c660755676472",
    576
   ],
+  "cards/snare-plate/art.png": [
+   "c5e7d4c4526fd6221d0b2336c57a7b1b85e8a84dd5738920f9dd08a1cddcce8a",
+   20306
+  ],
+  "cards/snare-plate/card.json": [
+   "01a9cb0ac3b038d703f7a814f770aabb6dea62b4821b43e05f8360669739ffe6",
+   472
+  ],
   "cards/speed-loader/art.png": [
    "732b95ec9f2bf0f4d52f8e0d8cb3d538c0df25bd190b7b7515d4d7b643f9261a",
    17413
@@ -1021,6 +1293,14 @@
   "cards/speed-loader/card.json": [
    "53e6acd1efdf8930ac850bf1f5c091ef4ad53c96f4d9a78af581978cb016db59",
    396
+  ],
+  "cards/spite-charge/art.png": [
+   "99fd5868da60d0f2c268bca058d8b39cc4dd9d1030d7701ee4ecee97455621b0",
+   26168
+  ],
+  "cards/spite-charge/card.json": [
+   "d6244f4ec8ccf843dff9f0ca6ef3105f10f7d52ff6d3caec35a87acd3ab7f110",
+   419
   ],
   "cards/splinter-bounce/art.png": [
    "2d59189e1edb11c846e44c28969763e7d9ab2afa4bca22813719b8af27b53ed3",
@@ -1110,6 +1390,14 @@
    "fb167347fa0258fd682d7d155e371a5623384e0c93846b54bdf961b230742802",
    477
   ],
+  "cards/tight-chamber/art.png": [
+   "27f956c79a6cb648caba8e8201094b616ae96b890e554cbcf6f62149c95a26c8",
+   35068
+  ],
+  "cards/tight-chamber/card.json": [
+   "df8ad7d264e55dd19bbaffc5a6755594f605ea3460c9dfec80f95cb318087bf9",
+   476
+  ],
   "cards/tiny-tank/art.png": [
    "c78671ede44c56e88497afdc5bb20b989e50bc3658b692f6ef2f68abc02b3280",
    9664
@@ -1141,6 +1429,14 @@
   "cards/toxic-cloud/card.json": [
    "0088bae76afea1dcd0936aa7281472981c14118650867bf35d12937d495462ea",
    626
+  ],
+  "cards/trappers-kit/art.png": [
+   "4df509809cc8aae0f25265f8a24a6da1779c5ec551369d125d1414f0361bfdda",
+   12684
+  ],
+  "cards/trappers-kit/card.json": [
+   "19677d30c077f044896d85b2f5d0032c403057bb38fc043b8a0885c998f08728",
+   541
   ],
   "cards/trick-shot/art.png": [
    "2f3d7a2564cdf2752d6e2ab6c3a2f01f2fb38d5ad6ab76bb92c0f7fbdb502f49",
@@ -1783,16 +2079,16 @@
    554
   ],
   "package.json": [
-   "b41cdcbe8161e13e5a16b8e1455d670b8f0d86383885d5c923a925e361c7de44",
+   "f0e75119b303b0e65f8d9eaaead3383a1f70416302559928b9ac985edd278840",
    345
   ],
   "public/css/style.css": [
-   "dcc2a6590468d8087adc0d6b40faaa434e990cde2747b8be3aa68f9fea9bbda9",
-   67238
+   "ccdb666108ac2006c49f8eb6b137b46e42c90b8c546f20dff7d8d1e02ff5bf18",
+   69700
   ],
   "public/index.html": [
-   "841673b1cfeb92a1a082dab99f056c62a25581ad2aaf8e00b70fb7dbbf19d2bb",
-   40092
+   "fd267f00da5255ac144404eea23267fbb3c6fdc0df263d9993ae99161d6bc86d",
+   40879
   ],
   "public/js/a11y.js": [
    "01493123a592d8868fe91a15be7a72b6c8687f8deac62c1aff7898c1aca4b8c3",
@@ -1839,12 +2135,12 @@
    8569
   ],
   "public/js/cards.js": [
-   "0ef7333172516e45fda83796ff7d80bb77cfc481686659708d78ee209ac85f12",
-   13326
+   "50da45b3454e917aba4b271e20d4ce96a880605a633a15d2103f2185972b93e5",
+   13476
   ],
   "public/js/config.js": [
-   "941078857640016abf44c3ccb49a7f1e75ca35ea74876118f2a7cb7a6f5e9b0d",
-   27829
+   "9790a08dca3bee1dcd256c88dc047ef2eba7fc7021e1795c0252f5eda198ae91",
+   35483
   ],
   "public/js/coop.js": [
    "9282d7cdc1bf3eb0ee1708719083a3a8adca2a71c6c7248e6f63b21dea9b4400",
@@ -1879,12 +2175,12 @@
    24659
   ],
   "public/js/levelgen.js": [
-   "93d88e42354b29488365dcf8f28eed5d22adf1fab9d934350d51fa1de0285f04",
-   24265
+   "df3694e253d3faaf95f32279e11a865318332fb0add744ba5fa96f544a2d161b",
+   27996
   ],
   "public/js/main.js": [
-   "c192e6c0903f6e6d9185f466a4aca03cfd16cf558f97651afe28672260d830f1",
-   268926
+   "acfc2853621a67c6c22cdfbf27cf685ee26948ed7f0d0d45cf1d36c3caf77541",
+   286275
   ],
   "public/js/net.js": [
    "d415f683a93c1c3320d56977ba98fe00506efc8dacc6d989f8826a6d8c86a2de",
@@ -1915,8 +2211,8 @@
    10712
   ],
   "public/js/render.js": [
-   "db1bd2eb2921878339bfa85d24c1e17126f1a94b5217c635c16a182ed8a517ba",
-   241244
+   "a5c93d46bfed75779f723730c966fa99e36508b4c636422a56c3f78bae40c5d2",
+   255372
   ],
   "public/js/rt.js": [
    "27da677421fb6d539b91c04feda574eb9ace7f57f74c99b37cceda721eeb4ecc",
@@ -1927,8 +2223,8 @@
    30454
   ],
   "public/js/settings.js": [
-   "cc38d93f603872354207f2cfd3a08033b4c5d400a8cd93d7ca30753fd0015c79",
-   8321
+   "53605443d87e2d31755b19f803a432a0d5f6321542eded17f39542d74a6a5894",
+   8591
   ],
   "public/js/side.js": [
    "b9a3915b6085365e0ffadc8a589603a70ade68d62383e425f04b9695afeac523",
@@ -1939,8 +2235,8 @@
    17528
   ],
   "public/js/sim.js": [
-   "e0b018c9cf27c99f3ea12c1ac495eb7c8103a3776ce6d08d2681b644b86be7ee",
-   235559
+   "4584f7d6f0650d98eb2b590b2ce990ffc9ae5f6708c15de08f2940ca9055961f",
+   267971
   ],
   "public/js/slop.js": [
    "9dc85c181fa4b81008b22eeb11ad788a5774e5e7f4526200377d6ec34d6f9932",
@@ -1949,6 +2245,10 @@
   "public/js/synergy.js": [
    "c2b156aaa3ecf3372be874ff68ae32ec96ef8b91c99f50b1154eff390a6bbf8e",
    4432
+  ],
+  "public/js/traps.js": [
+   "46fe5084a54ec5c34b8fcbff75ea00b84676c073c9d60a0a3d92ae39ebb8aea5",
+   2175
   ],
   "public/js/unitart.js": [
    "eeb879705512e83721bb02e1085f66aa9971316709a502fa0babc2d07b6abd18",
@@ -1991,8 +2291,8 @@
    14800
   ],
   "tools/card-art.py": [
-   "9985ef767aecb55a37aa67964f002d10d620c141cafd197e6fa568bf75f42a40",
-   65646
+   "9fb998dfba550ad0cb8ba56eafab86f31523747619f4f4253d47cf74f610f668",
+   77806
   ],
   "tools/codecfuzz.mjs": [
    "2d077d825c8748e3f184e51a9d2f53fa0495f4bca9ce5cd90d8f4f9971a518ad",
@@ -2003,8 +2303,8 @@
    2280
   ],
   "tools/simtest.mjs": [
-   "134f6e6e9db37f7b52b8bbe9d5f03a2f5c7777154d64d54512b0bc3774f4d7ba",
-   125721
+   "ded2a20463ff984dd14fdd67b28e64cab74d6278842656ffd3536657497f017f",
+   150861
   ],
   "tools/trim-build.cjs": [
    "f14cc62bb2ab8633c47b31e660b4a38c3774977e6e95d099f8a71b9b6c4d288d",

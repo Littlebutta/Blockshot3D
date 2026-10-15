@@ -1,0 +1,16 @@
+{
+  "id": "perfect-parry",
+  "name": "Perfect Parry",
+  "rarity": "rare",
+  "icon": "✨",
+  "description": "A block started within 0.15 s of a bullet reaching you deletes the bullet, refunds your block cooldown and flashes white.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "parry",
+      "op": "add",
+      "value": 0.15
+    }
+  ],
+  "details": "Later in the block, bullets bounce back as usual. Extra copies widen the timing window."
+}

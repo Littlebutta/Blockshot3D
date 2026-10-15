@@ -1,0 +1,18 @@
+{
+  "id": "shield-purge-pulse",
+  "name": "Purge Pulse",
+  "rarity": "shieldmod",
+  "icon": "💥",
+  "description": "Hold block for 3 s, then release to destroy every wall, turret, mine, critter and summon within 15 m, yours included. Once per round.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "purge",
+      "op": "add",
+      "value": 15
+    }
+  ],
+  "details": "A tap still blocks as usual. You can't move while charging; let go early and the charge drains back. Core Defense builds are left alone.",
+  "shieldMod": "purge",
+  "variants": true
+}

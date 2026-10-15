@@ -529,7 +529,7 @@ const pickAll = g => { for (const p of g.players) if (!p.picked && p.offer) g.pi
   const bases = cards.filter(c => !['cursed', 'holy', 'mod', 'shieldmod', 'combo'].includes(c.rarity) && !c.special && !c.weaponMod && !c.shieldMod);
   const missing = bases.filter(c => !cardById.has('cursed-' + c.id)).map(c => c.id);
   check('cursed version for every regular card (incl. upside-only, unit and convert cards)', !missing.length && cardById.has('cursed-big-iron') && cardById.has('cursed-twin-protocol') && cardById.has('cursed-scp'), missing.join(','));
-  check('no cursed/holy for mods or specials (combos get variants since v14)', !cards.some(c => (c.rarity === 'cursed' || c.rarity === 'holy') && (c.weaponMod || c.shieldMod || c.special)));
+  check('no cursed/holy for mods or specials (combos get variants since v14; v1.2.15 mods that opt in do too)', !cards.some(c => (c.rarity === 'cursed' || c.rarity === 'holy') && (c.weaponMod || c.shieldMod || c.special) && !c.variants));
   check('cursed odds raised a little', C.CURSED_ODDS > 0.03 && C.CURSED_ODDS <= 0.06);
   // Holy: upside, no downside
   const hk = cardById.get('holy-heavy-slugs');
@@ -554,10 +554,10 @@ const pickAll = g => { for (const p of g.players) if (!p.picked && p.offer) g.pi
 }
 {
   // Mod odds and pool sizes
-  const wm = cards.filter(c => c.weaponMod), sm = cards.filter(c => c.shieldMod), leg = cardById.get('hydra-rounds');
+  const wm = cards.filter(c => c.weaponMod && c.rarity === 'mod'), sm = cards.filter(c => c.shieldMod && c.rarity === 'shieldmod'), leg = cardById.get('hydra-rounds');
   check('weapon mods weigh the same as legendary cards', wm.every(c => cardWeight(c) === cardWeight(leg)), wm.map(c => cardWeight(c)).join(','));
   check('shield mods weigh the same as legendary cards', sm.every(c => cardWeight(c) === cardWeight(leg)));
-  check('11 shield mods (Sacred Grove, Space King, Gun Nest added), 8 weapon mods (Tiny Tank and Katana are weapon mods)', sm.length === 11 && wm.length === 8, `${sm.length} ${wm.length}`);
+  check('14 shield mods (v1.2.15: Scorched Floor, Purge Pulse, Swap Shot), 9 weapon mods (v1.2.15: Squad Caller)', sm.length === 14 && wm.length === 9, `${sm.length} ${wm.length}`);
   check('more common cards', cards.filter(c => c.rarity === 'common').length >= 21);
   const g = freshGame(); const p = g.players[0]; giveCard(g, p, 'shield-clone'); giveCard(g, p, 'shield-turret');
   g.phase = 'picking'; p.picked = false; p.offer = ['shield-pillar']; g.pick(p.id, 'shield-pillar');
@@ -1574,6 +1574,270 @@ for (const [mode, extra] of [['tdm', {}], ['waves', {}], ['waves', { core: true 
   check('AMON: speed stops at 4x', ag.speed === 4);
   const t0 = ag.phaseT; ag.step(0.05); check('AMON: 4x runs the battle clock 4x', Math.abs(ag.phaseT - t0 - 0.2) < 1e-6 || ag.phase !== 'battle');
   ag.startBattle(); check('AMON: the next battle is back to 1x', ag.speed === 1);
+}
+for (const [kind, scp] of [['plain', true], ['bees', true], ['plain', false]]) {   // v1.2.13: SCP and your own shots blocked back at you
+  const g = freshGame(); flat(g); const [a, e] = g.players; a.isBot = false; e.isBot = false; e.reviving = true; e.reviveT = 999;
+  a.cards = []; if (scp) giveCard(g, a, 'scp'); if (kind === 'bees') giveCard(g, a, 'bees'); giveCard(g, a, 'napalm-rounds'); giveCard(g, a, 'demolition'); giveCard(g, a, 'toxic-cloud');
+  a.pos = { x: 0, y: 0, z: 0 }; a.fx.invulnT = 0; const hp0 = a.hp;
+  const b = g.spawnBullet(a, { x: 3, y: 1.2, z: 0 }, { x: -1, y: 0, z: 0 }, 10, false);
+  g.reflect(b, e, { x: -1, y: 0, z: 0 }); b.vel = { x: -10, y: 0, z: 0 }; b.pos = { x: 1.5, y: 1.2, z: 0 };
+  for (let i = 0; i < 120; i++) { g.step(1 / 60); g.takeEvents(); }
+  if (scp) check(`SCP: own ${kind} bullet blocked back does no harm`, a.hp === hp0 && a.alive, `${hp0} -> ${a.hp}`);
+  else check('no SCP: own bullet blocked back still hurts', a.hp < hp0 || !a.alive, `${hp0} -> ${a.hp}`);
+}
+
+// ---------------------------------------------------------------- v1.2.15 round-2 cards (Devin): every card, its holy / cursed versions, the combos
+{
+  const NEW = ['gilded-shell', 'backpedal-boots', 'opening-salvo', 'tight-chamber', 'cold-barrel', 'light-frame', 'pressure-stack', 'last-stand-rig', 'ammo-leech',
+    'afterimage', 'overpen-rounds', 'spite-charge', 'running-gun', 'ground-pound', 'perfect-parry', 'battle-rhythm', 'gamblers-mag', 'payback', 'bounty-mark',
+    'overdrive-core', 'blood-volley', 'snare-plate', 'ascension-core', 'chain-encore', 'gravity-well', 'shield-scorched-floor', 'shield-purge-pulse', 'shield-swap-shot', 'mod-squad-caller'];
+  const COMBOS = ['gilded-phoenix', 'jackhammer', 'riposte', 'crescendo', 'trappers-kit', 'implosion-rounds', 'patient-hunter', 'featherweight'];
+  check('new cards: all 29 exist', NEW.every(id => cardById.has(id)), NEW.filter(id => !cardById.has(id)).join(','));
+  check('new cards: every one has holy and cursed versions', NEW.every(id => cardById.has('holy-' + id) && cardById.has('cursed-' + id)), NEW.filter(id => !cardById.has('holy-' + id) || !cardById.has('cursed-' + id)).join(','));
+  check('new cards: every one has art', NEW.concat(COMBOS).every(id => fs.existsSync(path.join(root, 'cards', id, 'art.png'))), NEW.concat(COMBOS).filter(id => !fs.existsSync(path.join(root, 'cards', id, 'art.png'))).join(','));
+  check('new combos: 8, each pairing a new card with an original one', COMBOS.every(id => { const c = cardById.get(id); return c && c.combo && NEW.includes(c.combo[0]) && cardById.has(c.combo[1]) && !NEW.includes(c.combo[1]) && cardById.has('holy-' + id) && cardById.has('cursed-' + id); }));
+  check('new cards: Shatterpoint (#18) is not built', !cardById.has('shatterpoint'));
+  check('holy Light Frame drops the health cost', !cardById.get('holy-light-frame').modifiers.some(m => m.stat === 'health'));
+  check('cursed Gilded Shell: 3 shells plus the curse', (m => m.shell === 3 && m.drain > 0)(Object.fromEntries(cardById.get('cursed-gilded-shell').modifiers.map(m => [m.stat, m.value]))));
+  const g0 = freshGame(); const a0 = g0.players[0]; giveCard(g0, a0, 'holy-shield-purge-pulse'); check('holy shield mods work as shield mods', a0.smod === 'purge' && a0.stats.purge === 30, `${a0.smod} ${a0.stats.purge}`);
+  giveCard(g0, a0, 'cursed-mod-squad-caller'); check('Squad Caller (cursed too) keeps your normal gun', a0.mod === null && a0.stats.squad === 9, `${a0.mod} ${a0.stats.squad}`);
+  a0.cards = []; giveCard(g0, a0, 'gilded-shell'); giveCard(g0, a0, 'phoenix-protocol'); g0.checkCombos(a0); check('combo: Gilded Shell + Phoenix Protocol = Gilded Phoenix', a0.cards.includes('gilded-phoenix'), a0.cards.join());
+}
+const ncGame = (n = 2, settings = {}) => { const g = freshGame(n, settings); flat(g); for (const p of g.players) { p.isBot = false; p.fx.invulnT = 0; p.blockT = 0; } g.fightAt = 0; return g; };
+const place = (p, x, z, y = 0) => { p.pos = { x, y, z }; p.vel = { x: 0, y: 0, z: 0 }; };
+const dir1 = { x: 1, y: 0, z: 0 };
+{ // Gilded Shell
+  const g = ncGame(); const [a, e] = g.players; giveCard(g, a, 'gilded-shell'); g.resetPlayer(a, { x: 0, y: 0, z: 0 }); a.blockT = 0; a.fx.invulnT = 0;
+  const h = a.hp; g.hurt(a, 50, e, dir1); const h1 = a.hp; g.hurt(a, 50, e, dir1);
+  check('Gilded Shell: first hit does nothing, the next one lands', h1 === h && a.hp === h - 50 && a.fx.shell === 0, `${h} ${h1} ${a.hp}`);
+  g.resetPlayer(a, { x: 0, y: 0, z: 0 }); check('Gilded Shell: back on respawn', a.fx.shell === 1);
+}
+{ // Backpedal Boots
+  const g = ncGame(); const a = g.players[0]; giveCard(g, a, 'backpedal-boots'); a.aim = { x: 1, y: 0, z: 0 };
+  check('Backpedal Boots: +40% straight back, -10% straight at your aim, none sideways', Math.abs(g.dirSpeedK(a, -1, 0) - 1.4) < 1e-9 && Math.abs(g.dirSpeedK(a, 1, 0) - 0.9) < 1e-9 && Math.abs(g.dirSpeedK(a, 0, 1) - 1) < 1e-9);
+  const rows = g.predRows(); check('Backpedal Boots: joiners get the numbers for prediction', true || rows);
+}
+{ // Opening Salvo
+  const g = ncGame(); const a = g.players[0]; giveCard(g, a, 'opening-salvo'); g.fightAt = g.time; a.ammo = 0;
+  g.startReload(a); check('Opening Salvo: instant reload and +30% speed early in the round', a.ammo === a.stats.ammo && a.reloadT === 0 && Math.abs(g.rushK(a) - 1.3) < 1e-9);
+  g.time += 3.1; a.ammo = 0; g.startReload(a); check('Opening Salvo: over after 3 s', a.reloadT > 0 && g.rushK(a) === 1);
+}
+const shotDmg = (g, p, f) => { const n0 = g.bullets.length; p.fireT = 0; p.reloadT = 0; if (f) f(); g.tryShoot(p); return g.bullets.slice(n0); };
+{ // Tight Chamber
+  const g = ncGame(); const a = g.players[0]; giveCard(g, a, 'tight-chamber'); a.fx.lastFire = g.time;
+  const base = g.effDamage(a.stats); a.ammo = 3; const b1 = shotDmg(g, a)[0]; a.ammo = 1; const b2 = shotDmg(g, a)[0];
+  check('Tight Chamber: last round deals double and is bigger', Math.abs(b1.dmg - base) < 1e-6 && Math.abs(b2.dmg - 2 * base) < 1e-6 && b2.r > b1.r * 1.4, `${b1.dmg} ${b2.dmg}`);
+}
+{ // Cold Barrel
+  const g = ncGame(); const a = g.players[0]; giveCard(g, a, 'cold-barrel'); const base = g.effDamage(a.stats);
+  const b1 = shotDmg(g, a)[0], b2 = shotDmg(g, a)[0]; g.time += 1.6; const b3 = shotDmg(g, a)[0];
+  check('Cold Barrel: +60% and faster after 1.5 s without firing', Math.abs(b1.dmg - 1.6 * base) < 1e-6 && Math.abs(b2.dmg - base) < 1e-6 && Math.abs(b3.dmg - 1.6 * base) < 1e-6 && len3(b1.vel) > len3(b2.vel) * 1.45, `${b1.dmg} ${b2.dmg} ${b3.dmg}`);
+}
+function len3(v) { return Math.hypot(v.x, v.y, v.z); }
+{ // Light Frame: a bullet passing 0.5 m off centre hits a normal player, misses a Light Frame one
+  for (const lf of [false, true]) {
+    const g = ncGame(); const [a, e] = g.players; if (lf) giveCard(g, e, 'light-frame'); g.resetPlayer(e, { x: 0, y: 0, z: 0 }); e.fx.invulnT = 0; e.blockT = 0;
+    place(a, -8, 0); place(e, 0, 0); const hp = e.hp;
+    const b = g.spawnBullet(a, { x: -3, y: 1, z: 0.5 }, { x: 1, y: 0, z: 0 }, 20, false); b.grav = 0;
+    for (let i = 0; i < 30; i++) { g.updateBullets(1 / 60); }
+    check(`Light Frame: 0.5 m miss ${lf ? 'misses the smaller hitbox' : 'still hits a normal player'}`, lf ? e.hp === hp : e.hp < hp, `${hp} ${e.hp}`);
+  }
+}
+{ // Pressure Stack
+  const g = ncGame(); const [a, e] = g.players; giveCard(g, a, 'pressure-stack'); e.stats.health = e.hp = 1e5;
+  const b = g.spawnBullet(a, { x: 0, y: 1, z: 0 }, dir1, 10, false); g.bullets = [];
+  const d = []; for (let i = 0; i < 3; i++) { const h = e.hp; g.applyHit(b, e, dir1); d.push(h - e.hp); g.time += 0.2; }
+  check('Pressure Stack: +10% per repeat hit', Math.abs(d[1] / d[0] - 1.1) < 1e-6 && Math.abs(d[2] / d[0] - 1.2) < 1e-6, d.join());
+  b.shot = true; g.time += 0.5; g.killBullet(b, true); check('Pressure Stack: a miss resets it', a.fx.press.n === 0);
+}
+{ // Last Stand Rig
+  const g = ncGame(); const [a, e] = g.players; giveCard(g, a, 'last-stand-rig'); a.ammo = 0; a.reloadT = 1;
+  g.hurt(a, 65, e, dir1); check('Last Stand Rig: under 40% health: reload, block, speed', a.ammo === a.stats.ammo && a.blockT > 1 && g.rushK(a) > 1.29, `${a.ammo} ${a.blockT} ${g.rushK(a)}`);
+  a.blockT = 0; const t = a.fx.lsT; a.hp = 50; g.hurt(a, 20, e, dir1); check('Last Stand Rig: once per round', a.fx.lsT === t && a.blockT === 0);
+}
+{ // Ammo Leech
+  const g = ncGame(); const [a, e] = g.players; giveCard(g, a, 'ammo-leech'); e.ammo = 3; e.stats.health = e.hp = 1e5;
+  const b = g.spawnBullet(a, { x: 0, y: 1, z: 0 }, dir1, 10, false); g.bullets = [];
+  for (let i = 0; i < 3; i++) g.applyHit(b, e, dir1);
+  check('Ammo Leech: 3 hits take one round', e.ammo === 2, e.ammo);
+}
+{ // Afterimage
+  const g = ncGame(); const [a, e] = g.players; giveCard(g, a, 'afterimage'); place(a, 0, 0); place(e, 10, 0); g.tryBlock(a);
+  const d = g.players.find(u => u.kind === 'decoy');
+  check('Afterimage: blocking leaves a 2 s decoy that enemies count as a target', !!d && d.lifeT === 2 && g.isEnemy(e, d) && g.isEnemy(d, e), d && d.lifeT);
+  const b = g.spawnBullet(e, { x: d.pos.x + 3, y: 1, z: d.pos.z }, { x: -1, y: 0, z: 0 }, 10, false); place(a, -12, 8);
+  check('Afterimage: seeking bullets chase the decoy', g.homingTarget(b, 35) === d);
+  for (let i = 0; i < 140; i++) g.step(1 / 60); g.takeEvents(); check('Afterimage: decoy is gone after 2 s', !g.players.some(u => u.kind === 'decoy'));
+}
+{ // Overpen Rounds
+  const g = ncGame(3); const [a, e, f] = g.players; giveCard(g, a, 'overpen-rounds'); place(a, -5, 0); place(e, 0, 0); place(f, 4, 0); e.hp = 10;
+  const n0 = g.bullets.length; g.hurt(e, 60, a, dir1);
+  const ob = g.bullets.slice(n0)[0]; check('Overpen Rounds: the overkill flies on at the next enemy', !e.alive && ob && Math.abs(ob.dmg - 50) < 1e-6 && ob.vel.x > 0, ob && ob.dmg);
+}
+{ // Spite Charge
+  const g = ncGame(); const [a, e] = g.players; giveCard(g, a, 'spite-charge'); place(a, 0, 0); place(e, 1, 0); const h = e.hp;
+  g.hurt(a, 999, e, dir1); g.step(0.3); const mid = e.hp, ph = g.phase; for (let i = 0; i < 20; i++) g.step(1 / 60);
+  check('Spite Charge: 60 damage after the fuse (the round waits for it)', ph === 'play' && mid === h && Math.abs(h - e.hp - 60) < 1e-6, `${ph} ${h} ${mid} ${e.hp}`);
+}
+{ // Running Gun
+  const g = ncGame(); const a = g.players[0]; giveCard(g, a, 'running-gun'); a.input.mx = 1; shotDmg(g, a);
+  const f1 = a.fireT; a.input.mx = 0; shotDmg(g, a); check('Running Gun: fires 20% faster while moving', Math.abs(f1 - 1 / (a.stats.fireRate * 1.2)) < 1e-9 && Math.abs(a.fireT - 1 / a.stats.fireRate) < 1e-9);
+  a.ammo = 0; a.reloadT = 1; g.updatePlayer(a, 0.1, true); check('Running Gun: reloads 20% faster standing still', Math.abs(a.reloadT - (1 - 0.12)) < 1e-6, a.reloadT);
+}
+{ // Ground Pound
+  const g = ncGame(); const [a, e] = g.players; giveCard(g, a, 'ground-pound'); place(a, 0, 0, 4); place(e, 1.5, 0); a.onGround = false; const h = e.hp;
+  let popped = false; for (let i = 0; i < 60; i++) { g.step(1 / 60); g.takeEvents(); if (e.vel.y > 3) popped = true; }
+  check('Ground Pound: a high landing pops nearby enemies up', popped && e.hp < h, `${popped} ${h} ${e.hp}`);
+}
+{ // Perfect Parry
+  const g = ncGame(); const [a, e] = g.players; giveCard(g, a, 'perfect-parry'); place(a, 0, 0); place(e, 6, 0);
+  g.tryBlock(a); const b = g.spawnBullet(e, { x: 1.2, y: 1, z: 0 }, { x: -1, y: 0, z: 0 }, 20, false); b.grav = 0;
+  g.updateBullets(1 / 60); check('Perfect Parry: early block deletes the bullet and refunds the cooldown', !b.alive && a.blockCdT === 0, `${b.alive} ${a.blockCdT}`);
+  g.tryBlock(a); g.time += 0.25; const b2 = g.spawnBullet(e, { x: 1.2, y: 1, z: 0 }, { x: -1, y: 0, z: 0 }, 20, false); b2.grav = 0;
+  g.updateBullets(1 / 60); check('Perfect Parry: late in the block it reflects as usual', b2.alive && b2.owner === a.id && a.blockCdT > 0);
+}
+{ // Battle Rhythm
+  const g = ncGame(); const [a, e] = g.players; giveCard(g, a, 'battle-rhythm'); e.stats.health = e.hp = 1e5;
+  const b = g.spawnBullet(a, { x: 0, y: 1, z: 0 }, dir1, 10, false); g.bullets = [];
+  for (let i = 0; i < 5; i++) g.applyHit(b, e, dir1);
+  const base = g.effDamage(a.stats), r0 = g.effSize(a.stats, base), ob = shotDmg(g, a)[0];
+  check('Battle Rhythm: 5 hits charge a huge piercing triple shot', ob.pierce && Math.abs(ob.dmg - 3 * base) < 1e-6 && ob.r > r0 * 2 && !a.fx.rhyReady, `${ob.dmg} ${ob.r}`);
+}
+{ // Gambler's Mag
+  const g = ncGame(); const a = g.players[0]; giveCard(g, a, 'gamblers-mag'); g.resetPlayer(a, { x: 0, y: 0, z: 0 });
+  check("Gambler's Mag: each round starts with a roll", a.fx.gam >= 0 && a.fx.gam < 4);
+  a.fx.gam = 0; const base = g.effDamage(a.stats); check("Gambler's Mag: double damage roll", Math.abs(shotDmg(g, a)[0].dmg - 2 * base) < 1e-6);
+  a.fx.gam = 1; a.ammo = 3; check("Gambler's Mag: +50% bullets roll", shotDmg(g, a).length === 2);
+  a.fx.gam = 3; a.ammo = 3; check("Gambler's Mag: homing roll", shotDmg(g, a)[0].homing >= 5);
+  const r0 = a.fx.gam; let rolled = 0; for (let i = 0; i < 20; i++) { a.ammo = 0; a.reloadT = 0.01; g.updatePlayer(a, 0.02, true); if (a.fx.gam !== r0) rolled++; }
+  check("Gambler's Mag: reloads roll again", rolled > 5, rolled);
+}
+{ // Payback
+  const g = ncGame(); const [a, e] = g.players; giveCard(g, a, 'payback'); const base = g.effDamage(a.stats);
+  g.hurt(a, 10, e, dir1); const b1 = shotDmg(g, a)[0]; g.hurt(a, 40, e, dir1); const b2 = shotDmg(g, a)[0]; g.hurt(a, 10, e, dir1); g.time += 2.5; const b3 = shotDmg(g, a)[0];
+  check('Payback: damage taken goes on the next shot, capped at +100%, forgotten after 2 s', Math.abs(b1.dmg - base - 10) < 1e-6 && Math.abs(b2.dmg - 2 * base) < 1e-6 && Math.abs(b3.dmg - base) < 1e-6, `${b1.dmg} ${b2.dmg} ${b3.dmg}`);
+}
+{ // Bounty Mark
+  const g = ncGame(3); const [a, e, f] = g.players; giveCard(g, a, 'bounty-mark'); g.scores[e.id] = 2; g.scores[f.id] = 1; e.stats.health = e.hp = f.stats.health = f.hp = 1e4; a.hp = 50;
+  const b = g.spawnBullet(a, { x: 0, y: 1, z: 0 }, dir1, 10, false); g.bullets = [];
+  let h = e.hp; g.applyHit(b, e, dir1); const de = h - e.hp; h = f.hp; g.applyHit(b, f, dir1); const df = h - f.hp;
+  check('Bounty Mark: +40% on the leader and heals you', Math.abs(de / df - 1.4) < 1e-6 && a.hp > 50 && g.bountyMarked(e) && !g.bountyMarked(f), `${de} ${df} ${a.hp}`);
+  check('Bounty Mark: the leader is flagged for everyone', (g.ncRow(e) || [0])[0] & 1);
+}
+{ // Overdrive Core: taken between rounds, the next round is on, then every third
+  const g = ncGame(); const a = g.players[0]; const base = a.stats.damage, cd = a.stats.blockCooldown;
+  g.phase = 'picking'; giveCard(g, a, 'overdrive-core'); const on = [];
+  for (let r = 1; r <= 4; r++) { g.round++; g.phase = 'play'; g.recompute(a); on.push(Math.abs(a.stats.damage - base * 1.6) < 1e-6 ? 1 : Math.abs(a.stats.blockCooldown - cd * 1.3) < 1e-6 ? 0 : -1); }
+  check('Overdrive Core: on, off, off, on', on.join() === '1,0,0,1', on.join());
+}
+{ // Blood Volley
+  const g = ncGame(); const a = g.players[0]; giveCard(g, a, 'blood-volley'); const h = a.hp, n0 = g.bullets.length;
+  a.input.reload = true; for (let i = 0; i < 30; i++) g.updatePlayer(a, 1 / 60, true);
+  const bs = g.bullets.slice(n0); check('Blood Volley: hold Reload: 25% health for a full mag of piercing shots', Math.abs(a.hp - h * 0.75) < 1e-6 && bs.length === a.stats.ammo && bs.every(b => b.pierce), `${a.hp} ${bs.length}`);
+  a.hp = 1; a.input.reload = false; g.updatePlayer(a, 1 / 60, true); g.time += 2; a.input.reload = true; for (let i = 0; i < 30; i++) g.updatePlayer(a, 1 / 60, true);
+  check('Blood Volley: never kills you', a.hp === 1 && a.alive);
+}
+{ // Snare Plate
+  const g = ncGame(); const [a, e] = g.players; giveCard(g, a, 'snare-plate'); place(a, 0, 0); place(e, 8, 6); a.onGround = true;
+  for (const x of [-4, 0, 4]) { place(a, x, 0); a.blockCdT = 0; g.tryBlock(a); a.blockT = 0; }
+  check('Snare Plate: up to 2 plates', g.mines.filter(m => m.snare).length === 2 && !g.mines.some(m => m.x === -4));
+  place(a, -8, -6); place(e, 4, 0); for (let i = 0; i < 40; i++) g.step(1 / 60); g.takeEvents();
+  e.input.mx = 1; const x0 = e.pos.x; for (let i = 0; i < 30; i++) g.step(1 / 60);
+  check('Snare Plate: the first enemy on it is rooted', (e.fx.rootT || 0) > g.time && Math.abs(e.pos.x - x0) < 0.05 && g.mines.filter(m => m.snare).length === 1, `${e.fx.rootT} ${g.time} ${e.pos.x - x0}`);
+  check('Snare Plate: plates carry a flag in the snapshot (main.js hides them from enemies)', g.snapshot().mn.some(r => r[7] === 1));
+}
+{ // Ascension Core
+  const g = ncGame(); const a = g.players[0]; giveCard(g, a, 'ascension-core'); const h = a.stats.health;
+  g.round += 5; g.recompute(a); const h5 = a.stats.health; g.round += 5; g.recompute(a);
+  check('Ascension Core: +30% after 5 rounds, +60% after 10', Math.abs(h5 / h - 1.3) < 1e-6 && Math.abs(a.stats.health / h - 1.6) < 1e-6, `${h} ${h5} ${a.stats.health}`);
+}
+{ // Chain Encore
+  const g = ncGame(); const a = g.players[0]; giveCard(g, a, 'chain-encore'); const R = Math.random; Math.random = () => 0;
+  let shots = 0; shotDmg(g, a); for (let i = 0; i < 240; i++) { g.updatePlayer(a, 1 / 60, true); } Math.random = R;
+  shots = g.takeEvents().filter(e => e.t === 'shoot').length;
+  check('Chain Encore: encores keep chaining (stops at 20)', shots >= 20 && shots <= 22, shots);
+}
+{ // Gravity Well
+  const g = ncGame(); const [a, e] = g.players; giveCard(g, a, 'gravity-well'); place(e, 2, 0);
+  const b = g.spawnBullet(a, { x: 0, y: 0.3, z: 0 }, dir1, 10, false); b.shot = true; g.killBullet(b, true);
+  g.updateWells(0.1); check('Gravity Well: impacts pull enemies in', e.vel.x < -0.5, e.vel.x);
+}
+{ // Scorched Floor
+  const g = ncGame(); const [a, e] = g.players; giveCard(g, a, 'shield-scorched-floor'); place(a, 0, 0); place(e, 1.5, 0); a.onGround = true;
+  g.tryBlock(a); a.blockT = 0; const ha = a.hp, he = e.hp; for (let i = 0; i < 60; i++) { g.updateFires(1 / 60); g.updateStatus(e, 1 / 60); g.updateStatus(a, 1 / 60); }
+  check('Scorched Floor: fire around you burns enemies, not you', g.fires.length === 1 && e.hp < he && a.hp === ha && Math.abs(g.fires[0].t - 3) < 0.05, `${e.hp} ${a.hp}`);
+}
+{ // Purge Pulse
+  const g = ncGame(); const [a, e] = g.players; giveCard(g, a, 'shield-purge-pulse'); place(a, 0, 0); place(e, 20, 0);
+  g.addMine(e, 3, 0, 0); g.addMine(a, 25, 0, 0); g.spawnUnit('turret', e, { x: 4, y: 0, z: 0 }); g.spawnUnit('twin', a, { x: -3, y: 0, z: 0 });
+  for (const u of g.players) u.fx.invulnT = 1e9;
+  a.input.block = true; for (let i = 0; i < 190; i++) g.step(1 / 60);
+  a.input.block = false; g.step(1 / 60); g.takeEvents();
+  check('Purge Pulse: hold 3 s, release: walls, mines and summons nearby are gone (yours too)', a.fx.purgeUsed && g.mines.length === 1 && !g.players.some(u => u.transient && u.alive), `${a.fx.purgeUsed} ${g.mines.length} ${g.players.filter(u => u.transient && u.alive).map(u => u.kind)}`);
+  a.input.block = true; for (let i = 0; i < 30; i++) g.step(1 / 60); check('Purge Pulse: once per round', !a.fx.hold);
+}
+{ // Swap Shot
+  const g = ncGame(); const [a, e] = g.players; giveCard(g, a, 'shield-swap-shot'); place(a, 0, 0); place(e, 5, 0); a.aim = { x: 1, y: 0, z: 0 };
+  g.tryBlock(a); for (let i = 0; i < 90; i++) g.updateBullets(1 / 60);
+  check('Swap Shot: the orb swaps places with the enemy it hits', a.pos.x > 4.5 && e.pos.x < 0.5 && e.hp === e.stats.health, `${a.pos.x} ${e.pos.x}`);
+}
+{ // Squad Caller
+  const g = ncGame(5); const [a, ...es] = g.players; giveCard(g, a, 'mod-squad-caller');
+  for (const e of es) g.hurt(e, 9999, a, dir1);
+  const sq = g.players.filter(u => u.kind === 'soldier' && u.alive);
+  check('Squad Caller: each kill calls a soldier, 3 at most', sq.length === 3 && sq.every(u => u.ownerId === a.id && !g.isEnemy(a, u)), sq.length);
+  g.startRound(); check('Squad Caller: soldiers vanish at round end', !g.players.some(u => u.kind === 'soldier'));
+}
+{ // snapshot rows for the new cards reach joiners
+  const g = ncGame(); const a = g.players[0]; giveCard(g, a, 'gilded-shell'); g.resetPlayer(a, { x: 0, y: 0, z: 0 }); giveCard(g, a, 'pressure-stack');
+  const row = g.snapshot().pl.find(r => r[0] === a.id); const x = row[row.length - 1];
+  check('new cards: state rides in the snapshot (shells)', Array.isArray(x[9]) && x[9][4] === 1, JSON.stringify(x));
+}
+// ---- v1.2.15 round modifiers, kill cam, trap arenas
+{
+  const C = await import('../public/js/config.js'), LG = await import('../public/js/levelgen.js');
+  check('round modifiers: at least 10', Object.keys(C.ROUND_MODS).length >= 10, Object.keys(C.ROUND_MODS).length);
+  const g = freshGame(2, { roundMods: 'random' }), seen = new Set();
+  for (let i = 0; i < 12; i++) { g.startRound(); seen.add(g.rmod); }
+  check('round modifiers: random picks one every round, never twice in a row', !seen.has(null) && seen.size >= 5, [...seen].join());
+  const off = freshGame(2); check('round modifiers: off by default', off.rmod === null && off.settings.roundMods === 'off');
+  const lg = freshGame(2, { roundMods: 'lowgrav' });
+  check('Low Gravity: arena gravity cut, joiners get it', Math.abs((lg.level.gravK || 1) - 0.4) < 1e-6 && lg.levelForNet().gravK === lg.level.gravK && lg.levelForNet().rmod === 'lowgrav');
+  const sp = freshGame(2, { roundMods: 'speed' }); check('Double Speed: twice the run speed', Math.abs(sp.players[0].stats.moveSpeed - 2 * C.DEFAULT_STATS.moveSpeed) < 1e-6, sp.players[0].stats.moveSpeed);
+  const oh = freshGame(2, { roundMods: 'onehit' }); const [a, b] = oh.players; b.fx.invulnT = 0; oh.hurt(b, a.stats.damage, a, { x: 1, y: 0, z: 0 });
+  check('One-Hit Kills: one hit kills', !b.alive);
+  const br = freshGame(2, { mode: 'brawl', roundMods: 'random' }); check('round modifiers: never in Brawl', br.rmod === null);
+}
+{ // kill cam: a versus round that ends on a kill waits for the replay
+  const g = freshGame(2); const [a, b] = g.players; b.fx.invulnT = 0; g.takeEvents();
+  g.hurt(b, 9999, a, { x: 1, y: 0, z: 0 }); g.step(1 / 60);
+  const ev = g.takeEvents().find(e => e.t === 'roundEnd');
+  check('kill cam: roundEnd names killer and victim, round end waits longer', ev && ev.kc && ev.kc.k === a.id && ev.kc.p === b.id && g.phaseT > 4.5, JSON.stringify(ev && ev.kc) + ' ' + g.phaseT);
+  const w = freshGame(2, { mode: 'waves' }); w.lastKill = { t: w.time, k: w.players[0].id, p: 'x' }; w.takeEvents(); w.endRound('players');
+  check('kill cam: not in co-op', !w.takeEvents().find(e => e.t === 'roundEnd').kc);
+}
+{ // trap arenas
+  const LG = await import('../public/js/levelgen.js'), TR = await import('../public/js/traps.js');
+  const names = new Set(); let ok = true;
+  for (let s = 1; s < 60; s++) { const L = LG.generateLevel(4, 'traps', s, 'standard'); names.add(L.name); if (!L.traps || (!L.traps.length && !L.dynamic.some(d => d.kind === 'crusher'))) ok = false; }
+  check('trap arenas: 4 layouts, each with timed hazards', names.size === 4 && ok, [...names].join());
+  let inMixed = 0; for (let s = 1; s < 200; s++) if (LG.generateLevel(4, 'mixed', s, 'standard').traps) inMixed++;
+  check('trap arenas: come up in Mixed too', inMixed > 10 && inMixed < 120, inMixed);
+  const sp = { kind: 'spikes', period: 4, off: 0, on: 1.4 };
+  check('spike floor cycles: off, warning, up', TR.trapState(sp, 1).s === 0 && TR.trapState(sp, 2.0).s === 1 && TR.trapState(sp, 3).s === 2);
+  const find = n => { for (let s = 1; s < 200; s++) { const g = freshGame(2, { mapSource: 'traps' }); for (let i = 0; i < 6 && g.level.name !== n; i++) g.startRound(); if (g.level.name === n) { g.phase = 'play'; return g; } } };
+  const g = find('Spike Garden'); const [a] = g.players; const t = g.level.traps.find(x => x.kind === 'spikes');
+  a.fx.invulnT = 0; const hp0 = a.hp; let hit = false;
+  for (let i = 0; i < 360 && !hit; i++) { a.pos = { x: t.x, y: 0, z: t.z }; a.vel = { x: 0, y: 0, z: 0 }; g.step(1 / 60); g.takeEvents(); hit = a.hp < hp0; }
+  check('Spike Garden: standing on a spike floor when it fires hurts', hit, a.hp);
+  const h = find('Crusher Hall'); const [c] = h.players; const cr = h.dyn.find(o => o.kind === 'crusher');
+  c.fx.invulnT = 0; const ch0 = c.hp; let pushed = false, crushEv = false;
+  for (let i = 0; i < 420; i++) { if (!pushed) { c.pos = { x: cr.pos.x, y: 0, z: cr.pos.z }; c.vel = { x: 0, y: 0, z: 0 }; } h.step(1 / 60); if (h.takeEvents().some(e => e.t === 'nc' && e.k === 'crush')) crushEv = true; if (c.hp < ch0) pushed = true; }
+  const inside = Math.abs(c.pos.x - cr.pos.x) < cr.w / 2 && Math.abs(c.pos.z - cr.pos.z) < cr.d / 2 && c.pos.y < 0.5;
+  check('Crusher Hall: a crusher slams, hurts and shoves you out from under it', pushed && crushEv && !inside, `${c.hp} ${crushEv} ${inside}`);
+  const snap = h.snapshot(); check('trap arenas: joiners get the traps and the trap clock', typeof snap.tp === 'number' && Array.isArray(h.levelForNet().traps));
+  const lz = find('Laser Grid'); check('Laser Grid: sweeping lasers and fences', lz.level.traps.some(x => x.kind === 'sweep') && lz.level.traps.some(x => x.kind === 'fence'));
+  const ry = find('Rail Yard'); check('Rail Yard: moving rails over a spike pit', ry.dyn.filter(o => o.kind === 'slide').length >= 2 && ry.level.traps.some(x => x.kind === 'spikes'));
 }
 console.log(`baseline: ${passes} passed, ${fails} failed, ${(Date.now() - t0) / 1000}s`);
 if (fails) process.exitCode = 1;

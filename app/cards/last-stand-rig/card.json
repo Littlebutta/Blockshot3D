@@ -1,0 +1,16 @@
+{
+  "id": "last-stand-rig",
+  "name": "Last Stand Rig",
+  "rarity": "uncommon",
+  "icon": "🆘",
+  "description": "The first time you drop under 40% health each round, you instantly reload, get a 1.5 s block and move 30% faster for 2 s.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "lastStand",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "details": "It goes off once per round (and once per life). Extra copies give a longer block and a faster rush."
+}

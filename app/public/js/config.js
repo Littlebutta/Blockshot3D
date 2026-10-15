@@ -98,6 +98,38 @@ export const DEFAULT_STATS = {
   squid: 0,             // Squid: bullets swim in pulses toward enemies
   bees: 0,              // Bees: bullets fly at the first enemy they see, around obstacles
   encore: 0,            // Encore: free follow-up shots (no ammo) fired right after each shot (1.5 = one, plus a 50% chance of a second)
+  // ---- v1.2.15 round-2 cards (sim.js "v1.2.15 new cards") ----
+  shell: 0,             // Gilded Shell: hits each round (and life) that do nothing
+  backpedal: 0,         // Backpedal Boots: faster moving away from your aim (fraction)
+  advanceSlow: 0,       // Backpedal Boots: slower moving toward your aim (fraction)
+  salvo: 0,             // Opening Salvo: seconds at the start of each round with +30% speed and instant reloads
+  lastRound: 0,         // Tight Chamber: extra damage on the last round in the mag (1 = double)
+  coldBarrel: 0,        // Cold Barrel: extra damage on a shot after 1.5 s without firing
+  hitScale: 1,          // Light Frame: hitbox size multiplier
+  pressure: 0,          // Pressure Stack: damage per repeat hit on the same target (up to 8 stacks)
+  lastStand: 0,         // Last Stand Rig: strength of the rush when you first drop under 40%
+  ammoLeech: 0,         // Ammo Leech: one of the target's rounds removed every 3 hits per level
+  afterimage: 0,        // Afterimage: seconds the decoy left by a block lasts
+  overpen: 0,           // Overpen Rounds: share of overkill carried on to the next enemy
+  spite: 0,             // Spite Charge: damage of the blast where you die
+  runGun: 0,            // Running Gun: fire rate while moving / reload speed while still (fraction)
+  pound: 0,             // Ground Pound: strength of the landing shockwave
+  parry: 0,             // Perfect Parry: seconds after the block starts in which bullets are deleted
+  rhythm: 0,            // Battle Rhythm: level (5 hits per level 1 charge an overcharged shot)
+  gamble: 0,            // Gambler's Mag: strength of the bonus rolled on every reload
+  payback: 0,           // Payback: damage taken in the last 2 s added to your next shot (cap = this x shot damage)
+  bounty: 0,            // Bounty Mark: extra damage on the round leader
+  overdrive: 0,         // Overdrive Core: extra damage on overdrive rounds
+  overdriveLag: 0,      // Overdrive Core: slower block and reload on the rounds in between
+  bloodVolley: 0,       // Blood Volley: hold Reload to trade health for a fan of piercing shots (level)
+  snare: 0,             // Snare Plate: root seconds
+  ascend: 0,            // Ascension Core: level
+  chainEncore: 0,       // Chain Encore: chance each Encore shot fires another
+  gravWell: 0,          // Gravity Well: pull strength level
+  scorch: 0,            // Scorched Floor shield mod: seconds the fire burns
+  purge: 0,             // Purge Pulse shield mod: radius (m)
+  swapShot: 0,          // Swap Shot shield mod: orb level
+  squad: 0,             // Squad Caller gun mod: soldiers at once
 };
 
 // How stats are shown on cards and kept in sane ranges.
@@ -167,6 +199,38 @@ export const STAT_INFO = {
   scavenge:      { label: 'Reload on health hit', flag: true, min: 0, max: 1 },
   squid:         { label: 'Squid bullets', flag: true, min: 0, max: 1 },
   bees:          { label: 'Bee bullets', flag: true, min: 0, max: 1 },
+  // v1.2.15 round-2 cards
+  shell:         { label: 'Gilded shells', int: true, min: 0, max: 6 },
+  backpedal:     { label: 'Speed moving away from your aim', percent: true, min: 0, max: 2 },
+  advanceSlow:   { label: 'Slower moving toward your aim', percent: true, lowerIsBetter: true, min: 0, max: 0.6 },
+  salvo:         { label: 'Opening rush', suffix: ' s', min: 0, max: 20 },
+  lastRound:     { label: 'Last round damage', percent: true, min: 0, max: 10 },
+  coldBarrel:    { label: 'Cold shot damage', percent: true, min: 0, max: 5 },
+  hitScale:      { label: 'Hitbox size', lowerIsBetter: true, min: 0.5, max: 1.5 },
+  pressure:      { label: 'Damage per repeat hit', percent: true, min: 0, max: 1 },
+  lastStand:     { label: 'Last stand rush', min: 0, max: 6 },
+  ammoLeech:     { label: 'Ammo leech', min: 0, max: 6 },
+  afterimage:    { label: 'Decoy time', suffix: ' s', min: 0, max: 10 },
+  overpen:       { label: 'Overkill carried on', percent: true, min: 0, max: 3 },
+  spite:         { label: 'Death blast damage', min: 0, max: 600 },
+  runGun:        { label: 'Run-and-gun', percent: true, min: 0, max: 1 },
+  pound:         { label: 'Ground pound', min: 0, max: 6 },
+  parry:         { label: 'Parry window', suffix: ' s', min: 0, max: 0.6 },
+  rhythm:        { label: 'Battle rhythm', min: 0, max: 5 },
+  gamble:        { label: 'Reload roll', min: 0, max: 6 },
+  payback:       { label: 'Payback cap', percent: true, min: 0, max: 3 },
+  bounty:        { label: 'Damage to the leader', percent: true, min: 0, max: 3 },
+  overdrive:     { label: 'Overdrive damage', percent: true, min: 0, max: 3 },
+  overdriveLag:  { label: 'Off-round block and reload time', percent: true, lowerIsBetter: true, min: 0, max: 2 },
+  bloodVolley:   { label: 'Blood volley', min: 0, max: 6 },
+  snare:         { label: 'Snare root', suffix: ' s', min: 0, max: 6 },
+  ascend:        { label: 'Ascension', min: 0, max: 6 },
+  chainEncore:   { label: 'Chain Encore chance', percent: true, min: 0, max: 0.9 },
+  gravWell:      { label: 'Gravity pull', min: 0, max: 6 },
+  scorch:        { label: 'Scorched floor', suffix: ' s', min: 0, max: 20 },
+  purge:         { label: 'Purge radius', suffix: ' m', min: 0, max: 40 },
+  swapShot:      { label: 'Swap orb', min: 0, max: 6 },
+  squad:         { label: 'Squad size', int: true, min: 0, max: 9 },
 };
 
 // How often each rarity shows up. Weight is per card: a common card is
@@ -243,6 +307,7 @@ export const DEFAULT_LOBBY_SETTINGS = {
   mapIce: true,          // Mixed: Ice Sheets maps can come up
   combos: true,          // matching card pairs merge into combo cards
   hazards: false,        // random rounds get a hazard event (laser, saws, turret)
+  roundMods: 'off',      // v1.2.15 round modifiers (ROUND_MODS): 'off' | 'random' (a new one every round) | one modifier id
   brawl: false, stocks: 3,   // Brawl mode (brawl.js; the lobby picks it as mode 'brawl'): lives per round
   side: false,           // 2D side view (side.js): flat orthographic camera, ROUNDS-style maps. Every mode except the open world
   commander: false,      // you pick the cards, an AI controls your character
@@ -381,3 +446,23 @@ export function assignColors(players, mode) {
     return hslToHex(hk, Math.min(1, s * (k % 2 ? 0.85 : 1)), Math.max(0.22, Math.min(0.88, lt)));
   });
 }
+
+// v1.2.15 round modifiers: lobby setting roundMods ('off' | 'random' | one id). With 'random', every versus/co-op
+// round rolls one. Each changes every hero's stats for that round (card-style modifiers), 'grav' scales the arena gravity.
+export const ROUND_MODS = {
+  lowgrav:  { name: 'Low Gravity', text: 'Everyone floats: gravity is cut to 40%.', grav: 0.4, mods: [] },
+  bouncy:   { name: 'Bouncy Walls', text: 'Every bullet bounces off walls 3 more times.', mods: [{ stat: 'bounces', op: 'add', value: 3 }] },
+  speed:    { name: 'Double Speed', text: 'Everyone runs twice as fast.', mods: [{ stat: 'moveSpeed', op: 'mul', value: 2 }] },
+  onehit:   { name: 'One-Hit Kills', text: 'Any hit kills. Block or dodge!', mods: [{ stat: 'damage', op: 'mul', value: 25 }] },
+  giant:    { name: 'Giant Bullets', text: 'Bullets are three times bigger.', mods: [{ stat: 'bulletSize', op: 'mul', value: 3 }] },
+  vampire:  { name: 'Vampires', text: 'Damage you deal heals you for 60% of it.', mods: [{ stat: 'lifesteal', op: 'add', value: 0.6 }] },
+  glass:    { name: 'Glass Cannons', text: 'Double damage, 40% health.', mods: [{ stat: 'damage', op: 'mul', value: 2 }, { stat: 'health', op: 'mul', value: 0.4 }] },
+  rapid:    { name: 'Rapid Fire', text: 'Double fire rate, +3 ammo, half reload time.', mods: [{ stat: 'fireRate', op: 'mul', value: 2 }, { stat: 'ammo', op: 'add', value: 3 }, { stat: 'reloadTime', op: 'mul', value: 0.5 }] },
+  boom:     { name: 'Explosive Rounds', text: 'Every bullet explodes.', mods: [{ stat: 'explosive', op: 'add', value: 1 }] },
+  homing:   { name: 'Homing Rounds', text: 'Bullets curve toward enemies.', mods: [{ stat: 'homing', op: 'add', value: 2.5 }] },
+  regen:    { name: 'Regeneration', text: 'Everyone heals 12 health a second.', mods: [{ stat: 'regen', op: 'add', value: 12 }] },
+  heavy:    { name: 'Heavyweights', text: 'Two and a half times the health, a bit slower.', mods: [{ stat: 'health', op: 'mul', value: 2.5 }, { stat: 'moveSpeed', op: 'mul', value: 0.8 }] },
+  moon:     { name: 'Moon Boots', text: 'Jumps go 70% higher.', mods: [{ stat: 'jump', op: 'mul', value: 1.7 }] },
+  sniper:   { name: 'Sniper Duel', text: 'Fast, heavy bullets but slow fire.', mods: [{ stat: 'bulletSpeed', op: 'mul', value: 2.5 }, { stat: 'damage', op: 'mul', value: 1.6 }, { stat: 'fireRate', op: 'mul', value: 0.6 }] },
+  bigmag:   { name: 'Big Mags', text: 'Four times the ammo, quick reloads.', mods: [{ stat: 'ammo', op: 'mul', value: 4 }, { stat: 'reloadTime', op: 'mul', value: 0.4 }] },
+};

@@ -1,0 +1,16 @@
+{
+  "id": "tight-chamber",
+  "name": "Tight Chamber",
+  "rarity": "common",
+  "icon": "🔩",
+  "description": "Your last round in the mag deals double damage and is bigger.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "lastRound",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "details": "Only the shot that empties the mag gets it (Encore shots don't). A dot next to your ammo lights up when the last round is chambered. Extra copies add another +100%."
+}

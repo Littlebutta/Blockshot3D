@@ -1,0 +1,30 @@
+{
+  "id": "trappers-kit",
+  "name": "Trapper's Kit",
+  "rarity": "combo",
+  "icon": "🧰",
+  "description": "Snares and mines.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "snare",
+      "op": "add",
+      "value": 1.5
+    },
+    {
+      "stat": "blockMines",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "blockCooldown",
+      "op": "mul",
+      "value": 1.1
+    }
+  ],
+  "details": "Blocking drops a snare plate under you and a row of mines ahead.",
+  "combo": [
+    "snare-plate",
+    "mine-layer"
+  ]
+}

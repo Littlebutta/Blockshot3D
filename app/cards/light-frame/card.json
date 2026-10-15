@@ -1,0 +1,22 @@
+{
+  "id": "light-frame",
+  "name": "Light Frame",
+  "rarity": "common",
+  "icon": "🪶",
+  "description": "Your hitbox is about 15% smaller, but you have less health. Harder to hit, easier to kill.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "hitScale",
+      "op": "mul",
+      "value": 0.85
+    },
+    {
+      "stat": "health",
+      "op": "mul",
+      "value": 0.8
+    }
+  ],
+  "details": "Bullets need to come closer to count as a hit. Your body looks the same size.",
+  "holyDescription": "Your hitbox is smaller. Harder to hit."
+}

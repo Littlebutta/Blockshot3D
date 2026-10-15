@@ -1,0 +1,16 @@
+{
+  "id": "afterimage",
+  "name": "Afterimage",
+  "rarity": "uncommon",
+  "icon": "👥",
+  "description": "Blocking leaves a decoy of you that bots and seeking bullets (bees, Seeker Chip, Bank Shot) chase for 2 s.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "afterimage",
+      "op": "add",
+      "value": 2
+    }
+  ],
+  "details": "The decoy stands where you blocked and has 40 health. Up to 2 at once. Extra copies make it last longer."
+}

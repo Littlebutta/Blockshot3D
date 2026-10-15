@@ -1,4 +1,4 @@
-import { ART, RULES, DIFFICULTY, RARITY, STAT_INFO, DEFAULT_LOBBY_SETTINGS, COSMETICS, COSMETIC_LABELS, assignColors, sizeFor } from './config.js';
+import { ART, RULES, DIFFICULTY, RARITY, STAT_INFO, DEFAULT_LOBBY_SETTINGS, COSMETICS, COSMETIC_LABELS, assignColors, sizeFor, ROUND_MODS } from './config.js';
 import { t, setLanguage, languageOptions } from './i18n.js';
 const tr = t;   // for functions that shadow t locally
 import { applyColorBlind } from './a11y.js';
@@ -152,11 +152,71 @@ function roundSplash(w) {
   const waves = waveMode();
   el.querySelector('.rsSmall').textContent = waves ? t('Wave {n}', { n: S.view.round || 1 }) : t('Round {n}', { n: S.view.round || 1 });
   el.querySelector('.rsBig').textContent = waves ? t(mine ? 'Wave cleared!' : 'The squad has fallen') : mine ? t('You won the round') : S.matchSettings.mode === 'tdm' ? `${L.name} takes the round` : t('{name} wins the round', { name: L.name });
+  el.querySelector('.rsText').textContent = '';
   el.querySelector('.rsPips').innerHTML = goal > 12 || (waves && !mine) ? '' : Array.from({ length: goal }, (_, i) => `<i class="${i < sc - 1 ? 'on' : i === sc - 1 ? 'new' : ''}"></i>`).join('');
   el.classList.remove('hidden', 'out'); void el.offsetWidth; el.classList.add('in');
   $('banner').classList.remove('show'); bannerT = 0;
   setTimeout(() => { if (!el.classList.contains('hidden')) sound.play('pip', 0.8); }, 520);
   splashT = 2.4;
+}
+// v1.2.15 round modifier: a splash as the round starts, then a small tag at the top for the rest of the round
+function modSplash(n, id) {
+  const m = ROUND_MODS[id]; if (!m || !S || !S.inGame) return;
+  const el = $('roundSplash');
+  el.style.setProperty('--c', '#c48bff'); el.style.setProperty('--on', '#10131c');
+  el.querySelector('.rsSmall').textContent = t('Round {n}', { n }) + ' · ' + t('Modifier');
+  el.querySelector('.rsBig').textContent = t(m.name);
+  el.querySelector('.rsPips').innerHTML = '';
+  el.querySelector('.rsText').textContent = t(m.text);
+  el.classList.remove('hidden', 'out'); void el.offsetWidth; el.classList.add('in');
+  $('banner').classList.remove('show'); bannerT = 0;
+  sound.play('cardDeal', 0.8);
+  splashT = 2.6;
+}
+function setRmodTag(id) {
+  const el = $('rmodTag'); if (!el) return;
+  const m = ROUND_MODS[id];
+  el.classList.toggle('hidden', !m); if (m) { el.textContent = '✦ ' + t(m.name); el.title = t(m.text); }
+}
+// ---- v1.2.15 kill cam: the last few seconds of views are kept; when the host says the round ended on a kill
+// (roundEnd e.kc), the 2 s around the winning kill are replayed from the killer's eyes, then the round splash.
+const KC = { buf: [], death: null, dur: 2000, lead: 330 };
+const kcCopy = o => { const c = { ...o }; for (const k in c) { const v = c[k]; if (v && typeof v === 'object' && !Array.isArray(v)) c[k] = { ...v }; } return c; };
+const kcMode = () => duelMode() && S.matchSettings.mode !== 'brawl' && !S.matchSettings.side && settings.killCam !== false;
+function kcRecord() {
+  if (!kcMode() || !S.view || !S.view.players) { KC.buf.length = 0; return; }
+  if (S.killCam) return;
+  const now = performance.now();
+  KC.buf.push({ t: now, players: S.view.players.map(kcCopy), bullets: (S.view.bullets || []).map(kcCopy) });
+  while (KC.buf.length && now - KC.buf[0].t > 3000) KC.buf.shift();
+}
+function kcStart() {
+  const w = S.kcWait; S.kcWait = null;
+  const d = KC.death, t1 = d ? Math.min(performance.now(), d.t + KC.lead) : 0, t0 = t1 - KC.dur;
+  const frames = d ? KC.buf.filter(f => f.t >= t0 && f.t <= t1 && f.players.some(p => p.id === w.k)) : [];
+  if (frames.length < 8) { sound.play(w.mine ? 'roundWin' : 'roundLose'); roundSplash(w.w); return; }
+  S.killCam = { ...w, frames, t: 0, t0: frames[0].t, span: frames[frames.length - 1].t - frames[0].t, dt: d.t, d, popped: false };
+  const el = $('killCam'), r = rosterOf(w.k), o = r.transient && r.ownerId != null ? rosterOf(r.ownerId) : r;
+  el.querySelector('.kcName').innerHTML = `<b style="color:${o.color}">${esc(w.k === S.localId ? t('You') : o.name)}</b>`;
+  el.classList.remove('hidden'); sound.play('whoosh', 0.7);
+}
+function kcFrame(dt) {
+  const K = S.killCam, at = K.t0 + K.t;
+  K.t += dt * 1000 * (Math.abs(at - K.dt) < 260 ? 0.4 : 1);   // slow motion around the killing hit
+  let i = 0; while (i < K.frames.length - 1 && K.frames[i + 1].t <= at) i++;
+  const f = K.frames[i], v = f.players.find(p => p.id === K.k);
+  if (!K.popped && at >= K.dt) { K.popped = true; const r = rosterOf(K.p); renderer.burst(K.d.x, K.d.y, K.d.z, r.color, 48, 11); renderer.deathPop(K.d.x, K.d.y, K.d.z, r.color || '#fff', true); sound.play('kill', 0.9); sound.play('slowmo', 0.6); }
+  const rs = renderer.settings, keep = [rs.view, renderer.yaw, renderer.pitch];
+  if (v && v.aim) { const a = v.netAim || v.aim; renderer.yaw = Math.atan2(a.x, a.z); renderer.pitch = Math.asin(Math.max(-1, Math.min(1, a.y || 0))); }
+  rs.view = 'first';
+  renderer.update({ ...S.view, players: f.players, bullets: f.bullets }, K.k, dt);
+  [rs.view, renderer.yaw, renderer.pitch] = keep;
+  if (K.t >= K.span) kcEnd(true);
+}
+function kcEnd(splash) {
+  const K = S && S.killCam; $('killCam').classList.add('hidden'); if (!K) return;
+  S.killCam = null; KC.buf.length = 0;
+  if (splash) { sound.play(K.mine ? 'roundWin' : 'roundLose'); roundSplash(K.w); }
 }
 function hideSplash() {
   const el = $('roundSplash'); if (!el || el.classList.contains('hidden')) return;
@@ -511,6 +571,7 @@ function pressAction(code, e) {
     if (e) e.preventDefault();
     if (settings.view === 'first' && locked()) { altFree = true; releaseMouse(); document.exitPointerLock(); }
   }
+  if (bound('emote', code) && inPlay() && !EW.open) { if (e && e.preventDefault) e.preventDefault(); openWheel(); }
   if (inPlay()) {
     if (bound('reload', code)) I.reloadSeq++;
     if (bound('block', code)) I.blockSeq++;
@@ -550,6 +611,70 @@ function menuBack() {
   if (b) b.click();
 }
 
+// ---- v1.2.15 emote and ping wheel: hold the key, move the mouse toward a slot, let go. Emotes show over your head
+// for everyone; pings mark the spot you were aiming at for your team (team and co-op modes only).
+const EMOTES = [
+  { k: 'laugh', icon: '😂', label: 'Ha ha' }, { k: 'cool', icon: '😎', label: 'Too easy' },
+  { k: 'here', icon: '📍', label: 'Look here', ping: 1 }, { k: 'attack', icon: '⚔️', label: 'Attack here', ping: 1 },
+  { k: 'help', icon: '🆘', label: 'Help me', ping: 1 }, { k: 'danger', icon: '⚠️', label: 'Careful', ping: 1 },
+  { k: 'gg', icon: '👋', label: 'GG' }, { k: 'angry', icon: '😡', label: 'Grr' },
+];
+const EW = { open: false, dx: 0, dy: 0, sel: -1, at: null, last: 0 };
+const teamPings = () => !!S && (['tdm', 'waves', 'core'].includes(S.matchSettings.mode) || (S.matchSettings.mode === 'open' && (S.matchSettings.owType === 'extract' || owSquads(S.matchSettings))));
+function buildWheel() {
+  const el = $('emoteWheel'); if (el.childElementCount) return;
+  EMOTES.forEach((m, i) => {
+    const a = i / EMOTES.length * Math.PI * 2, d = document.createElement('div');
+    d.className = 'ewSlot' + (m.ping ? ' ping' : ''); d.style.left = `calc(50% + ${Math.sin(a) * 105}px)`; d.style.top = `calc(50% - ${Math.cos(a) * 105}px)`;
+    d.innerHTML = `<b>${m.icon}</b><span>${m.label}</span>`; el.appendChild(d);
+  });
+  const c = document.createElement('div'); c.className = 'ewCenter'; el.appendChild(c);
+}
+function openWheel() {
+  if (!S || !S.inGame || S.amon || S.killCam) return;
+  buildWheel(); EW.open = true; EW.dx = EW.dy = 0; EW.sel = -1; EW.at = S.lastAimPt ? { ...S.lastAimPt } : null;
+  renderer.lookFreeze = true;
+  const pings = teamPings();
+  [...$('emoteWheel').querySelectorAll('.ewSlot')].forEach((d, i) => { d.classList.toggle('off', !!EMOTES[i].ping && (!pings || !EW.at)); d.classList.remove('sel'); });
+  $('emoteWheel').querySelector('.ewCenter').textContent = pings ? t('Emote or ping') : t('Emote');
+  $('emoteWheel').classList.remove('hidden');
+}
+function wheelMove(e) {
+  if (!EW.open) return;
+  EW.dx += e.movementX || 0; EW.dy += e.movementY || 0;
+  const L = Math.hypot(EW.dx, EW.dy); if (L > 120) { EW.dx *= 120 / L; EW.dy *= 120 / L; }
+  let sel = -1;
+  if (L > 22) { const a = (Math.atan2(EW.dx, -EW.dy) + Math.PI * 2) % (Math.PI * 2); sel = Math.round(a / (Math.PI * 2 / EMOTES.length)) % EMOTES.length; }
+  const slots = $('emoteWheel').querySelectorAll('.ewSlot');
+  if (sel >= 0 && slots[sel].classList.contains('off')) sel = -1;
+  if (sel !== EW.sel) { EW.sel = sel; slots.forEach((d, i) => d.classList.toggle('sel', i === sel)); if (sel >= 0) sound.play('cardHover', 0.4); }
+}
+function closeWheel(send) {
+  if (!EW.open) return;
+  EW.open = false; renderer.lookFreeze = false; $('emoteWheel').classList.add('hidden');
+  const m = EMOTES[EW.sel]; if (!send || !m || !S || !S.inGame) return;
+  const now = performance.now(); if (now - EW.last < 700) return; EW.last = now;
+  const msg = { k: 'emote', e: m.k, ...(m.ping && EW.at ? { x: +EW.at.x.toFixed(2), y: +EW.at.y.toFixed(2), z: +EW.at.z.toFixed(2) } : {}) };
+  if (S.role === 'peer') S.net.send({ t: 'toHost', msg }); else emoteFrom(S.localId, msg);
+}
+// Host: check it and pass it on to everyone (with the match events, like bets)
+function emoteFrom(from, msg) {
+  const m = EMOTES.find(q => q.k === msg.e); if (!m || !S.inGame) return;
+  S.emoteT ||= new Map(); const now = performance.now(); if (now - (S.emoteT.get(from) || 0) < 600) return; S.emoteT.set(from, now);
+  const ev = { t: 'emote', p: from, e: m.k };
+  if (m.ping) { if (![msg.x, msg.y, msg.z].every(Number.isFinite)) return; ev.x = msg.x; ev.y = msg.y; ev.z = msg.z; }
+  if (S.role === 'host') S.outEvents.push(ev);
+  handleEvent(ev);
+}
+function emoteEvent(e) {
+  const m = EMOTES.find(q => q.k === e.e); if (!m) return;
+  const r = rosterOf(e.p);
+  if (!m.ping) { renderer.emote(e.p, m.icon); if (e.p !== S.localId) sound.play('pip', 0.35); return; }
+  if (!friendOf(e.p) || !teamPings()) return;
+  renderer.ping(e.x, e.y, e.z, r.color || '#ffffff', m.icon); sound.play('pip', 0.7);
+  if (e.p !== S.localId) toast(`${r.name}: ${t(m.label)}`);
+}
+
 function bindInput() {
   addEventListener('keydown', e => {
     if (bindCapture) return;   // the controls screen is waiting for a key (handled there)
@@ -568,8 +693,8 @@ function bindInput() {
     if (currentScreen === 'pick' && /^Digit[1-5]$/.test(e.code)) choosePick(+e.code.slice(5) - 1);
     else if (inPlay() && S.lootOffer && /^Digit[1-4]$/.test(e.code)) chooseLoot(e.code === 'Digit4' ? -1 : +e.code.slice(5) - 1);
   });
-  addEventListener('keyup', e => { keys[e.code] = false; });
-  addEventListener('blur', () => { for (const k in keys) keys[k] = false; peerNeutral(); });
+  addEventListener('keyup', e => { keys[e.code] = false; if (EW.open && !held('emote')) closeWheel(true); });
+  addEventListener('blur', () => { for (const k in keys) keys[k] = false; peerNeutral(); closeWheel(false); });
   // v1.2.6: a hidden or minimized window stops drawing frames, so a joiner's "all keys up" would never be sent: send it now
   document.addEventListener('visibilitychange', () => { if (document.hidden) { for (const k in keys) keys[k] = false; peerNeutral(); } });
   renderer.canvas.addEventListener('mousedown', e => {
@@ -578,9 +703,20 @@ function bindInput() {
     keys['Mouse' + e.button] = true;
     pressAction('Mouse' + e.button, e);
   });
-  addEventListener('mouseup', e => { keys['Mouse' + e.button] = false; });
+  addEventListener('mouseup', e => { keys['Mouse' + e.button] = false; if (EW.open && !held('emote')) closeWheel(true); });
+  document.addEventListener('mousemove', wheelMove);
   addEventListener('mousemove', e => { if ((e.buttons & 5) && spectating()) renderer.specDrag(e.movementX || 0, e.movementY || 0); });   // v1.2.11: drag to pan
-  addEventListener('wheel', e => { if (e.deltaY && spectating()) renderer.specZoom(e.deltaY); }, { passive: true });   // v1.2.11: scroll to zoom
+  addEventListener('wheel', e => {
+    if (!e.deltaY) return;
+    if (spectating()) { renderer.specZoom(e.deltaY); return; }   // v1.2.11: scroll to zoom
+    // v1.2.13 (Devin): the scroll wheel zooms the top-down view while you play too, and further out than the default
+    if (!inPlay() || S.amon || currentScreen !== 'none' || S.matchSettings.mode === 'open' || S.matchSettings.side || settings.view === 'first' || S.matchSettings.commander) return;
+    const co = S.matchSettings.core && S.view && S.view.core;
+    if (co && co.cr && co.cr.some(r => r[0] === S.localId)) return;   // (Core: turning a carried block)
+    settings.topZoom = Math.round(Math.min(2.2, Math.max(0.6, (settings.topZoom || 1) * (e.deltaY > 0 ? 1.1 : 1 / 1.1))) * 100) / 100;
+    renderer.settings.topZoom = settings.topZoom;
+    clearTimeout(I.zoomSave); I.zoomSave = setTimeout(() => saveSettings(settings), 800);
+  }, { passive: true });
   renderer.canvas.addEventListener('contextmenu', e => e.preventDefault());
   // v1.0.1 Core Defense: the scroll wheel turns the block you carry (45 degrees a notch)
   addEventListener('wheel', e => {
@@ -633,11 +769,13 @@ function gatherInput(local) {
   else { mx = r; mz = -f; }
   const l = Math.hypot(mx, mz); if (l > 1) { mx /= l; mz /= l; }
   const aim = local && local.alive && !blocked ? renderer.computeAim(local, S.localId) : null;
+  if (aim && aim.aimPoint && !EW.open) S.lastAimPt = aim.aimPoint;   // (v1.2.15: where a ping goes)
   return {
     mx, mz, drop: !blocked && side && held('down') && held('jump'), jump: !blocked && !(side && held('down') && held('jump')) && (held('jump') || (side && !S.matchSettings.brawl && held('up'))), dash: !blocked && !!S.matchSettings.brawl && held('dash'), shoot: !blocked && held('shoot') && (!fp || locked()),
     block: !blocked && held('block'),   // held block (Super Saiyan Hair, Pentagram)
     crouch: !blocked && held('crouch'),   // open world: sneak
     use: !blocked && held('use'),         // extraction: hold on a fallen teammate to revive them
+    reload: !blocked && held('reload'),   // v1.2.15 Blood Volley: hold Reload
     blockSeq: I.blockSeq, reloadSeq: I.reloadSeq, useSeq: I.useSeq, jumpSeq: I.jumpSeq, shotSeq: I.shotSeq, ready: I.ready, rot: I.rot, aim: aim ? aim.aim : null, aimPoint: aim ? aim.aimPoint : null, fp,
   };
 }
@@ -872,6 +1010,7 @@ function renderLobby() {
   $('setCombos').checked = st.combos !== false;
   $('setThemes').value = st.themes || 'standard';
   $('setHazards').checked = !!st.hazards;
+  $('setRoundMods').value = ROUND_MODS[st.roundMods] || st.roundMods === 'random' ? st.roundMods : 'off';
   $('setSide').checked = !!st.side; $('setStocks').value = String(st.stocks || 3); $('setBrawlFlat').checked = !!st.brawlFlat;
   $('setCommander').checked = !!st.commander;
   $('setPickTime').value = String(st.pickTime ?? 30); $('setAmonTimer').value = st.amonTimer ? '1' : '0'; $('setAmonVs').value = st.amonVs ? '1' : '0';
@@ -892,7 +1031,7 @@ function renderLobby() {
   $('lobbyError').textContent = host ? err : 'Waiting for the host to start the match.';
 }
 const owSquads = st => st.mode === 'open' && st.owType !== 'extract' && !!st.owSquads;
-const LOBBY_INPUTS = ['setSide', 'setOwType', 'setOwBots', 'setOwSquads', 'setRounds', 'setRerolls', 'setMaps', 'setFF', 'setCombos', 'setHazards', 'setCommander', 'setPickTime', 'setThemes', 'setSpeed', 'setWaveDiff', 'setCoopScale', 'setGmSpawn', 'setDummies', 'setDummyMode', 'setDummyHp', 'setGod', 'setAmonTimer'];
+const LOBBY_INPUTS = ['setSide', 'setOwType', 'setOwBots', 'setOwSquads', 'setRounds', 'setRerolls', 'setMaps', 'setFF', 'setCombos', 'setHazards', 'setRoundMods', 'setCommander', 'setPickTime', 'setThemes', 'setSpeed', 'setWaveDiff', 'setCoopScale', 'setGmSpawn', 'setDummies', 'setDummyMode', 'setDummyHp', 'setGod', 'setAmonTimer'];
 let colorPopFor = null;
 function openColorPop(anchor) {
   const pop = $('colorPop'), L = S.lobby, colors = assignColors(L.players, L.settings.mode);
@@ -1009,6 +1148,8 @@ function bindLobby() {
   });
   document.addEventListener('click', e => { if (!e.target.closest('#colorPop') && !e.target.closest('[data-color]')) $('colorPop').classList.add('hidden'); });
   $('setHazards').onchange = set('hazards', t => t.checked);
+  $('rmodList').innerHTML = Object.entries(ROUND_MODS).map(([k, m]) => `<option value="${k}" title="${m.text}">${m.name}</option>`).join('');
+  $('setRoundMods').onchange = set('roundMods', t => t.value);
   $('setSide').onchange = set('side', t => t.checked);
   $('setStocks').onchange = set('stocks', t => +t.value);
   $('setBrawlFlat').onchange = set('brawlFlat', t => t.checked);
@@ -1131,6 +1272,7 @@ function onHostMsg(m) {
     case 'setCos': if (!S.hello || !S.hello.has(from)) { if (!(S.dropped && S.dropped.has(from))) dropPeer(from, `The host has ${appVersion()} and your game is older. Everyone needs the same version to play together.`); break; }
       if (!S.inGame) { const p = S.lobby.players.find(q => q.id === from); if (p) { p.cosmetics = cleanCos(msg.cos); lobbyChanged(); } } break;
     case 'setName': if (!S.inGame) { const p = S.lobby.players.find(q => q.id === from); if (p) { p.name = cleanName(msg.name); lobbyChanged(); } } break;
+    case 'emote': if (S.inGame) emoteFrom(from, msg); break;
     case 'bet': if (S.inGame && +msg.a > 0) { const ev = { t: 'bet', p: from, a: Math.floor(+msg.a) }; S.outEvents.push(ev); handleEvent(ev); } break;
     case 'fsel': fselAction(from, msg); break;
     case 'setColor': if (!S.inGame) { const p = S.lobby.players.find(q => q.id === from); if (p && ART.ffaColors.includes(msg.color)) claimColor(from, msg.color); } break;
@@ -1147,7 +1289,7 @@ function onPeerMsg(m) {
     case 'cardsAll': for (const e of msg.list || []) { const r = S.roster.get(e.p); if (r) { r.cards = e.cards; r.stats = e.s; } } scoreKeyCache = ''; renderChips(); break;
     case 'note': toast(msg.text); break;
     case 'helloOk': S.helloOk = true; break;
-    case 'level': S.peerLevel = prepareLevel(msg.level); renderer.setLevel(S.peerLevel); if (S.pred) S.pred.base = null; S.predSolids = null; break;
+    case 'level': setRmodTag(msg.level.rmod); S.peerLevel = prepareLevel(msg.level); renderer.setLevel(S.peerLevel); if (S.pred) S.pred.base = null; S.predSolids = null; break;
     case 'snap': if (S.inGame) { const a = performance.now(); if (NL.on) netLogSnap(a, msg._sz); applySnap(msg.s); HM.msg.add(performance.now() - a); if (msg._sz && S.peerNet) S.peerNet.sizeW.add(msg._sz); } break;
     case 'pong': if (S.peerNet) S.peerNet.onPong(msg); break;
     case 'netRows': S.netRows = msg.ns; break;   // v1.0.1: AMON has no snapshots, so the host sends the window's rows on their own
@@ -1448,9 +1590,29 @@ function viewOfPlayer(p) {
 }
 // Katana charge, slash counter, Super Saiyan Hair pool and the hold-to-charge flag (sim.js extRow).
 function extFields(x) {
-  const [k, sn, hf, hp, hm, hold, ts, holy, mnt] = x || [];
+  const [k, sn, hf, hp, hm, hold, ts, holy, mnt, nc] = x || [];
   return { kCharge: k ?? -1, slashN: sn || 0, hairFrac: hf ?? -1, hairHp: hp || 0, hairMax: hm || 0, holding: !!hold, holdHoly: hold === 2,
-    tsFrac: ts ?? -1, holyShield: !!((holy || 0) & 1), robe: !!((holy || 0) & 2), mount: mnt || null };
+    tsFrac: ts ?? -1, holyShield: !!((holy || 0) & 1), robe: !!((holy || 0) & 2), mount: mnt || null, nc: ncFields(nc) };
+}
+
+// v1.2.15 round-2 cards (sim.js ncRow): flags, Pressure Stack, Battle Rhythm, Gambler's Mag roll, Gilded Shells, Ascension, Purge Pulse
+const GAMBLE_TAGS = ['🎲 ×2 dmg', '🎲 +bullets', '🎲 bouncy', '🎲 homing'];
+function ncFields(x) {
+  if (!x) return null;
+  const [f, press, rhy, gam, shell, asc, purge] = x;
+  return { bounty: !!(f & 1), od: !!(f & 2), rooted: !!(f & 4), cold: !!(f & 8), salvo: !!(f & 16), rhyReady: !!(f & 32), lastRound: !!(f & 64),
+    press: press || 0, rhy: rhy ?? -1, gam: gam ?? -1, shell: shell || 0, ascTier: (asc || 0) & 3, ascRounds: (asc || 0) >> 2, purge: purge || 0 };
+}
+// Words above a head: the Gambler's Mag roll, the Bounty Mark, a Snare Plate root
+function ncTag(v) {
+  const n = v.nc; if (!n || !v.alive) return '';
+  return [n.bounty ? '🏴 BOUNTY' : '', n.rooted ? '🪤 ROOTED' : '', n.gam >= 0 ? GAMBLE_TAGS[n.gam] || '' : ''].filter(Boolean).join('  ');
+}
+// Snare Plates are hidden from enemies: only the owner and their team see them
+function friendOf(ownerId) {
+  if (!S || ownerId === S.localId) return true;
+  const mode = S.matchSettings && S.matchSettings.mode, o = S.roster.get(ownerId), me = S.roster.get(S.localId);
+  return (mode === 'tdm' || mode === 'waves' || mode === 'core') && !!o && !!me && (o.team || 0) === (me.team || 0);
 }
 
 // dt: real time since the last frame (up to 0.25 s). v1.2.6: the sim catches up in steps of 35 ms at most, so a long
@@ -1478,7 +1640,8 @@ function hostFrame(dt, ts = 1) {
     bullets: g.bullets.map(b => ({ id: b.id, pos: b.pos, vel: b.vel, ring: b.ring || 0, r: b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r, color: b.color, fx: b.fx })),
     dynamics: g.dyn.map(o => ({ id: o.id, x: o.pos.x, y: o.pos.y, z: o.pos.z, h: o.h, tip: o.tipped || 0, tx: o.tx || 0, tz: o.tz || 0 })),
     shields: g.shields.map(sh => ({ id: sh.id, x: sh.x, y0: sh.y0, z: sh.z, w: sh.w, h: sh.h, d: sh.d, ang: sh.ang || 0, shock: !!sh.shock, leech: !!sh.leech, box: !!sh.box, hp: sh.box ? Math.max(0, sh.hp) / sh.maxHp : 1, color: (g.player(sh.owner) || {}).color || '#ffffff' })),
-    mines: g.mines.map(m => ({ id: m.id, x: m.x, y: m.y, z: m.z, armed: m.armT <= 0, sz: m.sz || 1, color: (g.player(m.owner) || {}).color || '#ffffff' })),
+    mines: g.mines.filter(m => !m.snare || friendOf(m.owner)).map(m => ({ id: m.id, x: m.x, y: m.y, z: m.z, armed: m.armT <= 0, sz: m.sz || 1, snare: !!m.snare, color: (g.player(m.owner) || {}).color || '#ffffff' })),
+    trapT: g.level && g.level.traps ? g.time : null,
     laser: g.hazard && g.hazard.type === 'laser' ? [g.hazard.pos, g.hazard.state === 'warn' ? 1 : g.hazard.state === 'on' ? 2 : 0] : null,
     telegraphs: g.telegraphs.length ? telegraphRows(g) : null, shocks: g.shockwaves.length ? shockRows(g) : null, boss: bossRow(g), final: g.isFinalRound(),
     rituals: g.rituals.length ? g.ritualRows() : null, relics: g.relics.length ? g.relicRows() : null,
@@ -1632,8 +1795,9 @@ function applySnap(s) {
   const col = o => (S.roster.get(o) || {}).color || '#ffffff';
   S.view.dynamics = (s.ob || []).map(([id, x, y, z, h, tip, tx, tz]) => ({ id, x, y, z, h, tip, tx: tx || 0, tz: tz || 0 }));
   S.view.shields = (s.sh || []).map(([id, x, y0, z, w, h, d, o, f, hp, ang]) => ({ id, x, y0, z, w, h, d, ang: ang || 0, shock: !!(f & 1), leech: !!(f & 2), box: !!(f & 4), hp: hp ?? 1, color: col(o) }));
-  S.view.mines = (s.mn || []).map(([id, x, y, z, o, armed, sz]) => ({ id, x, y, z, armed: !!armed, sz: sz || 1, color: col(o) }));
+  S.view.mines = (s.mn || []).filter(r => !r[7] || friendOf(r[4])).map(([id, x, y, z, o, armed, sz, sn]) => ({ id, x, y, z, armed: !!armed, sz: sz || 1, snare: !!sn, color: col(o) }));
   S.view.laser = s.lz || null;
+  if (s.tp != null) S.trapClk = { t: s.tp, at: performance.now() }; else if ('tp' in s) S.trapClk = null;
   if (s.ow) { if (s.ow.lt) S.owTaken = new Set(s.ow.lt); s.ow.taken = S.owTaken || new Set(); }
   S.view.ow = s.ow || null;
   for (const [id, pct, stocks, fighter] of s.bw || []) { const v = S.pmap.get(id); if (v) { v.pct = pct; v.stocks = stocks; v.fighter = fighter; } }
@@ -1697,14 +1861,14 @@ function peerFrame(dt) {
   // mask, so first-person mouse-look doesn't count)
   S.sendT -= dt;
   const mk = (held('up') ? 1 : 0) | (held('down') ? 2 : 0) | (held('left') ? 4 : 0) | (held('right') ? 8 : 0) | (held('crouch') ? 16 : 0);
-  const li = S.lastIn, edge = !li || mk !== S.lastMk || inp.shoot !== li.shoot || inp.jump !== li.jump || inp.dash !== li.dash || inp.block !== li.block || inp.blockSeq !== li.blockSeq || inp.reloadSeq !== li.reloadSeq || inp.useSeq !== li.useSeq || inp.jumpSeq !== li.jumpSeq || inp.shotSeq !== li.shotSeq || inp.rot !== li.rot;
+  const li = S.lastIn, edge = !li || mk !== S.lastMk || inp.shoot !== li.shoot || inp.jump !== li.jump || inp.dash !== li.dash || inp.block !== li.block || inp.reload !== li.reload || inp.blockSeq !== li.blockSeq || inp.reloadSeq !== li.reloadSeq || inp.useSeq !== li.useSeq || inp.jumpSeq !== li.jumpSeq || inp.shotSeq !== li.shotSeq || inp.rot !== li.rot;
   if (S.sendT <= 0 || edge) {
     if (S.sendT <= 0) S.sendT = S.sendT < -0.05 ? 1 / 60 : S.sendT + 1 / 60;
     S.lastMk = mk; inp.q = S.inQ = (S.inQ || 0) + 1; S.lastIn = inp;
     // v1.0.1: rounded and with the false / zero fields left out, an input is about half the bytes
     const r = (v, k) => Math.round(v * k) / k, w = { q: inp.q, mx: r(inp.mx, 1000), mz: r(inp.mz, 1000) };
     if (inp.blockSeq) w.blockSeq = inp.blockSeq; if (inp.reloadSeq) w.reloadSeq = inp.reloadSeq; if (inp.useSeq) w.useSeq = inp.useSeq;   // (v1.2.9: counters only once they've started; missing = 0 on the host)
-    for (const f of ['drop', 'jump', 'dash', 'shoot', 'block', 'crouch', 'use', 'fp']) if (inp[f]) w[f] = 1;
+    for (const f of ['drop', 'jump', 'dash', 'shoot', 'block', 'crouch', 'use', 'reload', 'fp']) if (inp[f]) w[f] = 1;
     if (inp.jumpSeq) w.js = inp.jumpSeq; if (inp.shotSeq) w.ss = inp.shotSeq;
     if (inp.ready) w.ready = inp.ready; if (inp.rot) w.rot = inp.rot;
     if (inp.aim) w.aim = { x: r(inp.aim.x, 1000), y: r(inp.aim.y, 1000), z: r(inp.aim.z, 1000) };
@@ -1779,7 +1943,8 @@ function predAck(mv) {
   const P = S.pred ||= { off: { x: 0, y: 0, z: 0 }, base: null };
   if (!P.prevBase) { P.prevBase = P.base; P.prevAck = P.ack; P.prevAge = P.age; P.prevK = { spd: P.spd, jv: P.jv, leash: P.leash }; }   // (v1.2.6: two snapshots in one frame: the one drawn last is the old picture; v1.2.9: with the speed, jump and leash it was drawn with)
   P.base = { pos: { ...me.tgt }, vel: { ...me.vel }, onGround: !!row[5] };
-  [, P.ack, P.spd, P.jv] = row; P.ok = !!row[4]; P.age = row[6]; P.leash = row.length > 9 ? row.slice(7, 10) : null;
+  [, P.ack, P.spd, P.jv] = row; P.ok = !!row[4]; P.age = row[6]; P.leash = row.length > 9 && row[9] > 0 ? row.slice(7, 10) : null;
+  P.bp = row[10] || 0; P.adv = row[11] || 0;   // v1.2.15 Backpedal Boots
 }
 // v1.2.6: replays against the same world as the host (walls, built blocks and props too: predWorld) and with the host's
 // jump rules: a press up to 0.13 s before landing still jumps (buffer), and you can still jump 0.1 s after walking off
@@ -1816,7 +1981,8 @@ function predReplay(base, ack, size, W, age, K) {
     if (skip > 0) { const k = Math.min(skip, rem); rem -= k; skip -= k; }
     while (rem > 1e-4) {
       const st = Math.min(rem, 1 / 60); rem -= st;
-      accel(b, h.mx * P.spd, h.mz * P.spd, st);
+      const dk = P.bp || P.adv ? dirSpeedK(h.mx, h.mz, P.bp, P.adv) : 1;   // v1.2.15 Backpedal Boots (same as sim.js dirSpeedK)
+      accel(b, h.mx * P.spd * dk, h.mz * P.spd * dk, st);
       if (b.onGround) air = 0; else if (air !== 9) air += st;
       if ((h.jump || jb < 0.13) && (b.onGround || (air < 0.1 && b.vel.y <= 0.5)) && P.jv > 0) {
         b.vel.y = P.jv; b.onGround = false; jb = air = 9;
@@ -1828,6 +1994,12 @@ function predReplay(base, ack, size, W, age, K) {
     }
   }
   return b.pos;
+}
+function dirSpeedK(mx, mz, bp, adv) {
+  const me = S.pmap.get(S.localId), a = me && me.aim, ml = Math.hypot(mx || 0, mz || 0), al = a ? Math.hypot(a.x, a.z) : 0;
+  if (ml < 0.1 || al < 1e-3) return 1;
+  const dot = (mx * a.x + mz * a.z) / (ml * al);
+  return dot < 0 ? 1 + bp * -dot : Math.max(0.2, 1 - adv * dot);
 }
 function predictLocal(dt, tNow) {
   const me = S.pmap.get(S.localId), P = S.pred;
@@ -2157,6 +2329,33 @@ function updateMusic() {
 }
 // Boss banners: the Warden keeps its translated lines, the other bosses use their own name.
 function bossLine(e, what) { return !e.name || e.name === 'The Warden' ? t('The Warden ' + what) : `${e.name} ${what}`; }
+// v1.2.15 round-2 card effects
+function ncEvent(e, me, vol) {
+  const col = rosterOf(e.p).color;
+  switch (e.k) {
+    case 'shell': renderer.burst(e.x, e.y, e.z, '#ffd23a', 22, 6); renderer.ring(e.x, e.y - 0.6, e.z, 1.2, '#ffd23a'); sound.play('block', vol(e.x, e.z)); if (e.p === me) toast(e.n ? `Gilded Shell broke (${e.n} left)` : 'Gilded Shell broke'); break;
+    case 'salvo': if (e.p === me) sound.play('reload', 0.5); break;
+    case 'crush': renderer.burst(e.x, 0.2, e.z, '#b8bcc6', 26, 7); sound.play('explode', vol(e.x, e.z) * 0.7); renderer.addShake(0.35 * vol(e.x, e.z)); break;   // trap arena crusher hits the floor
+    case 'pound': renderer.ring(e.x, e.y, e.z, e.r, col); renderer.burst(e.x, e.y + 0.2, e.z, '#c9b48a', 20, 6); sound.play('explode', vol(e.x, e.z) * 0.6); renderer.addShake(0.2 * vol(e.x, e.z)); break;
+    case 'gamble': if (e.p === me) { toast('Gambler\'s Mag: ' + (GAMBLE_TAGS[e.r] || '').replace('🎲 ', '')); sound.play('cardDeal', 0.6); } break;
+    case 'volley': renderer.burst(e.x, e.y, e.z, '#c8102e', 26, 7); sound.play('hurt', vol(e.x, e.z) * 0.6); break;
+    case 'purge': renderer.ring(e.x, e.y, e.z, e.r, '#ffffff'); renderer.ring(e.x, e.y, e.z, e.r * 0.6, col); renderer.burst(e.x, e.y + 1, e.z, '#ffffff', 40, 12); sound.play('explode', vol(e.x, e.z)); renderer.addShake(0.4 * vol(e.x, e.z)); if (e.p === me) toast('Purge Pulse!'); break;
+    case 'rhythm': renderer.glowSprite(e.x, e.y, e.z, col, 2.4, 0.3); sound.play('explode', vol(e.x, e.z) * 0.4); break;
+    case 'rhythmReady': if (e.p === me) sound.play('pip', 0.9); break;
+    case 'decoy': renderer.burst(e.x, e.y, e.z, col, 10, 3); break;
+    case 'swap': renderer.line(e.x1, e.y1, e.z1, e.x2, e.y2, e.z2, col, 0.45, 0.12); renderer.burst(e.x1, e.y1, e.z1, col, 16, 5); renderer.burst(e.x2, e.y2, e.z2, col, 16, 5); sound.play('shield', vol(e.x2, e.z2)); if (e.p === me || e.q === me) toast('Swapped!'); break;
+    case 'snare': renderer.ring(e.x, e.y + 0.05, e.z, 1, '#ff9a2a'); renderer.burst(e.x, e.y + 0.3, e.z, '#ff9a2a', 14, 4); sound.play('block', vol(e.x, e.z)); if (e.p === me) toast('Snared!'); break;
+    case 'stand': renderer.ring(e.x, e.y - 0.6, e.z, 1.6, '#ff4f4f'); renderer.burst(e.x, e.y, e.z, '#ff4f4f', 20, 6); if (e.p === me) { toast('Last Stand!'); sound.play('reload', 0.9); } break;
+    case 'spite': renderer.spiteRing(e.x, e.y, e.z, e.r, e.f); sound.play('pip', vol(e.x, e.z)); break;
+    case 'overpen': renderer.line(e.x1, e.y1, e.z1, e.x2, e.y2, e.z2, col, 0.2); break;
+    case 'squad': renderer.burst(e.x, e.y, e.z, col, 14, 4); if (e.p === me) sound.play('cardDeal', 0.5); break;
+    case 'well': renderer.wellFx(e.x, e.y, e.z, e.r, col); break;
+    case 'parry': renderer.glowSprite(e.x, e.y, e.z, '#ffffff', 2.2, 0.25); renderer.burst(e.x, e.y, e.z, '#ffffff', 18, 7); sound.play('block', vol(e.x, e.z)); if (e.p === me) { flashWhite(); sound.play('hitConfirm', 0.9); } break;
+    case 'leech': renderer.burst(e.x, e.y, e.z, '#b07bff', 5, 2.5); break;
+    case 'chain': renderer.floatText(e.x, e.y, e.z, `×${e.n}`, col); break;
+  }
+}
+function flashWhite() { const h = $('hurt'); h.style.background = 'rgba(255,255,255,.35)'; h.style.opacity = 1; setTimeout(() => { h.style.opacity = 0; setTimeout(() => { h.style.background = ''; }, 200); }, 90); }
 function handleEvent(e) {
   const me = S.localId, lp = localPos();
   const vol = (x, z) => lp ? Math.max(0.15, 1 - Math.hypot(x - lp.x, z - lp.z) / 45) : 0.7;
@@ -2170,9 +2369,11 @@ function handleEvent(e) {
       else banner(e.wave ? t('Wave {n}', { n: e.wave }) : t('Round {n}', { n: e.n }), null, 1.4);
       sound.play('roundStart');
       if (e.gm && !e.boss) toast(gmText(e.gm));
+      { const tip = { 'Crusher Hall': 'Crusher Hall: stay out from under the slabs when the red marks light up', 'Spike Garden': 'Spike Garden: spike floors flash red before they fire', 'Laser Grid': 'Laser Grid: jump the low sweeping beams, wait out the laser fences', 'Rail Yard': 'Rail Yard: ride the moving rails over the spike pit' }[e.map]; if (tip) toast(tip); }   // v1.2.15 trap arenas
       if (currentScreen === 'pick' || currentScreen === 'breakAsk') show('none');
       S.offer = null; S.breakAsk = null; S.resetYaw = true; S.lateJoined = false;
-      TS.stop = TS.slow = 0; hideSplash();
+      TS.stop = TS.slow = 0; hideSplash(); S.kcWait = null; kcEnd(false);
+      setRmodTag(e.rmod); if (e.rmod) setTimeout(() => modSplash(e.wave || e.n, e.rmod), 450);
       { const w = $('wipe'); w.classList.remove('hidden', 'go'); void w.offsetWidth; w.classList.add('go'); sound.play('whoosh', 0.6); clearTimeout(w._t); w._t = setTimeout(() => w.classList.add('hidden'), 700); }   // v1.2.0: wipe the new arena in
       break;
     case 'fight': if ((S.view.round || 1) <= 1) { const lg = $('legend'); lg.classList.remove('brief'); void lg.offsetWidth; lg.classList.add('brief'); }   // the height legend fades 10 s into the first round
@@ -2212,7 +2413,7 @@ function handleEvent(e) {
       sound.play('death', vol(e.x, e.z)); killFeed(e);
       if (e.p === me && e.dl) showDeathLog(e);
       if (e.k === me && e.p !== me) { hitMarker(true); sound.play('kill', 0.9); renderer.addShake(0.22); }
-      if (hero) { S.lastDeath = { x: e.x, y: e.y, z: e.z }; if (duelMode()) hitStop(0.075); }
+      if (hero) { S.lastDeath = { x: e.x, y: e.y, z: e.z }; KC.death = { t: performance.now(), p: e.p, k: e.k, x: e.x, y: e.y, z: e.z }; if (duelMode()) hitStop(0.075); }
       break;
     }
     // ---- co-op: Game Master, elites, boss
@@ -2265,6 +2466,7 @@ function handleEvent(e) {
     case 'jump': if (S.role === 'peer' && e.p === me && takePred(S.jumpPred)) break;   // (v1.2.6: played already by your prediction)
       if (settings.pillow) sound.play('hop', e.p === me ? 0.9 : 0.45); else if (e.p === me) sound.play('jump'); break;
     case 'reload': if (e.p === me) sound.play('reload'); break;
+    case 'emote': emoteEvent(e); break;   // v1.2.15
     case 'bet': {
       const r = rosterOf(e.p);
       if (e.p === me) toast(`Bet placed: 💰 ${e.a} on you winning`);
@@ -2282,6 +2484,7 @@ function handleEvent(e) {
         break;
       }
       if (S.matchSettings.core && !mine) { banner('The core is destroyed!', '#ff6a4a', 3); sound.play('roundLose'); break; }   // v28
+      if (e.kc && kcMode() && KC.death && KC.death.p === e.kc.p) { S.kcWait = { at: performance.now() + KC.lead + 60, k: e.kc.k, p: e.kc.p, w: e.w, mine }; break; }   // v1.2.15 kill cam
       if (duelMode()) {   // v1.2.0: slow motion and a zoom on the winning kill, then the round splash in the winner's color
         slowMo(1.25); sound.play('slowmo', 0.8);
         const d = S.lastDeath; if (d) renderer.punch(d.x, d.y, d.z, 1.7);
@@ -2408,6 +2611,7 @@ function handleEvent(e) {
       sound.play('explode', vol(e.x, e.z)); sound.play('grunt', e.p === me ? 0.9 : vol(e.x, e.z) * 0.8); renderer.addShake(0.35 * vol(e.x, e.z)); break;
     case 'unitGone': renderer.burst(e.x, e.y, e.z, '#c9ced8', 12, 3); break;
     case 'leech': renderer.burst(e.x, e.y, e.z, '#5fe3a1', 6, 2.5); break;
+    case 'nc': ncEvent(e, me, vol); break;
     case 'critterMax': if (e.p === S.localId) toast(`Max critters (${e.n}/${e.n}): your oldest one was replaced`); break;
     case 'revive':
       renderer.burst(e.x, e.y, e.z, '#ffb347', 30, 7); renderer.ring(e.x, e.y, e.z, 2.5, '#ffb347'); sound.play('roundWin', vol(e.x, e.z));
@@ -2980,6 +3184,21 @@ function updateCursorAmmo(me) {
     if (ready && !curBlkReady) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
     curBlkReady = ready;
   }
+  {   // v1.2.15: round-2 card chips
+    const n = me.nc, chips = [];
+    if (n) {
+      if (n.press > 1) chips.push(`<b class="${n.press >= 8 ? 'hot' : ''}">▲${n.press}</b>`);
+      if (n.rhyReady) chips.push('<b class="hot">🥁</b>'); else if (n.rhy >= 0) chips.push(`<b class="rhy" style="--p:${Math.round(n.rhy * 100)}%">🥁</b>`);
+      if (n.cold) chips.push('<b>❄</b>');
+      if (n.lastRound) chips.push('<b class="hot">●</b>');
+      if (n.shell) chips.push(`<b>🥚${n.shell > 1 ? n.shell : ''}</b>`);
+      if (n.od) chips.push('<b class="hot">⚡</b>');
+      if (n.salvo) chips.push('<b class="hot">🎺</b>');
+      if (n.ascTier) chips.push(`<b>🌟${n.ascTier}</b>`);
+      if (n.purge > 0) chips.push(`<b class="rhy" style="--p:${Math.round(n.purge * 100)}%">💥</b>`);
+    }
+    setHtml($('curNc'), chips.join(''));
+  }
   if (settings.view === 'first') { el.style.left = 'calc(50% + 14px)'; el.style.top = 'calc(50% + 10px)'; }
   else { el.style.left = ((renderer.mouse.x + 1) / 2 * innerWidth + 16) + 'px'; el.style.top = ((1 - renderer.mouse.y) / 2 * innerHeight + 14) + 'px'; }
 }
@@ -3222,7 +3441,7 @@ function bindSettings() {
     ['sEffects', 'effects', 'value'],
     ['sFov', 'fov', 'value', Number, v => v + '°'], ['sSens', 'sensitivity', 'value', Number, v => v.toFixed(2) + '×'],
     ['sMaster', 'master', 'value', Number, pct], ['sMusic', 'music', 'value', Number, pct], ['sSfx', 'sfx', 'value', Number, pct],
-    ['sShadows', 'shadows', 'checked'], ['sShake', 'screenShake', 'checked'], ['sFeel', 'feel', 'checked'], ['sProps', 'props', 'checked'], ['sSlop', 'slop', 'checked'], ['sPillow', 'pillow', 'checked'],
+    ['sShadows', 'shadows', 'checked'], ['sShake', 'screenShake', 'checked'], ['sFeel', 'feel', 'checked'], ['sKillCam', 'killCam', 'checked'], ['sProps', 'props', 'checked'], ['sSlop', 'slop', 'checked'], ['sPillow', 'pillow', 'checked'],
     ['sCB', 'colorBlind', 'value'], ['sRecommend', 'recommend', 'checked'],
     ['sCurAmmo', 'cursorAmmo', 'checked'], ['sHaze', 'shieldHaze', 'checked'],
     ['sLighting', 'lighting', 'value'], ['sShadowQ', 'shadowQ', 'value'], ['sAO', 'ao', 'checked'], ['sBloom', 'bloom', 'value'],
@@ -3578,7 +3797,12 @@ function frameBody(now) {
       if (lp) { const a = lp.netAim || lp.aim; renderer.yaw = Math.atan2(a.x, a.z); renderer.pitch = 0; }
       S.resetYaw = false;
     }
-    renderer.update(S.view, S.localId, dt * Math.max(0.12, ts));
+    S.view.ncTag = ncTag;   // v1.2.15: words over heads (renderer.syncNcTags)
+    if (S.role === 'peer') S.view.trapT = S.trapClk && S.peerLevel && S.peerLevel.traps ? S.trapClk.t + Math.min(0.5, (performance.now() - S.trapClk.at) / 1000) : null;
+    kcRecord();
+    if (S.kcWait && performance.now() >= S.kcWait.at) kcStart();
+    if (S.killCam) kcFrame(dt);
+    else renderer.update(S.view, S.localId, dt * Math.max(0.12, ts));
     updateHud(); updateMusic();
   } else {
     renderer.updateFx(dt);

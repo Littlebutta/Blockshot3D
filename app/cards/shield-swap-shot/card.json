@@ -1,0 +1,18 @@
+{
+  "id": "shield-swap-shot",
+  "name": "Swap Shot",
+  "rarity": "shieldmod",
+  "icon": "🔄",
+  "description": "Blocking fires a slow orb. If it hits an enemy, you trade places with them.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "swapShot",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "details": "The orb flies straight for 3 s and stops at walls. Bosses can't be swapped. Extra copies make it faster.",
+  "shieldMod": "swap",
+  "variants": true
+}

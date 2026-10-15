@@ -1,5 +1,5 @@
 // Authoritative simulation. Runs on the host (or in solo play). No rendering here.
-import { RULES, DEFAULT_STATS, DEFAULT_LOBBY_SETTINGS, sizeFor, speedFor, UNITS, bulletGravityFor } from './config.js';
+import { RULES, DEFAULT_STATS, DEFAULT_LOBBY_SETTINGS, sizeFor, speedFor, UNITS, bulletGravityFor, ROUND_MODS } from './config.js';
 import { applyCard, finishStats, weightedOffer, VARIANT_CHANCE, variantBase } from './cards.js';
 import { generateLevel, spawnPoints, clearSpawns, mulberry32, edgeDistance, boundaryPoint } from './levelgen.js';
 import { prepareLevel, movePlayer, moveBody, accel, pointInSolid, rayExit, groundBelow, segBlocked, clampToArena, wallSegments } from './physics.js';
@@ -7,6 +7,7 @@ import { planWave, splitWave, unitSpec, spawnBoss, spawnAllyBoss, bossThink, por
 import { botThink } from './ai.js';
 import { generateOpenWorld, owStart, owTick, owAir, owView, owBotThink, owRoundEnd, owDrive, owCarHit, OW } from './openworld.js';
 import { runHook } from './effects.js';
+import { TRAP, trapState, crusherAt, segDist } from './traps.js';
 import { SIDE, generateSideLevel, sideSpawnPoints, sideRules, swingStep, swingImpulse, inPit } from './side.js';
 import { CORE, generateCoreLevel, coreSpawnPoints, coreSpawnGuard, coreStart, coreCapture, coreTick, coreUse, corePlace, coreRows, coreAmonPick, coreAmonStats, coreAwardLeftovers } from './core.js';
 import { BRAWL, generateBrawlLevel, brawlSpawnPoints, brawlRules, brawlLaunch, brawlTick, applyFighter, brawlMove, brawlHit } from './brawl.js';
@@ -120,6 +121,27 @@ export const ENCORE = { gap: 0.11 };
 // v1.2.8 Gun Nest shield mod: a mountable turret. reach = how far (m, edge to edge) you can be to man it with the use key,
 // decay = share of its health lost per second, fireK = its fire rate vs the caster's, size = body size.
 export const MOUNT = { reach: 1.1, decay: 0.012, fireK: 2, size: 0.9 };
+// v1.2.15 round-2 cards (Devin): the numbers behind them. Card strength comes from each card's stat (so holy / cursed
+// versions scale it); these are the fixed parts.
+//   salvoSpeed: Opening Salvo move bonus; cold: Cold Barrel wait (s) and speed share; press: Pressure Stack window (s), max stacks,
+//   grace (s) a miss is forgiven after a hit; stand: Last Stand Rig health share, block (s), speed, rush time (s) per level;
+//   decoy: Afterimage decoy health, most at once; overpen: Overpen search range (m); spite: Spite Charge fuse (s);
+//   pound: Ground Pound landing speed, radius, pop, damage per level; rhythm: hits for level 1, overcharged size / damage;
+//   gamble: Gambler's Mag rolls; payback: Payback memory (s); bountyHeal: Bounty Mark heal share per bounty;
+//   volley: Blood Volley hold (s), health cost, fan width (rad), cooldown (s); snare: Snare Plate arm time, most at once;
+//   asc: Ascension Core rounds for tier 1 / 2 and the bonus per level; chain: Chain Encore longest chain; well: Gravity Well
+//   radius, pull (m/s2 per level), time, most per shooter; scorch: Scorched Floor radius and burn (dps share of bullet damage);
+//   purge: Purge Pulse charge (s); swap: Swap Shot orb speed / size / life; squad: Squad Caller soldier stats.
+export const NEWC = {
+  salvoSpeed: 0.3, cold: { wait: 1.5, speedK: 0.83 }, press: { win: 1, max: 8, grace: 0.3 },
+  stand: { at: 0.4, block: 1.5, speed: 0.3, time: 2 }, decoy: { hp: 40, max: 2 }, overpen: 12, spite: 0.5,
+  pound: { vy: -10.5, r: 3, pop: 8, dmg: 8 }, rhythm: { hits: 5, size: 2.5, dmg: 3 },
+  gamble: ['dmg', 'proj', 'bounce', 'homing'], payback: 2, bountyHeal: 0.25,
+  volley: { hold: 0.35, cost: 0.25, fan: 1.0, cd: 1 }, snare: { arm: 0.5, max: 2 },
+  asc: { t1: 5, t2: 10, k: 0.3 }, chain: 20, well: { r: 4, pull: 16, t: 0.5, max: 10 },
+  scorch: { r: 3.5, dps: 16 }, purge: { time: 3 }, swap: { speed: 9, perLv: 4, r: 0.35, life: 3 },
+  squad: { hp: 40, dmg: 0.35, rate: 2, speed: 6.5, size: 0.62 },
+};
 const WAVE_COLORS = ['#ff5f5f', '#ff7f50', '#e04a6a', '#ff9a6b'];
 
 export class Game {
@@ -139,6 +161,8 @@ export class Game {
     if (this.settings.core) { this.settings.side = false; this.settings.hazards = false; this.settings.commander = false; }
     this.settings.side = !!this.settings.side && this.settings.mode !== 'open';   // 2D side view: every mode except the open world
     if (this.settings.side) this.settings.hazards = false;   // the laser / saws / turret are built for the top-down arenas
+    if (['practice', 'open'].includes(this.settings.mode) || this.settings.brawl || this.settings.core) this.settings.roundMods = 'off';
+    this.rmod = null;
     this.allCards = cards;
     this.cardById = new Map(cards.map(c => [c.id, c]));
     this.combos = cards.filter(c => c.combo && !variantBase(c));   // base combos; their holy / cursed versions come from the pieces
@@ -151,7 +175,7 @@ export class Game {
     if (this.isWaves() || this.isExtract()) this.scores.players = 0;
     else if (this.isPractice()) { /* practice range keeps no score */ }
     else for (const p of this.players) this.scores[this.scoreKey(p)] = 0;
-    this.events = []; this.bullets = []; this.barricades = []; this.shields = []; this.mines = []; this.fields = []; this.booms = []; this.fires = []; this.clouds = []; this.rituals = []; this.relics = [];
+    this.events = []; this.bullets = []; this.barricades = []; this.shields = []; this.mines = []; this.fields = []; this.booms = []; this.fires = []; this.clouds = []; this.rituals = []; this.relics = []; this.wells = [];
     this.dyn = []; this.nextId = 1; this.nextUnit = 1;
     this.stepN = 0; this.unitsEv = null; this.unitsAt = -1; this.unitsGone = false;   // (unitsChanged)
     if (this.isBrawl()) for (const p of this.players) applyFighter(this, p);
@@ -236,6 +260,8 @@ export class Game {
     if (!this.isEnemy(src, t)) return this.settings.friendlyFire; // friendly fire only covers allies
     return true;
   }
+  // v1.2.13 (Devin): SCP also covers your own shots after someone blocked them back at you (bullets, bees, their blasts, fire, clouds).
+  ownShot(x, q) { return !!(x && x.cown && x.cown === q.id && q.stats.noSelfDamage > 0); }
   creditOf(p) { return p && p.ownerId ? this.player(p.ownerId) : p; }
 
   setInput(id, i) {
@@ -246,7 +272,7 @@ export class Game {
     const mx = fin(i.mx) ? i.mx : 0, mz = fin(i.mz) ? i.mz : 0, ml = Math.hypot(mx, mz);
     inp.mx = ml > 1 ? mx / ml : mx; inp.mz = ml > 1 ? mz / ml : mz;
     inp.fp = !!i.fp;   // first-person view: shots leave from the eye, straight down the crosshair
-    inp.jump = !!i.jump; inp.shoot = !!i.shoot; inp.block = !!i.block; inp.crouch = !!i.crouch; inp.use = !!i.use; inp.drop = !!i.drop; inp.dash = !!i.dash; inp.ready = i.ready | 0;
+    inp.jump = !!i.jump; inp.shoot = !!i.shoot; inp.block = !!i.block; inp.crouch = !!i.crouch; inp.use = !!i.use; inp.reload = !!i.reload; inp.drop = !!i.drop; inp.dash = !!i.dash; inp.ready = i.ready | 0;
     inp.blockSeq = i.blockSeq | 0; inp.reloadSeq = i.reloadSeq | 0; inp.useSeq = i.useSeq | 0; inp.rot = (i.rot | 0) & 7;   // rot: Core Defense carry turn (scroll wheel)
     inp.jumpSeq = (i.jumpSeq ?? i.js) | 0; inp.shotSeq = (i.shotSeq ?? i.ss) | 0;   // v1.2.6: press counters, so a quick tap is never lost between two steps
     if (!p.alive || p.reviving) { p.fx.jSeq = inp.jumpSeq; p.lastShotSeq = inp.shotSeq; }   // (presses made while down don't fire once you're back)
@@ -276,14 +302,43 @@ export class Game {
     this.oneModEach(p);
     const s = { ...DEFAULT_STATS };
     p.mod = null; p.smod = null;
-    for (const id of p.cards) { const c = this.cardById.get(id); if (c) { applyCard(s, c); if (c.weaponMod) p.mod = c.weaponMod; if (c.shieldMod) p.smod = c.shieldMod; } }
+    for (const id of p.cards) { const c = this.cardById.get(id); if (c) { applyCard(s, c); if (c.weaponMod && c.weaponMod !== 'squad') p.mod = c.weaponMod; if (c.shieldMod) p.smod = c.shieldMod; } }   // (Squad Caller keeps your normal gun)
+    this.roundCards(p, s);
     finishStats(s);
+    if (this.rmod && p.kind === 'hero' && !p.dummy && ROUND_MODS[this.rmod]) { applyCard(s, { modifiers: ROUND_MODS[this.rmod].mods }); s.ammo = Math.max(1, Math.round(s.ammo)); }   // v1.2.15 round modifier (after the clamps)
     if (p.dummy) s.health = Math.max(10, this.settings.dummyHp || 100);
     if (p.splitK && p.splitK < 1) applySplit(s, p.splitK);   // Clone shield mod: split down for the rest of the round
     p.stats = s;
     // Super Saiyan Hair: the pool is HAIR.mult x your max health, refreshed after every card (it never counts toward size).
     p.hairMax = p.smod === 'hair' ? HAIR.mult * s.health : 0;
     if (p.fx && p.fx.hair > p.hairMax) p.fx.hair = p.hairMax;
+  }
+  // v1.2.15: Overdrive Core and Ascension Core change with the round. cardRound remembers the round each card was taken
+  // (picked between rounds: the next round is its first; taken any other time: this round is its first).
+  roundCards(p, s) {
+    const cr = p.cardRound || (p.cardRound = {});
+    for (const id of p.cards) if (cr[id] == null) cr[id] = this.phase === 'picking' && !this.prePick ? this.round : this.round - 1;
+    if (!(s.overdrive > 0 || s.ascend > 0)) return;
+    const first = id => { const c = this.cardById.get(id); return c ? cr[id] + 1 : null; };
+    let od = null, asc = null;
+    for (const id of p.cards) {
+      const c = this.cardById.get(id); if (!c) continue;
+      const mods = c.modifiers || [];
+      if (mods.some(m => m.stat === 'overdrive')) od = od == null ? first(id) : Math.min(od, first(id));
+      if (mods.some(m => m.stat === 'ascend')) asc = asc == null ? first(id) : Math.min(asc, first(id));
+    }
+    p.ncOd = 0; p.ncAsc = 0;
+    if (s.overdrive > 0 && od != null) {
+      const on = ((this.round - od) % 3 + 3) % 3 === 0;
+      p.ncOd = on ? 1 : 2;
+      if (on) s.damage *= 1 + s.overdrive;
+      else { s.blockCooldown *= 1 + s.overdriveLag; s.reloadTime *= 1 + s.overdriveLag; }
+    }
+    if (s.ascend > 0 && asc != null) {
+      const held = this.round - asc, A = NEWC.asc, tier = held >= A.t2 ? 2 : held >= A.t1 ? 1 : 0;
+      p.ncAsc = tier + (Math.max(0, held) << 2);
+      if (tier) { const k = 1 + A.k * tier * s.ascend; s.health *= k; s.damage *= k; }
+    }
   }
   modeOK(c) {
     if (!c.modes) return true;
@@ -403,7 +458,7 @@ export class Game {
     const pp = this.prePick; this.prePick = null;
     for (const p of this.heroes()) { p.picked = true; p.offer = null; if (p.alive) { p.size = p.fixedSize || sizeFor(this.maxHp(p)); p.hp = this.maxHp(p); p.ammo = Math.round(p.stats.ammo); } }
     this.phase = 'countdown'; this.phaseT = pp.t; this.lastCount = null; this.fightSent = false;
-    this.emit({ t: 'round', n: this.round, map: this.level.name, wave: this.isWaves() ? this.round : 0, final: this.isFinalRound(), start: 1 });
+    this.emit({ t: 'round', n: this.round, map: this.level.name, wave: this.isWaves() ? this.round : 0, final: this.isFinalRound(), rmod: this.rmod, start: 1 });
   }
   afterPicks() { if (this.prePick) this.endPrePick(); else this.startRound(); }
 
@@ -411,7 +466,7 @@ export class Game {
     // Core Defense: what the players built carries over (a retry puts back how the wave started).
     const coreKeep = this.settings.core ? (this.coreRetry || (this.round > 0 ? coreCapture(this) : null)) : null, coreNoHeal = !!this.coreRetry || this.round === 0;
     this.coreRetry = null;
-    this.round++; this.levelVersion++; this.time = 0; this.overtime = false; this.odx = 0;
+    this.round++; this.levelVersion++; this.time = 0; this.overtime = false; this.odx = 0; this.fightAt = null; this.wells = [];
     this.unitsRemoved();
     this.players = this.players.filter(p => !p.transient);
     // Bots that gave their seat to a late joiner leave now (between rounds, so nobody vanishes mid-fight).
@@ -437,10 +492,13 @@ export class Game {
     const waveCount = plan ? Math.max(1, waveGroups[0].length + (plan.boss ? 1 : 0)) : 0;
     const totalUnits = plan ? plan.units.length + (plan.boss ? 4 : 0) : 0;
     const seed = (Math.random() * 2 ** 31) | 0, rng = mulberry32(seed ^ 0x51ed);
+    const prevMod = this.rmod; this.rmod = this.pickRoundMod();
     const open = this.isOpen(), side = this.isSide();
     SIDE_ON = side; BRAWL_ON = this.isBrawl();
     if (this.settings.core && this.coreSeed == null) this.coreSeed = seed;   // v28 Core Defense: one map for the whole match (made for wave 1)
     const level = open ? generateOpenWorld(seed, this.settings) : this.settings.core ? generateCoreLevel(this.coreSeed, this.settings.themes) : BRAWL_ON ? generateBrawlLevel(heroes.length, seed, this.settings.themes, !!this.settings.brawlFlat) : side ? generateSideLevel(heroes.length + Math.ceil(totalUnits / 3), this.settings.mapSource, seed, this.settings.themes, { spread: this.settings.mode === 'tdm' || this.isWaves() }) : generateLevel(heroes.length + Math.ceil(totalUnits / 2), this.settings.mapSource, seed, this.settings.themes, heroes.length + waveCount, { noLava: this.isWaves(), liquids: { lava: this.settings.mapLava !== false, ice: this.settings.mapIce !== false } });
+    level.rmod = this.rmod;
+    if (this.rmod && ROUND_MODS[this.rmod].grav) level.gravK = (level.gravK || 1) * ROUND_MODS[this.rmod].grav;
     const sizes = groups.map(g => g.length);
     if (waveCount) sizes.push(waveCount);
     const pts = open ? sizes.map(n => Array.from({ length: n }, () => ({ x: 0, y: OW.busY, z: 0 }))) : this.settings.core ? coreSpawnPoints(level, sizes) : BRAWL_ON ? brawlSpawnPoints(level, sizes) : side ? sideSpawnPoints(level, sizes) : spawnPoints(level, sizes, { coop: this.isWaves() && sizes.length === 2 });
@@ -451,6 +509,7 @@ export class Game {
     // v26 Core Defense: heroes stay where they were between waves (not on a retry or the first wave)
     const corePos = this.settings.core && coreKeep && !coreNoHeal ? new Map(heroes.filter(p => p.alive && p.pos).map(p => [p.id, { ...p.pos }])) : null;
     for (const p of this.players) { p.alive = false; p.reviving = false; }
+    for (const p of heroes) if (this.rmod !== prevMod || (!BRAWL_ON && (p.stats.overdrive > 0 || p.stats.ascend > 0))) this.recompute(p);   // v1.2.15: round-based cards
     if (BRAWL_ON) for (const p of this.players) { p.stocks = p.connected && heroes.includes(p) ? Math.max(1, this.settings.stocks || BRAWL.stocks) : 0; p.respawnT = null; }
     groups.forEach((g, gi) => g.forEach((p, k) => this.resetPlayer(p, (corePos && corePos.get(p.id)) || pts[gi][k])));
     this.ow = null;
@@ -476,8 +535,17 @@ export class Game {
     this.refreshSolids();
     this.unitsChanged();
     this.phase = 'countdown'; this.phaseT = this.settings.core ? CORE.prep : (RULES.countdown || 3) + (this.isWaves() ? WAVE_PREP.extra : 0) + (open ? 2 : 0); this.fightSent = false; this.roundWinner = null;
-    this.emit({ t: 'round', n: this.round, map: level.name, hazard: this.hazard && this.hazard.type, wave: this.isWaves() ? this.round : 0, boss: plan && plan.boss && this.boss ? this.boss.name : null, final: this.isFinalRound(), gm: this.gm ? this.gmSummary(plan) : null });
+    this.emit({ t: 'round', n: this.round, map: level.name, hazard: this.hazard && this.hazard.type, wave: this.isWaves() ? this.round : 0, boss: plan && plan.boss && this.boss ? this.boss.name : null, final: this.isFinalRound(), rmod: this.rmod, gm: this.gm ? this.gmSummary(plan) : null });
     if (this.gm) for (const u of this.players) if (u.kind === 'elite' && u.alive) this.announceElite(u);
+  }
+
+  // v1.2.15: the round modifier for the next round (never the same one twice in a row when random)
+  pickRoundMod() {
+    const r = this.settings.roundMods;
+    if (!r || r === 'off') return null;
+    if (r !== 'random') return ROUND_MODS[r] ? r : null;
+    const ids = Object.keys(ROUND_MODS).filter(k => k !== this.rmod);
+    return ids[Math.floor(Math.random() * ids.length)];
   }
 
   nearSpot(h, k) {
@@ -500,6 +568,7 @@ export class Game {
     p.lastBlockSeq = p.input.blockSeq; p.lastReloadSeq = p.input.reloadSeq; p.lastShotSeq = p.input.shotSeq | 0;
     p.lastUseSeq = p.input.useSeq | 0; p.coreUseT = 0;   // v1.0.1: a use press made while dead doesn't fire on respawn; the clock restarts each round
     if (p.flying) p.pos.y = this.flyHeight;
+    this.ncReset(p);
     runHook('onRoundStart', this, p);
   }
 
@@ -523,6 +592,8 @@ export class Game {
     else if (kind === 'blockTurret' || kind === 'mount') { stats = extra.stats; name = `${owner.name}'s turret`; }
     else if (kind === 'brute') { stats = extra.stats; name = `${owner.name}'s brute`; }
     else if (kind === 'angel') { stats = extra.stats; name = `${owner.name}'s angel`; }
+    else if (kind === 'decoy') { stats = { ...DEFAULT_STATS, health: NEWC.decoy.hp, moveSpeed: 0, jump: 0 }; name = `${owner.name}'s afterimage`; cosmetics = owner.cosmetics; }
+    else if (kind === 'soldier') { stats = extra.stats; name = `${owner.name}'s soldier`; cosmetics = owner.cosmetics; }
     const p = this.makePlayer({
       id, name, kind: kind === 'wave' ? (extra.unitKind || 'hero_bot') : kind, isBot: true, transient: true,
       difficulty: extra.difficulty || (owner ? 'hard' : 'normal'), ownerId: owner ? owner.id : null,
@@ -540,6 +611,8 @@ export class Game {
     if (kind === 'mount') { p.fixedSize = MOUNT.size; p.noBlock = true; p.ephemeral = true; p.heavy = true; p.casterId = owner.id; p.riderId = null; }
     if (kind === 'brute') { p.fixedSize = RITUAL.brute.size; p.melee = extra.melee; p.lifeT = RITUAL.brute.life; p.noBlock = true; p.ephemeral = true; p.heavy = true; }
     if (kind === 'angel') { p.fixedSize = 0.8; p.noBlock = true; p.ephemeral = true; p.flying = true; }
+    if (kind === 'decoy') { p.fixedSize = owner.size || 1; p.noBlock = true; p.ephemeral = true; p.lifeT = extra.life || 2; }
+    if (kind === 'soldier') { p.fixedSize = NEWC.squad.size; p.noBlock = true; p.ephemeral = true; }
     p.stats = stats; p.cards = cards;
     this.players.push(p);
     this.resetPlayer(p, pt);
@@ -678,6 +751,56 @@ export class Game {
     }
   }
 
+  // v1.2.15 trap arenas: crushers slam down on a timer (a moving solid: anyone caught under it is hurt and shoved out)
+  crusherStep(o) {
+    const c = crusherAt(o.def, this.time), was = o.st;
+    o.pos.y = c.y; o.st = c.st;
+    if (c.st === 3 && was !== 3) { this.emit({ t: 'nc', k: 'crush', x: o.pos.x, z: o.pos.z }); }
+    if (c.st < 2 || c.st > 3) return;
+    for (const p of this.players) {
+      if (!p.alive || p.reviving || p.flying || p.ground === o) continue;
+      const r = PR * (p.size || 1), ox = o.w / 2 + r - Math.abs(p.pos.x - o.pos.x), oz = o.d / 2 + r - Math.abs(p.pos.z - o.pos.z);
+      if (ox <= 0 || oz <= 0 || p.pos.y >= o.pos.y + o.h - 0.05 || p.pos.y + PH * (p.size || 1) <= o.pos.y) continue;
+      const sx = Math.sign(p.pos.x - o.pos.x) || 1, sz = Math.sign(p.pos.z - o.pos.z) || 1;
+      if (ox < oz) { p.pos.x += sx * (ox + 0.05); p.vel.x = sx * 7; } else { p.pos.z += sz * (oz + 0.05); p.vel.z = sz * 7; }
+      if (this.phase === 'play' && (p.fx.crushCd || 0) <= this.time) {
+        p.fx.crushCd = this.time + 1;
+        if (p.blockT > 0) this.emit({ t: 'block', p: p.id, x: p.pos.x, y: p.pos.y + 1, z: p.pos.z });
+        else this.hurt(p, TRAP.crushDmg, null, { x: ox < oz ? sx : 0, y: 0, z: ox < oz ? 0 : sz });
+      }
+    }
+  }
+  // Spike floors, laser fences and sweeping lasers (traps.js): hurt whoever touches them while they're on.
+  updateTraps() {
+    const L = this.level, T = this.time;
+    if (!L.traps || this.phase !== 'play') return;
+    const st = L.traps.map(tr => trapState(tr, T));
+    for (const p of this.players) {
+      if (!p.alive || p.reviving || p.flying || p.kind === 'turret' || p.kind === 'hazardTurret') continue;
+      const r = PR * (p.size || 1), top = p.pos.y + PH * (p.size || 1);
+      L.traps.forEach((tr, i) => {
+        const s = st[i]; if (s.s !== 2) return;
+        let dmg = 0, dir = null;
+        if (tr.kind === 'spikes') {
+          if (p.pos.y < TRAP.spikeHeight && Math.abs(p.pos.x - tr.x) < tr.w / 2 + r * 0.5 && Math.abs(p.pos.z - tr.z) < tr.d / 2 + r * 0.5) { dmg = TRAP.spikeDmg; dir = { x: 0, y: 1, z: 0 }; }
+        } else if (tr.kind === 'fence') {
+          if (p.pos.y < TRAP.fenceH && segDist(p.pos.x, p.pos.z, tr.ax, tr.az, tr.bx, tr.bz) < 0.2 + r) dmg = TRAP.fenceDmg;
+        } else {
+          const c = tr.axis === 'x' ? p.pos.z : p.pos.x;
+          if (Math.abs(c - s.pos) < 0.25 + r && p.pos.y < TRAP.sweepY && top > TRAP.sweepY) dmg = TRAP.sweepDmg;
+        }
+        if (!dmg) return;
+        const key = 'trapCd' + tr.id;
+        if ((p.fx[key] || 0) > T) return;
+        p.fx[key] = T + 0.8;
+        if (p.blockT > 0) { this.emit({ t: 'block', p: p.id, x: p.pos.x, y: p.pos.y + 0.6, z: p.pos.z }); return; }
+        this.hurt(p, dmg, null, dir);
+        if (tr.kind === 'spikes') p.vel.y = Math.max(p.vel.y, 6.5);
+        else if (tr.kind === 'fence') { const vx = tr.bz - tr.az, vz = -(tr.bx - tr.ax), l = Math.hypot(vx, vz) || 1, sd = Math.sign((p.pos.x - tr.ax) * vx + (p.pos.z - tr.az) * vz) || 1; p.vel.x += sd * vx / l * 8; p.vel.z += sd * vz / l * 8; }
+      });
+    }
+  }
+
   // ------------------------------------------------------------ world objects
   buildDynamics() {
     this.dyn = (this.level.dynamic || []).map(d => {
@@ -698,7 +821,7 @@ export class Game {
     s.min.y = o.pos.y; s.max.y = o.pos.y + o.h;
   }
   impulse(o, J) {
-    if (!o || o.kind === 'slide' || o.kind === 'piston') return;
+    if (!o || o.kind === 'slide' || o.kind === 'piston' || o.kind === 'crusher') return;
     if (o.kind === 'swing') { swingImpulse(o, J); return; }
     o.vel.x += J.x / o.mass; o.vel.y += J.y / o.mass; o.vel.z += J.z / o.mass;
   }
@@ -714,6 +837,8 @@ export class Game {
         const ease = x => x * x * (3 - 2 * x);
         const k = u < 0.3 ? 0 : u < 0.5 ? ease((u - 0.3) / 0.2) : u < 0.8 ? 1 : 1 - ease((u - 0.8) / 0.2);
         o.h = o.def.hMin + (o.def.hMax - o.def.hMin) * k;
+      } else if (o.kind === 'crusher') {
+        this.crusherStep(o);
       } else if (o.kind === 'swing') {
         swingStep(o, dt);
       } else if ((o.kind === 'crate' || o.kind === 'barrel') && o.gone) {
@@ -1341,7 +1466,7 @@ export class Game {
   addMine(p, x, y, z) {
     const u = this.nearMount(x, z, 0.5, y);   // v1.2.8: a mine meant for a Gun Nest turret's spot goes down just beside it
     if (u) { const dx = x - u.pos.x, dz = z - u.pos.z, d = Math.hypot(dx, dz) || 1, k = PR * u.size + 0.55; x = u.pos.x + (d > 0.01 ? dx / d : 1) * k; z = u.pos.z + (d > 0.01 ? dz / d : 0) * k; }
-    const mine = this.mines.filter(m => m.owner === p.id);
+    const mine = this.mines.filter(m => m.owner === p.id && !m.snare);
     if (mine.length >= 8) this.mines = this.mines.filter(m => m !== mine[0]);
     const s = p.stats;
     this.mines.push({ id: this.nextId++, owner: p.id, ownerRef: p, x, y, z, armT: 0.7, life: 25, dmg: this.effDamage(s),
@@ -1352,6 +1477,7 @@ export class Game {
     for (const m of this.mines) {
       m.armT -= dt; m.life -= dt;
       if (m.life <= 0) { m.dead = true; continue; }
+      if (m.snare) { this.snareCheck(m); continue; }   // v1.2.15 Snare Plate
       for (const q of this.players) {
         if (!q.alive || q.reviving || q.flying) continue;
         if (q === m.ownerRef && m.armT > 0) continue;
@@ -1391,7 +1517,7 @@ export class Game {
       const c = Math.ceil(this.phaseT);
       if (c !== this.lastCount && c > 0) { this.lastCount = c; this.emit({ t: 'count', n: c }); }
       if (this.phaseT <= 0 && !this.fightSent) { this.fightSent = true; this.lastCount = null; this.emit({ t: 'fight' }); }
-      if (this.phaseT <= 0) this.phase = 'play';
+      if (this.phaseT <= 0) { this.phase = 'play'; this.fightAt = this.time; }
       this.updateDynamics(dt); this.refreshSolids();
       if (this.ow) owTick(this, dt);
       if (this.settings.core) coreTick(this, dt);   // build phase: drops keep falling, you can carry and place
@@ -1408,8 +1534,8 @@ export class Game {
       this.updatePlayers(dt, true);
       this.updateBullets(dt);
       this.updateMines(dt); this.updateFires(dt); this.updateClouds(dt); this.updateFields(dt); this.updateBooms(dt); this.updateShields(dt); this.updatePillars(dt);
-      this.updateRituals(dt); this.updateRelics(dt);
-      this.updateHazard(dt);
+      this.updateRituals(dt); this.updateRelics(dt); this.updateWells(dt);
+      this.updateHazard(dt); this.updateTraps();
       if (this.isWaves() || this.telegraphs.length || this.shockwaves.length) coopTick(this, dt);   // Space King's ally boss casts in any mode
       if (this.settings.core) coreTick(this, dt);
       if (this.ow) owTick(this, dt);
@@ -1464,6 +1590,7 @@ export class Game {
       else if (p.kind === 'boss') bossThink(this, p, dt);
       else if (p.kind === 'portal') portalThink(this, p, dt);
       else if (p.kind === 'angel') { this.angelThink(p, dt); continue; }
+      else if (p.kind === 'decoy') { /* v1.2.15 Afterimage: stands still where you blocked */ }
       else if (p.kind === 'mount') { this.mountThink(p, dt); if (!p.alive) continue; }
       else if (p.isBot || p.commanded) (this.ow ? owBotThink : botThink)(this, p, dt);
       this.updatePlayer(p, dt, canAct);
@@ -1495,9 +1622,9 @@ export class Game {
     p.crouch = !!(this.ow && inp.crouch && !p.veh && p.onGround && p.kind === 'hero');
     // v1.0.1: crouching also makes your body (and hitbox) smaller, capped so even big builds fit up building stairs
     if (p.crouch) p.size = Math.min(p.size * OW.crouch.body, OW.crouch.maxSize);
-    const spd = this.walkSpeed(p) * (slamAir ? SLAM.airSpeed : 1);
+    const spd = this.walkSpeed(p) * (slamAir ? SLAM.airSpeed : 1) * this.dirSpeedK(p, inp.mx, inp.mz);
     // Countdown: nobody moves until it ends, except in co-op waves (prep time, but stay near your spawn).
-    const frozen = this.phase === 'countdown' && !this.isWaves();
+    const frozen = (this.phase === 'countdown' && !this.isWaves()) || (p.fx.rootT || 0) > this.time;   // (v1.2.15: Snare Plate roots too)
     if (frozen) { p.vel.x = 0; p.vel.z = 0; if (p.fx.thrust) p.fx.thrust.t = 0; }   // the countdown locks everyone in place
     const bHold = BRAWL_ON && p.kind === 'hero' ? brawlMove(this, p, inp, dt, frozen) : 0;   // brawl: 1 = hanging on a ledge or floating in to respawn, 2 = charging or doing the air dash
     if (bHold) canAct = false;
@@ -1528,7 +1655,9 @@ export class Game {
     if (inp.aimPoint) p.aimPoint = inp.aimPoint;
     // Fast movers (critters run at bullet speed) move in small sub-steps so they can't skip through walls.
     const sub = Math.max(1, Math.min(5, Math.ceil(Math.hypot(p.vel.x, p.vel.z) * dt / 0.3)));
+    const wasGround = p.onGround, fallV = p.vel.y;
     if (bHold !== 1) for (let k = 0; k < sub; k++) movePlayer(p, dt / sub, L, p.flying ? this.wallSolids : this.solids);
+    if (s.pound > 0 && !wasGround && p.onGround && fallV < NEWC.pound.vy && canAct && !p.flying) this.groundPound(p);   // v1.2.15 Ground Pound
     if (this.phase === 'countdown' && this.isWaves() && p.spawn && !p.flying && !(this.settings.core && p.team !== 1)) {   // (Core Defense: heroes build during the countdown)
       const dx = p.pos.x - p.spawn.x, dz = p.pos.z - p.spawn.z, d = Math.hypot(dx, dz);
       if (d > WAVE_PREP.leash) { p.pos.x = p.spawn.x + dx / d * WAVE_PREP.leash; p.pos.z = p.spawn.z + dz / d * WAVE_PREP.leash; p.vel.x = 0; p.vel.z = 0; }
@@ -1545,10 +1674,24 @@ export class Game {
     if (p.blockT > 0) {
       p.blockT -= dt;
     }
-    if (p.reloadT > 0) { p.reloadT -= dt; if (p.reloadT <= 0) { p.reloadT = 0; p.ammo = s.ammo; } }
+    if (p.reloadT > 0) {   // (v1.2.15 Running Gun: reloads faster while you stand still)
+      p.reloadT -= dt * (s.runGun > 0 && Math.hypot(inp.mx || 0, inp.mz || 0) < 0.1 ? 1 + s.runGun : 1);
+      if (p.reloadT <= 0) { p.reloadT = 0; p.ammo = s.ammo; this.gambleRoll(p); }
+    }
     if (p.encoreQ && p.encoreQ.length) {   // Encore follow-up shots
       for (const e of p.encoreQ) e.t -= dt;
-      while (p.encoreQ.length && p.encoreQ[0].t <= 0) { p.encoreQ.shift(); if (canAct && !hold) this.tryShoot(p, true); }
+      while (p.encoreQ.length && p.encoreQ[0].t <= 0) {
+        const e = p.encoreQ.shift();
+        if (canAct && !hold) {
+          this.tryShoot(p, true);
+          // v1.2.15 Chain Encore: each Encore shot may fire another, and that one may too
+          const ch = e.ch || 1;
+          if (s.chainEncore > 0 && ch < NEWC.chain && Math.random() < s.chainEncore) {
+            p.encoreQ.push({ t: ENCORE.gap, ch: ch + 1 }); p.encoreQ.sort((a, b) => a.t - b.t);
+            if (ch + 1 >= 3) this.emit({ t: 'nc', k: 'chain', p: p.id, n: ch + 1, x: p.pos.x, y: p.pos.y + 2.2 * p.size, z: p.pos.z });
+          }
+        }
+      }
     }
     // Core Defense: the use key (E) picks up and puts down blocks, cubes and turrets (also during the build phase).
     if (this.settings.core && p.kind === 'hero') {
@@ -1562,11 +1705,15 @@ export class Game {
     if (canAct) {
       if (inp.blockSeq !== p.lastBlockSeq) { p.lastBlockSeq = inp.blockSeq; this.tryBlock(p); }
       if (inp.reloadSeq !== p.lastReloadSeq) { p.lastReloadSeq = inp.reloadSeq; this.startReload(p); }
+      if (s.bloodVolley > 0) this.volleyHold(p, dt, !!inp.reload && !hold);
       const tap = ss !== p.lastShotSeq; p.lastShotSeq = ss;   // v1.2.6: a click whose press and release both came between steps: one shot attempt
       if ((inp.shoot || tap) && !hold && !p.carry) this.tryShoot(p);   // Core Defense: no shooting while carrying
     } else { p.lastBlockSeq = inp.blockSeq; p.lastReloadSeq = inp.reloadSeq; p.lastShotSeq = ss; }
     if (p.mod === 'katana') this.updateKatana(p, dt, canAct && !hold);
     if (hold) this.chargeHold(p, dt);
+    else if (p.smod === 'purge' && (p.fx.purge || 0) > 0) {   // v1.2.15 Purge Pulse: let go at full charge to fire, earlier and it drains back
+      if (p.fx.purge >= 1 && canAct) this.purgePulse(p); else p.fx.purge = Math.max(0, p.fx.purge - dt / NEWC.purge.time * 1.5);
+    }
     if (s.regen > 0) p.hp = Math.min(this.maxHp(p), p.hp + s.regen * dt * (BRAWL_ON && p.kind === 'hero' ? BRAWL.regenK : 1));
     this.updateStatus(p, dt);
     if (p.melee && canAct) this.meleeContact(p);
@@ -1577,7 +1724,7 @@ export class Game {
 
   // Top walking speed right now (crouch, chill and wet slow it). v30: also sent to the player for local prediction.
   walkSpeed(p) {
-    return (p.crouch ? OW.crouch.speed : 1) * (this.hairFull(p) && !p.fx.hold ? HAIR.fullSpeed : 1) * p.stats.moveSpeed * speedFor(p.size) * ((p.fx.chillT || 0) > this.time ? 1 - (p.fx.chillK || 0.4) : 1) * ((p.fx.wetT || 0) > this.time ? ICE.wetSlow : 1);
+    return (p.crouch ? OW.crouch.speed : 1) * (this.hairFull(p) && !p.fx.hold ? HAIR.fullSpeed : 1) * this.rushK(p) * p.stats.moveSpeed * speedFor(p.size) * ((p.fx.chillT || 0) > this.time ? 1 - (p.fx.chillK || 0.4) : 1) * ((p.fx.wetT || 0) > this.time ? ICE.wetSlow : 1);
   }
   // v30 client-side prediction: per remote human [id, last input seq applied, walk speed, jump speed, ok, on ground].
   // ok = 0 whenever the simple walk/jump model would guess wrong (vehicles, falling in, brawl, holds, moving floors...).
@@ -1589,14 +1736,17 @@ export class Game {
       // v1.2.6: joiners now replay against walls, blocks and props too, so standing on a crate, a resting piston or a
       // bobbing float stays predicted (not on slides / swings, or anything moving faster than 0.6 m/s); a rising pillar lifts you
       const G = p.ground, slowG = !G || (G.kind !== 'slide' && G.kind !== 'swing' && Math.hypot(G.dx || 0, G.dy || 0, G.dz || 0) < 0.6 * (this.stepDt || 1 / 60));
-      const ok = p.alive && !p.reviving && !p.veh && !p.flying && !p.fx.hold && !p.fx.slam && !(p.fx.thrust && p.fx.thrust.t > 0) && slowG && !(p.ow && p.ow.st !== 'ground')
+      const ok = p.alive && !p.reviving && !p.veh && !p.flying && !p.fx.hold && !p.fx.slam && !((p.fx.rootT || 0) > this.time) && !((p.fx.pullT || 0) > this.time) && !(p.fx.thrust && p.fx.thrust.t > 0) && slowG && !(p.ow && p.ow.st !== 'ground')
         && !(this.phase === 'countdown' && !this.isWaves()) && !(L.ice && p.onGround) && !p.commanded && !p.fx.mount
         && !this.barricades.some(b => b.grow && Math.abs(p.pos.x - b.x) < b.len / 2 + 1 && Math.abs(p.pos.z - b.z) < b.th / 2 + 1);
       // v1.2.9: [6] ms the newest input has been in use: the joiner replays only the rest of it (joiners' inputs are now applied
       // for exactly as long as they were held, main.js queueInput, so this is what's left of a 0-17 ms difference at every snapshot)
       out.push([p.id, p.input.q, Math.round(this.walkSpeed(p) * 100) / 100, Math.round(p.stats.jump * (L.ice ? ICE.jumpK : 1) * 100) / 100, ok ? 1 : 0, p.onGround ? 1 : 0, Math.max(0, Math.round((this.time - (p.inAt ?? this.time)) * 1000))]);
       // v1.2.9: [7-9] the prep-time leash (spawn x, z, radius) while it holds you, so the joiner's replay stops at it like you do here
-      if (this.phase === 'countdown' && this.isWaves() && p.spawn && !p.flying && !(this.settings.core && p.team !== 1)) out[out.length - 1].push(Math.round(p.spawn.x * 100) / 100, Math.round(p.spawn.z * 100) / 100, WAVE_PREP.leash);
+      const leash = this.phase === 'countdown' && this.isWaves() && p.spawn && !p.flying && !(this.settings.core && p.team !== 1);
+      if (leash) out[out.length - 1].push(Math.round(p.spawn.x * 100) / 100, Math.round(p.spawn.z * 100) / 100, WAVE_PREP.leash);
+      // v1.2.15: [10-11] Backpedal Boots (faster away from your aim, slower toward it), so the replay moves like the host
+      if (p.stats.backpedal > 0 || p.stats.advanceSlow > 0) { if (!leash) out[out.length - 1].push(0, 0, 0); out[out.length - 1].push(Math.round(p.stats.backpedal * 100) / 100, Math.round(p.stats.advanceSlow * 100) / 100); }
     }
     return out;
   }
@@ -1887,6 +2037,7 @@ export class Game {
   canHoldCharge(p) {
     if (!p.alive || p.reviving || p.noBlock) return false;
     if (p.smod === 'hair') return (p.fx.hair || 0) < (p.hairMax || 0);
+    if (p.smod === 'purge') return !p.fx.purgeUsed;
     if (p.smod === 'spaceking') return !p.fx.kingUsed && (p.blockCdT <= 0 || (p.fx.king || 0) > 0) && p.onGround && !this.players.some(u => u.kingOf === p.id && u.alive);
     if (p.smod === 'ritual' || p.smod === 'grove') {
       const r = p.fx.ritual;
@@ -1896,6 +2047,7 @@ export class Game {
     return false;
   }
   chargeHold(p, dt) {
+    if (p.smod === 'purge') { p.fx.purge = Math.min(1, (p.fx.purge || 0) + dt / NEWC.purge.time); return; }
     if (p.smod === 'hair') {
       p.fx.hair = Math.min(p.hairMax, (p.fx.hair || 0) + p.hairMax / (HAIR.fillTime * this.holdRateK(p)) * dt);
       if (p.fx.hair >= p.hairMax && !p.fx.hairFullSent) { p.fx.hairFullSent = true; this.emit({ t: 'hairFull', p: p.id, x: p.pos.x, y: p.pos.y + 1.5 * p.size, z: p.pos.z }); }
@@ -2171,7 +2323,7 @@ export class Game {
     if (p.mod === 'shield' || p.mod === 'katana') return;   // the shield and katana charge instead (updateShieldGun / updateKatana)
     if (!encore && (p.reloadT > 0 || p.fireT > 0 || p.ammo <= 0)) return;
     const s = p.stats;
-    if (!encore) { p.fireT = 1 / s.fireRate; p.ammo--; }
+    if (!encore) { p.fireT = 1 / (s.fireRate * (s.runGun > 0 && Math.hypot(p.input.mx || 0, p.input.mz || 0) >= 0.1 ? 1 + s.runGun : 1)); p.ammo--; }   // (v1.2.15 Running Gun)
     if (!encore && s.encore > 0 && p.mod !== 'critter') {
       const n = Math.floor(s.encore) + (Math.random() < s.encore % 1 ? 1 : 0);
       if (n > 0) {   // v1.2.11: added to the queue (a fast next shot used to wipe the encores still waiting from the last one)
@@ -2180,8 +2332,9 @@ export class Game {
         q.sort((a, b) => a.t - b.t);
       }
     }
-    const n = Math.round(s.projectiles);
-    if (p.mod && p.mod !== 'tank') { this.fireMod(p, n); if (p.ammo <= 0) this.startReload(p); return; }   // Tiny Tank fires normal bullets
+    const boost = this.shotBoost(p, encore), b0 = this.bullets.length;   // v1.2.15: Tight Chamber, Cold Barrel, Battle Rhythm, Payback, Gambler's Mag
+    const n = Math.min(12, Math.round(s.projectiles * boost.proj));
+    if (p.mod && p.mod !== 'tank') { this.fireMod(p, n); this.applyBoost(p, boost, b0); if (p.ammo <= 0) this.startReload(p); return; }   // Tiny Tank fires normal bullets
     if (s.skyfall > 0) {
       // Locked to where you aimed when you fired, kept inside the arena.
       const L = this.level;
@@ -2211,6 +2364,7 @@ export class Game {
         this.spawnBullet(p, o, d, s.bulletSpeed, false);
       }
     }
+    this.applyBoost(p, boost, b0);
     this.emit({ t: 'shoot', p: p.id, x: p.pos.x, y: this.chest(p), z: p.pos.z, sky: s.skyfall > 0 ? 1 : 0 });
     if (p.ammo <= 0) this.startReload(p);
   }
@@ -2327,6 +2481,7 @@ export class Game {
 
   startReload(p) {
     if (p.reloadT > 0 || p.ammo >= p.stats.ammo) return;
+    if (this.salvoOn(p)) { p.ammo = Math.round(p.stats.ammo); this.gambleRoll(p); this.emit({ t: 'nc', k: 'salvo', p: p.id }); return; }   // v1.2.15 Opening Salvo: instant reloads
     p.reloadT = p.stats.reloadTime;
     this.emit({ t: 'reload', p: p.id });
   }
@@ -2338,6 +2493,8 @@ export class Game {
     if ((p.smod === 'ritual' || p.smod === 'grove' || p.smod === 'spaceking') && !free) return;
     const s = p.stats;
     if (!free) p.blockCdT = s.blockCooldown;
+    p.fx.blockAt = this.time;   // v1.2.15 Perfect Parry
+    if (!free) this.ncBlock(p);   // v1.2.15: Afterimage, Snare Plate, Scorched Floor, Swap Shot
     // Shield mods. Clone replaces the block entirely: no bubble and no block effects, just the clone.
     if (p.smod === 'clone') { if (!free) this.spawnClone(p); return; }
     p.fx.deploy = this.planDeploys(p);   // where this block's turret / walls / mines go
@@ -2420,6 +2577,12 @@ export class Game {
     const tag = this.dmgTag || (quiet ? 'dot' : 'hit'); this.dmgTag = null;   // v1.2.11: what kind of damage, for the death recap
     if (!t.alive || t.reviving || this.phase !== 'play') return;
     if ((t.fx.invulnT || 0) > this.time) return;
+    // v1.2.15 Gilded Shell: a hit (not burn / poison ticks) that would hurt you just shatters a shell instead
+    if ((t.fx.shell || 0) > 0 && !quiet && amt >= 1 && src !== t && this.canHurt(src, t)) {
+      t.fx.shell--; t.flashT = 0.12;
+      this.emit({ t: 'nc', k: 'shell', p: t.id, n: t.fx.shell, x: t.pos.x, y: this.chest(t), z: t.pos.z });
+      return;
+    }
     if (t.veh && t.veh.hp != null && amt > 0 && owCarHit(this, t, amt, src)) return;   // open world: in a car, the car takes the damage
     if ((t.fx.hexT || 0) > this.time) amt *= 1 + (t.fx.hexK || 0.25);
     if (amt > 0 && src && src !== t) amt *= this.suddenMul();   // v1.2.9: sudden death doubles damage every 10 s
@@ -2439,6 +2602,7 @@ export class Game {
     const rest = amt - soaked;
     const dealt = Math.max(0, BRAWL_ON && t.kind === 'hero' ? amt : soaked + Math.min(rest, Math.max(0, t.hp)));   // v1.0.1: brawl fighters sit at 1 hp, so count the whole hit
     if (t.kind === 'hero' && dealt > 0) this.logDamage(t, src, tag, dealt);
+    const hp0 = t.hp;
     t.hp -= rest; if (!quiet) t.flashT = 0.12;   // steady damage (burn, poison, shock) shows its own effect instead of a white flash
     if (this.isPractice() && this.settings.practiceGod && !t.isBot && t.kind === 'hero' && t.hp < 1) t.hp = 1;   // practice: you can't die
     if (BRAWL_ON && t.kind === 'hero' && amt > 0) brawlHit(this, t);   // a hit lets go of a ledge; two break a dash charge
@@ -2450,7 +2614,8 @@ export class Game {
       if (amt > 30) t.vel.y += Math.min(3, (amt - 30) * 0.03) / t.size;
     }
     const enemyHit = src && src !== t && this.isEnemy(src, t);
-    if (enemyHit) { t.fx.lastSrc = src; t.fx.lastSrcT = this.time; }   // side view: a pit or edge kill credits whoever hit you last
+    if (enemyHit) { t.fx.lastSrc = src; t.fx.lastSrcT = this.time; }
+    if (rest > 0 && t.hp > 0) this.ncHurt(t, rest, enemyHit);   // v1.2.15: Last Stand Rig, Payback   // side view: a pit or edge kill credits whoever hit you last
     const credit = this.creditOf(src);
     // Scavenger: damage to health (not a shield, hair pool or deployable) reloads the shooter to full.
     if (enemyHit && rest > 0 && src.alive && src.stats.scavenge > 0 && !this.isTurret(t) && t.kind !== 'portal') {
@@ -2476,6 +2641,8 @@ export class Game {
       if (enemyHit && credit && credit.kind === 'hero') credit.tally.kills++;
       else if (late && late !== t && late.kind === 'hero' && this.isEnemy(late, t)) late.tally.kills++;
       this.emit({ t: 'death', p: t.id, k: src ? src.id : null, x: t.pos.x, y: t.pos.y + 0.8, z: t.pos.z, ...(t.kind === 'hero' ? this.deathRecap(t, tag) : {}) });
+      if (t.kind === 'hero') this.lastKill = { t: this.time, p: t.id, k: src ? src.id : null };   // (v1.2.15 kill cam)
+      this.ncDeath(t, src, enemyHit ? credit : null, rest - Math.max(0, hp0), dir, quiet);   // v1.2.15: Spite Charge, Overpen Rounds, Squad Caller
       if (t.kind === 'splitter' && (t.gen || 0) < 2) this.splitBlob(t);
       else if (t.kind === 'splitter') addBlotch(this, t, t.pos.x, t.pos.z, 1.3, (t.melee || 8) * 0.35, 5);   // smallest blobs leave a poison puddle
       if (t.kind === 'boss' && !t.kingOf) bossDown(this, t);
@@ -2499,14 +2666,15 @@ export class Game {
 
   // ---------------------------------------------------------- bullet hits
   applyHit(b, q, dir) {
-    const src = b.ownerRef;
+    const src = b.ownerRef, hm = this.ncHitMul(b, q);   // v1.2.15: Pressure Stack, Bounty Mark
     if (b.poison > 0) {
       this.addPoison(q, src, b.poison);
       this.hurt(q, 0.01, src, dir);
     } else if (b.flame) {
-      this.hurt(q, b.dmg * 0.25, src, null, true);
+      this.hurt(q, b.dmg * 0.25 * hm, src, null, true);
       this.setBurn(q, 3, b.dmg * 0.6, src, src);   // a flamethrower stream is one burn (refreshed), not a stack per flame
-    } else this.hurt(q, b.dmg, src, dir);
+    } else this.hurt(q, b.dmg * hm, src, dir);
+    this.ncOnHit(b, q, hm);   // v1.2.15: Ammo Leech, Battle Rhythm, Bounty heal, Gravity Well
     if (b.ignite > 0) this.setBurn(q, 3, b.dmg * 0.18 * b.ignite, src);
     if (b.chill > 0) { q.fx.chillK = Math.max((q.fx.chillT || 0) > this.time ? q.fx.chillK || 0 : 0, Math.min(0.65, 0.4 + 0.1 * (b.chill - 1))); q.fx.chillT = this.time + 1.5 * b.chill; }   // stacked chill slows harder
     if (b.hex > 0) { q.fx.hexK = Math.max((q.fx.hexT || 0) > this.time ? q.fx.hexK || 0 : 0, 0.25 * Math.min(4, b.hex)); q.fx.hexT = this.time + 2.5; }   // stacked Hex: +25% per level
@@ -2514,11 +2682,11 @@ export class Game {
       const f = b.knockback * b.dmg * 0.08 * THRUST.impulse / q.size; q.vel.x += dir.x * f; q.vel.z += dir.z * f; q.vel.y += Math.min(3, f * 0.25);
       this.addThrust(q, dir, b);
     }
-    if (b.limpet > 0) this.booms.push({ t: 1.0, follow: q, pos: { ...q.pos }, dmg: b.dmg * 0.6 * b.limpet, owner: src, opts: {} });
+    if (b.limpet > 0) this.booms.push({ t: 1.0, follow: q, pos: { ...q.pos }, dmg: b.dmg * 0.6 * b.limpet, owner: src, opts: { cown: b.cown } });
     if (b.chain > 0 && !b.chained) {
       let best = null, bd = 6;
       for (const o of this.players) {
-        if (o === q || !o.alive || o.reviving || !this.isEnemy(src, o)) continue;
+        if (o === q || !o.alive || o.reviving || !this.isEnemy(src, o) || this.ownShot(b, o)) continue;
         const d = Math.hypot(o.pos.x - q.pos.x, o.pos.z - q.pos.z);
         if (d < bd) { bd = d; best = o; }
       }
@@ -2557,7 +2725,7 @@ export class Game {
     for (const q of this.players) {
       if (!q.alive || q.reviving) continue;
       const cx = q.pos.x - pos.x, cy = this.chest(q) - pos.y, cz = q.pos.z - pos.z, d = Math.hypot(cx, cy, cz);
-      if (d >= R) continue;
+      if (d >= R || this.ownShot(opts, q)) continue;
       if (this.shielded(q)) { if (q !== owner && this.canHurt(owner, q)) { this.blockedDamage(q, dmg * (opts.full ? 1 : 0.6)); this.soakShield(q, dmg * (opts.full ? 1 : 0.6)); } continue; }
       const box = q !== owner && this.boxCover(q, pos, owner);
       if (box) { this.soakBox(box, dmg * (opts.full ? 1 : 0.6)); continue; }
@@ -2608,12 +2776,13 @@ export class Game {
 
   killBullet(b, impact, hitQ = null) {
     b.alive = false;
+    this.ncBulletEnd(b, impact, hitQ);   // v1.2.15: Pressure Stack misses, Gravity Well
     // v1.1.2: Shrapnel bursts on anything it hits (players, shields, crates, walls, the floor), not just walls.
     // Fragments skip the player that was hit, so a direct hit isn't also shredded by its own burst.
     if (impact && b.shrapnel > 0) this.shrapnelBurst(b, hitQ);
     if (impact && b.toxic > 0) this.toxicCloud(b);
-    if (impact && b.explosive > 0) this.explode(b.pos, b.dmg, b.ownerRef, { extra: Math.max(0, Math.round(b.explosive) - 1), knock: b.knockback, rmul: b.boomMul });
-    if (impact && b.bounceExplode > 0 && !b.beam) this.explode(b.pos, b.dmg * b.bounceExplode, b.ownerRef, { knock: b.knockback, noSelf: true });   // Rebound Charge: the last hit blasts too (v1.2.11: also with Volatile Payload, like on bounces)
+    if (impact && b.explosive > 0) this.explode(b.pos, b.dmg, b.ownerRef, { extra: Math.max(0, Math.round(b.explosive) - 1), knock: b.knockback, cown: b.cown, rmul: b.boomMul });
+    if (impact && b.bounceExplode > 0 && !b.beam) this.explode(b.pos, b.dmg * b.bounceExplode, b.ownerRef, { knock: b.knockback, cown: b.cown, noSelf: true });   // Rebound Charge: the last hit blasts too (v1.2.11: also with Volatile Payload, like on bounces)
     if (impact && !(b.explosive > 0) && !(b.bounceExplode > 0 && !b.beam)) this.emit({ t: 'impact', x: b.pos.x, y: b.pos.y, z: b.pos.z, p: b.owner });
   }
 
@@ -2639,12 +2808,12 @@ export class Game {
       b.vel.x *= k; b.vel.y *= k; b.vel.z *= k;
     }
     // v1.0.9: a full blast (bullet damage, knockback) on every bounce, not the old small 45% pop
-    if (b.bounceExplode > 0) this.explode({ ...b.pos }, b.dmg * b.bounceExplode, b.ownerRef, { knock: b.knockback, noSelf: true });
+    if (b.bounceExplode > 0) this.explode({ ...b.pos }, b.dmg * b.bounceExplode, b.ownerRef, { knock: b.knockback, cown: b.cown, noSelf: true });
     // Impact effects fire on every bounce, not just the last impact: Volatile Payload blasts and Shrapnel bursts
     // (grenades and shells only blast on a bounce if you have Volatile Payload yourself). Napalm splats where it touches.
     if (!b.beam) {
       const vol = b.fx === 'grenade' || b.fx === 'shell' ? (b.ownerRef && b.ownerRef.stats.explosive) || 0 : b.explosive;
-      if (vol > 0) this.explode({ ...b.pos }, b.dmg, b.ownerRef, { knock: b.knockback, noSelf: true });
+      if (vol > 0) this.explode({ ...b.pos }, b.dmg, b.ownerRef, { knock: b.knockback, cown: b.cown, noSelf: true });
       if (b.shrapnel > 0) this.shrapnelBurst(b);
     }
     if (b.bounceSplit > 0 && !b.splitChild) {
@@ -2711,6 +2880,11 @@ export class Game {
         const n = norm(off);
         b.pos = { x: c.x + n.x * (R + b.r + 0.03), y: c.y + n.y * (R + b.r + 0.03), z: c.z + n.z * (R + b.r + 0.03) };
         if (q.blockT > 0 && q.smod === 'catcher') { this.catchBullet(b, q); return true; }
+        if (q.blockT > 0 && q.stats.parry > 0 && this.time - (q.fx.blockAt ?? -9) <= q.stats.parry + 1e-6) {   // v1.2.15 Perfect Parry
+          b.alive = false; q.blockCdT = 0;
+          this.emit({ t: 'nc', k: 'parry', p: q.id, x: b.pos.x, y: b.pos.y, z: b.pos.z });
+          return true;
+        }
         const dmg = b.dmg;
         this.reflect(b, q, n);
         this.soakShield(q, dmg);
@@ -2836,7 +3010,7 @@ export class Game {
     const h = Math.hypot(b.vel.x, b.vel.z) || 1, r0 = clamp(0.8 + 0.45 * Math.sqrt(Math.max(1, b.dmg) / DEFAULT_STATS.damage), 0.8, 2.2) * (1 + 0.15 * (b.toxic - 1));
     const side = !!this.level.side;
     const c = { id: this.nextId++, x: b.pos.x, y: Math.max(0.5, Math.min(b.pos.y, 3)), z: side ? 0 : b.pos.z, vx: b.vel.x / h * TOXIC.drift, vz: side ? 0 : b.vel.z / h * TOXIC.drift,
-      r0, r: r0, t: TOXIC.life, dps: b.dmg * TOXIC.dps * b.toxic, ownerRef: b.ownerRef, checkT: 0 };
+      r0, r: r0, t: TOXIC.life, dps: b.dmg * TOXIC.dps * b.toxic, ownerRef: b.ownerRef, cown: b.cown, checkT: 0 };
     this.clouds.push(c);
     const r2 = v => Math.round(v * 100) / 100;
     this.emit({ t: 'toxic', id: c.id, p: b.cown || b.owner, x: r2(c.x), y: r2(c.y), z: r2(c.z), vx: r2(c.vx), vz: r2(c.vz), r0: r2(r0), r1: r2(r0 * TOXIC.grow), life: TOXIC.life });
@@ -2851,7 +3025,7 @@ export class Game {
       if ((c.checkT -= dt) > 0) continue;
       c.checkT = 0.25;
       for (const q of this.players) {
-        if (!q.alive || q.reviving || q === c.ownerRef || !this.canHurt(c.ownerRef, q) || this.shielded(q)) continue;
+        if (!q.alive || q.reviving || q === c.ownerRef || !this.canHurt(c.ownerRef, q) || this.ownShot(c, q) || this.shielded(q)) continue;
         if (Math.hypot(q.pos.x - c.x, q.pos.z - c.z) > c.r + PR * q.size || q.pos.y > c.y + c.r || q.pos.y + PH * q.size < c.y - c.r - 0.6) continue;
         this.dmgTag = 'toxic'; this.hurt(q, c.dps * 0.25, c.ownerRef, null, true);
         q.fx.toxT = this.time + 0.4;
@@ -2862,7 +3036,7 @@ export class Game {
   homingTarget(b, near) {
     const cands = [];
     for (const q of this.players) {
-      if (!q.alive || q.reviving || !this.isEnemy(b.ownerRef, q)) continue;
+      if (!q.alive || q.reviving || !this.isEnemy(b.ownerRef, q) || this.ownShot(b, q)) continue;   // (blocked-back seekers don't chase an SCP shooter)
       const dq = Math.hypot(q.pos.x - b.pos.x, this.chest(q) - b.pos.y, q.pos.z - b.pos.z);
       if (dq < near) cands.push([dq, q]);
     }
@@ -2879,7 +3053,7 @@ export class Game {
   slowFieldRadius(n) { return n > 0 ? SLOWFIELD.radius + SLOWFIELD.perCopy * (Math.round(n) - 1) : 0; }
   bulletSlow(b, holders) {
     for (const h of holders) {
-      if (h === b.ownerRef || !this.canHurt(b.ownerRef, h) || h.blockT > 0) continue;   // blocking: bullets reach your bubble at full speed
+      if (h === b.ownerRef || !this.canHurt(b.ownerRef, h) || this.ownShot(b, h) || h.blockT > 0) continue;   // blocking: bullets reach your bubble at full speed
       const dy = b.pos.y - (h.pos.y + PH * h.size * 0.5);
       if (Math.abs(dy) < SLOWFIELD.height && Math.hypot(b.pos.x - h.pos.x, b.pos.z - h.pos.z) < h.fieldR) return 1 - SLOWFIELD.slow;
     }
@@ -2994,10 +3168,11 @@ export class Game {
         if (b.cutter) this.waveCuts(b);
         for (const q of this.players) {
           if (!q.alive || q.reviving || (q.id === b.owner && !b.bounced) || q.id === b.noHit || (q.ow && q.ow.st === 'bus')) continue;
-          const hr = b.hitR || b.r, qr = PR * q.size + hr;
+          const hr = b.hitR || b.r, qr = PR * q.size * (q.stats.hitScale || 1) + hr;   // (v1.2.15 Light Frame: smaller hitbox)
           if ((b.pos.x > q.pos.x - qr && b.pos.x < q.pos.x + qr && b.pos.z > q.pos.z - qr && b.pos.z < q.pos.z + qr &&
               b.pos.y > q.pos.y - hr && b.pos.y < q.pos.y + PH * q.size + hr) || (b.ring > 0 && this.ringTouches(b, q))) {
-            if (!this.canHurt(b.ownerRef, q)) continue;
+            if (!this.canHurt(b.ownerRef, q) || this.ownShot(b, q)) continue;
+            if (b.swap) { this.swapPlaces(b, q); break; }   // v1.2.15 Swap Shot orb
             if (b.pierce) { // flames and shield waves pass through, hitting each target once
               const key = b.wave || b.id; this.pierceHits = this.pierceHits || new Map();
               const set = this.pierceHits.get(key) || new Set(); this.pierceHits.set(key, set);
@@ -3006,7 +3181,7 @@ export class Game {
             const dir = norm({ x: b.vel.x, y: L.side ? b.vel.y * 0.6 : 0, z: b.vel.z });   // side view: hits knock you up and down too
             this.applyHit(b, q, dir);
             if (b.napalm > 0) { const gy = groundBelow(this.solids, q.pos.x, q.pos.z, q.pos.y + 0.3); this.napalmSplat(b, { x: q.pos.x, y: gy, z: q.pos.z }, { x: 0, y: 1, z: 0 }, null); }
-            if (b.cutter && b.explosive > 0) this.explode({ x: q.pos.x, y: this.chest(q), z: q.pos.z }, b.dmg, b.ownerRef, { knock: b.knockback, rmul: 0.8 });   // slash waves pass through, exploding on each target
+            if (b.cutter && b.explosive > 0) this.explode({ x: q.pos.x, y: this.chest(q), z: q.pos.z }, b.dmg, b.ownerRef, { knock: b.knockback, cown: b.cown, rmul: 0.8 });   // slash waves pass through, exploding on each target
             if (b.pierce) continue;
             this.killBullet(b, true, q);
             break;
@@ -3090,7 +3265,7 @@ export class Game {
       if ((f.checkT -= dt) > 0) continue;
       f.checkT = 0.1;
       for (const q of this.players) {
-        if (!q.alive || q.reviving || q === f.ownerRef || !this.canHurt(f.ownerRef, q) || this.shielded(q)) continue;
+        if (!q.alive || q.reviving || q === f.ownerRef || !this.canHurt(f.ownerRef, q) || this.ownShot(f, q) || this.shielded(q)) continue;
         const pr = PR * q.size + 0.22, top = q.pos.y + PH * q.size;
         if (f.bits.some(k => Math.abs(k.x - q.pos.x) < pr && Math.abs(k.z - q.pos.z) < pr && k.y > q.pos.y - 0.2 && k.y < top + 0.05 && Math.hypot(k.x - q.pos.x, k.z - q.pos.z) < pr)) {
           this.setBurn(q, NAPALM.burnFor, f.dps, f.ownerRef, f);
@@ -3116,6 +3291,7 @@ export class Game {
   }
 
   checkRoundEnd() {
+    if (this.booms.some(b => b.spite)) return;   // v1.2.15 Spite Charge: the round waits for a fuse that's still burning
     const live = BRAWL_ON ? (p => p.connected && p.stocks > 0) : (p => p.alive || p.reviving);
     if (this.ow) { const w = owRoundEnd(this); if (w !== undefined) this.endRound(w); return; }
     if (this.settings.core) {   // Core Defense: the wave is lost when the core falls (players respawn), won when the raid is cleared
@@ -3157,7 +3333,10 @@ export class Game {
   endRound(w) {
     this.phase = 'roundEnd'; this.phaseT = 2.0; this.roundWinner = w; this.unitsOnlyT = null;
     if (w != null && w !== 'waves' && w in this.scores) this.scores[w]++;
-    this.emit({ t: 'roundEnd', w, wave: this.isWaves() ? this.round : 0 });
+    // v1.2.15 kill cam: a versus round that just ended on a kill waits for the replay (main.js kcStart)
+    const lk = this.lastKill, kc = w != null && lk && this.time - lk.t < 1.2 && lk.k != null && lk.k !== lk.p && !this.isWaves() && !this.isSide() && !this.isOpen() && !this.isPractice() && !this.settings.commander ? { k: lk.k, p: lk.p } : null;
+    if (kc) this.phaseT += 3.2;
+    this.emit({ t: 'roundEnd', w, wave: this.isWaves() ? this.round : 0, kc });
   }
 
   tallyList() {
@@ -3464,6 +3643,288 @@ export class Game {
     return true;
   }
 
+  // ------------------------------------------------------------ v1.2.15 new cards (round 2)
+  ncReset(p) {
+    const s = p.stats;
+    p.fx.shell = Math.round(s.shell || 0);   // Gilded Shell: back every round and every life
+    if (s.gamble > 0) this.gambleRoll(p, true);
+  }
+  salvoOn(p) { const s = p.stats.salvo; return s > 0 && this.phase === 'play' && this.fightAt != null && this.time - this.fightAt < s; }
+  // Opening Salvo and Last Stand Rig speed boosts (part of walkSpeed, so joiners' prediction gets them too)
+  rushK(p) {
+    const s = p.stats;
+    return (this.salvoOn(p) ? 1 + NEWC.salvoSpeed : 1) * ((p.fx.lsT || 0) > this.time ? 1 + NEWC.stand.speed * (s.lastStand || 0) : 1);
+  }
+  // Backpedal Boots: faster moving away from where you aim, slower moving toward it (main.js predReplay copies this)
+  dirSpeedK(p, mx, mz) {
+    const bp = p.stats.backpedal || 0, adv = p.stats.advanceSlow || 0;
+    if (!(bp > 0 || adv > 0)) return 1;
+    const ml = Math.hypot(mx || 0, mz || 0), al = Math.hypot(p.aim.x, p.aim.z);
+    if (ml < 0.1 || al < 1e-3) return 1;
+    const dot = (mx * p.aim.x + mz * p.aim.z) / (ml * al);
+    return dot < 0 ? 1 + bp * -dot : Math.max(0.2, 1 - adv * dot);
+  }
+  groundPound(p) {
+    if ((p.fx.poundT || 0) > this.time) return;
+    p.fx.poundT = this.time + 0.4;
+    const lv = p.stats.pound, P = NEWC.pound, R = P.r + 0.5 * (lv - 1);
+    for (const q of this.players) {
+      if (!q.alive || q.reviving || !this.isEnemy(p, q) || q.flying) continue;
+      if (Math.hypot(q.pos.x - p.pos.x, q.pos.z - p.pos.z) > R + PR * q.size || Math.abs(q.pos.y - p.pos.y) > 1.5) continue;
+      if (!q.heavy) { q.vel.y = Math.max(q.vel.y, P.pop * Math.sqrt(lv) / q.size); q.onGround = false; }
+      this.dmgTag = 'blast'; this.hurt(q, P.dmg * lv, p, null);
+    }
+    this.emit({ t: 'nc', k: 'pound', p: p.id, x: p.pos.x, y: p.pos.y + 0.1, z: p.pos.z, r: R });
+  }
+  // Gambler's Mag: every reload (and each round's first mag) rolls one bonus for the whole mag
+  gambleRoll(p, quiet = false) {
+    if (!(p.stats.gamble > 0)) return;
+    p.fx.gam = Math.floor(Math.random() * NEWC.gamble.length);
+    if (!quiet) this.emit({ t: 'nc', k: 'gamble', p: p.id, r: p.fx.gam });
+  }
+  // Blood Volley: hold Reload to pay 25% of your current health for a fan of piercing shots (a full mag's worth, free)
+  volleyHold(p, dt, held) {
+    if (!held) { p.fx.vhT = 0; p.fx.vhDone = false; return; }
+    p.fx.vhT = (p.fx.vhT || 0) + dt;
+    if (p.fx.vhDone || p.fx.vhT < NEWC.volley.hold || (p.fx.vCd || 0) > this.time || p.hp <= 1 || p.mod === 'katana' || p.mod === 'shield') return;
+    p.fx.vhDone = true; p.fx.vCd = this.time + NEWC.volley.cd;
+    const s = p.stats, V = NEWC.volley, cost = p.hp * V.cost;
+    p.hp = Math.max(1, p.hp - cost);
+    const n = Math.max(1, Math.round(s.ammo)), k = 0.6 + 0.4 * s.bloodVolley;
+    for (let i = 0; i < n; i++) {
+      const a = n > 1 ? (i / (n - 1) - 0.5) * V.fan : 0, d = norm(rotY(p.aim, a));
+      const b = this.spawnBullet(p, { x: p.pos.x + d.x * 0.75 * p.size, y: this.chest(p) + d.y * 0.75, z: p.pos.z + d.z * 0.75 * p.size }, d, s.bulletSpeed, false);
+      b.pierce = true; b.dmg *= k; b.shot = true;
+    }
+    this.emit({ t: 'shoot', p: p.id, x: p.pos.x, y: this.chest(p), z: p.pos.z, sky: 0 });
+    this.emit({ t: 'nc', k: 'volley', p: p.id, a: Math.round(cost), x: p.pos.x, y: this.chest(p), z: p.pos.z });
+  }
+  // Purge Pulse: wipes every player-made wall, turret, mine, critter and summon nearby (yours too). Once per round.
+  purgePulse(p) {
+    p.fx.purge = 0; p.fx.purgeUsed = true;
+    const R = p.stats.purge, x = p.pos.x, z = p.pos.z, near = (ax, az, pad = 0) => Math.hypot(ax - x, az - z) < R + pad;
+    const CORE_KINDS = new Set(['block', 'cube', 'plank', 'slab', 'steel', 'spikes']);   // Core Defense builds stay
+    for (const b of this.barricades.slice()) if (!CORE_KINDS.has(b.kind) && near(b.x, b.z, (b.len || 0) / 2)) this.damageBarricade(b, (b.hp || 0) + 1e6);
+    for (const s of this.shields) if (!s.box && near(s.x, s.z)) s.t = 0;
+    this.mines = this.mines.filter(m => !near(m.x, m.z));
+    let gone = 0;
+    for (const u of this.players) {
+      if (!u.alive || !u.transient || u.kind === 'core' || (u.kind === 'boss' && !u.kingOf) || u.kind === 'portal') continue;
+      if (!(u.ownerId || u.kingOf || ['critter', 'turret', 'drone', 'blockTurret'].includes(u.kind))) continue;
+      if (!near(u.pos.x, u.pos.z)) continue;
+      if (u.kind === 'mount' && u.riderId) { const r = this.player(u.riderId); if (r) this.dismount(r); }
+      this.expireUnit(u); gone++;
+    }
+    if (gone) this.unitsChanged();
+    this.emit({ t: 'nc', k: 'purge', p: p.id, x, y: p.pos.y + 0.2, z, r: R });
+  }
+  // Per-shot boosts, worked out before the shot and put on its bullets after (applyBoost)
+  shotBoost(p, encore) {
+    const s = p.stats, f = p.fx, B = { dmg: 1, r: 1, speed: 1, proj: 1, pierce: false, bounce: 0, homing: 0, flat: 0, rhythm: false };
+    if (!encore) {
+      if (s.lastRound > 0 && p.ammo === 0 && p.mod !== 'critter') { B.dmg *= 1 + s.lastRound; B.r *= 1.5; }   // Tight Chamber
+      if (s.coldBarrel > 0 && this.time - (f.lastFire ?? -99) >= NEWC.cold.wait) { B.dmg *= 1 + s.coldBarrel; B.speed *= 1 + s.coldBarrel * NEWC.cold.speedK; }   // Cold Barrel
+      f.lastFire = this.time;
+      if (f.rhyReady) { const R = NEWC.rhythm; f.rhyReady = false; B.dmg *= R.dmg; B.r *= R.size; B.pierce = true; B.rhythm = true; this.emit({ t: 'nc', k: 'rhythm', p: p.id, x: p.pos.x, y: this.chest(p), z: p.pos.z }); }   // Battle Rhythm
+      if (s.payback > 0 && f.pb && f.pb.length) {   // Payback
+        const sum = f.pb.filter(e => this.time - e[0] <= NEWC.payback).reduce((a, e) => a + e[1], 0);
+        B.flat = Math.min(sum, s.payback * this.effDamage(s)); f.pb = [];
+      }
+    }
+    if (s.gamble > 0 && f.gam != null) {   // Gambler's Mag (encores too)
+      const g = NEWC.gamble[f.gam], lv = s.gamble;
+      if (g === 'dmg') B.dmg *= 1 + lv; else if (g === 'proj') B.proj *= 1 + 0.5 * lv; else if (g === 'bounce') B.bounce += 2 * lv; else if (g === 'homing') B.homing += 5 * lv;
+    }
+    return B;
+  }
+  applyBoost(p, B, b0) {
+    const n = this.bullets.length - b0;
+    for (let i = b0; i < this.bullets.length; i++) {
+      const b = this.bullets[i];
+      b.shot = true;
+      b.dmg = b.dmg * B.dmg + (n ? B.flat / n : 0);
+      if (B.r !== 1) b.r = clamp(b.r * B.r, 0.05, 1.2);
+      if (B.speed !== 1) { b.vel.x *= B.speed; b.vel.y *= B.speed; b.vel.z *= B.speed; }
+      if (B.pierce) b.pierce = true;
+      if (B.rhythm) b.rhythmShot = true;
+      if (B.bounce) b.bLeft += Math.round(B.bounce);
+      if (B.homing) b.homing += B.homing;
+    }
+  }
+  // Block add-ons: Afterimage, Snare Plate and the Scorched Floor / Swap Shot shield mods
+  ncBlock(p) {
+    const s = p.stats;
+    if (s.afterimage > 0 && p.kind !== 'decoy') this.spawnDecoy(p);
+    if (s.snare > 0) {
+      const mine = this.mines.filter(m => m.owner === p.id && m.snare);
+      if (mine.length >= NEWC.snare.max) this.mines = this.mines.filter(m => m !== mine[0]);
+      const gy = p.onGround ? p.pos.y : groundBelow(this.solids, p.pos.x, p.pos.z, p.pos.y + 0.3);
+      this.mines.push({ id: this.nextId++, owner: p.id, ownerRef: p, x: p.pos.x, y: gy, z: p.pos.z, armT: NEWC.snare.arm, life: 9999, dmg: 0, snare: s.snare, sz: 1 });
+    }
+    if (p.smod === 'scorch' && s.scorch > 0) {
+      const gy = p.onGround ? p.pos.y : groundBelow(this.solids, p.pos.x, p.pos.z, p.pos.y + 0.3);
+      this.firePatch(p, p.pos.x, gy, p.pos.z, NEWC.scorch.r * Math.sqrt(clamp(s.blockSize || 1, 0.5, 3)), NEWC.scorch.dps * this.effDamage(s) / DEFAULT_STATS.damage, s.scorch);
+    }
+    if (p.smod === 'swap' && s.swapShot > 0) {
+      const W = NEWC.swap, d = norm(p.aim);
+      const b = this.spawnBullet(p, { x: p.pos.x + d.x * 0.9 * p.size, y: this.chest(p), z: p.pos.z + d.z * 0.9 * p.size }, d, W.speed + W.perLv * s.swapShot, false);
+      Object.assign(b, { swap: true, dmg: 0, r: W.r, grav: 0, life: W.life, bLeft: 0, explosive: 0, homing: 0, drill: 0, poison: 0, ignite: 0, chill: 0, hex: 0, chain: 0, limpet: 0,
+        shrapnel: 0, napalm: 0, toxic: 0, bounceTarget: 0, bounceExplode: 0, bounceBoost: 0, bounceSplit: 0, ring: 0, swarm: null, fx: 'swap', knockback: 0 });
+    }
+  }
+  spawnDecoy(p) {
+    const owner = p.ownerId ? this.player(p.ownerId) || p : p;
+    this.capUnits(owner, 'decoy', NEWC.decoy.max);
+    const u = this.spawnUnit('decoy', owner, { x: p.pos.x, y: p.pos.y, z: p.pos.z }, { life: p.stats.afterimage });
+    u.aim = { ...p.aim }; u.fixedSize = p.size;
+    this.unitsChanged();
+    this.emit({ t: 'nc', k: 'decoy', p: p.id, x: p.pos.x, y: this.chest(p), z: p.pos.z });
+    return u;
+  }
+  swapPlaces(b, q) {
+    const a = b.ownerRef; b.alive = false;
+    if (!a || !a.alive || a.reviving || q === a || q.heavy || q.kind === 'boss' || q.kind === 'core' || q.kind === 'portal' || q.fx.mount || a.fx.mount) { this.emit({ t: 'impact', x: b.pos.x, y: b.pos.y, z: b.pos.z, p: b.owner }); return; }
+    const pa = { ...a.pos }, pq = { ...q.pos };
+    a.pos = pq; q.pos = pa; a.vel = { x: 0, y: 0, z: 0 }; q.vel = { x: 0, y: 0, z: 0 };
+    this.emit({ t: 'nc', k: 'swap', p: a.id, q: q.id, x1: pa.x, y1: pa.y + 1, z1: pa.z, x2: pq.x, y2: pq.y + 1, z2: pq.z });
+  }
+  snareCheck(m) {
+    if (m.armT > 0) return;
+    for (const q of this.players) {
+      if (!q.alive || q.reviving || q.flying || !this.isEnemy(m.ownerRef, q) || q.kind === 'boss' || q.kind === 'core' || q.kind === 'decoy') continue;
+      if (Math.hypot(q.pos.x - m.x, q.pos.z - m.z) < 0.6 + PR * q.size && Math.abs(q.pos.y - m.y) < 1) {
+        m.dead = true; q.fx.rootT = this.time + m.snare; q.vel.x = 0; q.vel.z = 0;
+        this.emit({ t: 'nc', k: 'snare', p: q.id, o: m.owner, x: m.x, y: m.y, z: m.z, d: m.snare });
+        return;
+      }
+    }
+  }
+  ncHurt(t, rest, enemyHit) {
+    const s = t.stats, f = t.fx;
+    if (s.lastStand > 0 && !f.lsUsed && t.hp < NEWC.stand.at * this.maxHp(t)) {   // Last Stand Rig
+      const S2 = NEWC.stand; f.lsUsed = true;
+      t.ammo = Math.round(s.ammo); t.reloadT = 0;
+      t.blockT = Math.max(t.blockT, S2.block * Math.sqrt(s.lastStand)); t.blockExtra = RULES.blockMaxExtra;
+      f.lsT = this.time + S2.time;
+      this.emit({ t: 'nc', k: 'stand', p: t.id, x: t.pos.x, y: this.chest(t), z: t.pos.z });
+    }
+    if (enemyHit && s.payback > 0) { const L = f.pb || (f.pb = []); L.push([this.time, rest]); while (L.length && (L.length > 40 || this.time - L[0][0] > NEWC.payback)) L.shift(); }
+  }
+  ncDeath(t, src, credit, over, dir, quiet) {
+    const ts = t.stats;
+    if (ts.spite > 0) {   // Spite Charge: a blast where you fell after a short fuse
+      const pos = { x: t.pos.x, y: this.chest(t), z: t.pos.z };
+      this.booms.push({ t: NEWC.spite, pos, dmg: ts.spite, owner: t, spite: true, opts: { full: true, noSelf: true } });
+      this.emit({ t: 'nc', k: 'spite', p: t.id, x: pos.x, y: t.pos.y + 0.1, z: pos.z, r: Math.round((1.4 + 0.6 * Math.sqrt(ts.spite / DEFAULT_STATS.damage)) * 100) / 100, f: NEWC.spite });
+    }
+    const ss = src && src.stats;
+    if (ss && ss.overpen > 0 && !quiet && dir && over >= 1 && src.alive) {   // Overpen Rounds: the overkill flies on
+      let best = null, bd = NEWC.overpen;
+      for (const q of this.players) {
+        if (q === t || !q.alive || q.reviving || !this.isEnemy(src, q)) continue;
+        const dx = q.pos.x - t.pos.x, dz = q.pos.z - t.pos.z, d = Math.hypot(dx, dz);
+        if (d < bd && (dx * dir.x + dz * dir.z) > -0.3 * d) { bd = d; best = q; }
+      }
+      if (best) {
+        const o = { x: t.pos.x, y: this.chest(t), z: t.pos.z }, d = norm({ x: best.pos.x - o.x, y: this.chest(best) - o.y, z: best.pos.z - o.z });
+        const b = this.spawnBullet(src, o, d, Math.max(24, ss.bulletSpeed), false);
+        Object.assign(b, { dmg: over * ss.overpen, noHit: t.id, grav: 0, bLeft: 0, explosive: 0, shrapnel: 0, napalm: 0, toxic: 0, limpet: 0, chain: 0, bounceSplit: 0, bounceExplode: 0, swarm: null, fx: undefined, homing: 0 });
+        this.emit({ t: 'nc', k: 'overpen', p: src.id, x1: o.x, y1: o.y, z1: o.z, x2: best.pos.x, y2: this.chest(best), z2: best.pos.z });
+      }
+    }
+    if (credit && credit !== t && credit.alive && credit.stats.squad > 0 && t.kind !== 'decoy') this.spawnSoldier(credit);   // Squad Caller
+  }
+  spawnSoldier(o) {
+    const Q = NEWC.squad, os = o.stats;
+    this.capUnits(o, 'soldier', Math.max(1, Math.round(os.squad)));
+    const stats = { ...DEFAULT_STATS, health: Q.hp, damage: this.effDamage(os) * Q.dmg, fireRate: Q.rate, ammo: 4, reloadTime: 1.5, moveSpeed: Q.speed, bulletSize: 0.09, bulletSpeed: 26, jump: 8, blockCooldown: 99 };
+    const k = (this.nextUnit % 6) + 1, spot = this.freeSpot(o.pos.x + Math.cos(k * 1.05) * 1.5, o.pos.z + Math.sin(k * 1.05) * 1.5, o.pos.x, o.pos.z, PR * Q.size, o.pos.y);
+    const u = this.spawnUnit('soldier', o, spot, { stats, difficulty: 'normal' });
+    u.aim = { ...o.aim };
+    this.unitsChanged();
+    this.emit({ t: 'nc', k: 'squad', p: o.id, x: spot.x, y: spot.y + 0.6, z: spot.z });
+    return u;
+  }
+  bountyMarked(q) {
+    if (!q || q.kind !== 'hero' || this.isWaves() || this.isOpen() || this.isPractice()) return false;
+    const v = this.scores[this.scoreKey(q)];
+    return v > 0 && v >= Math.max(...Object.values(this.scores));
+  }
+  ncHitMul(b, q) {
+    const src = b.ownerRef, s = src && src.stats;
+    if (!s || b.swap) return 1;
+    let k = 1;
+    if (s.pressure > 0 && !b.chained && this.isEnemy(src, q)) {   // Pressure Stack
+      const P = NEWC.press, st = src.fx.press || (src.fx.press = { id: null, n: 0, t: -9 });
+      const same = st.id === q.id && this.time - st.t <= P.win;
+      k *= 1 + s.pressure * (same ? st.n : 0);
+      st.n = same ? Math.min(P.max, st.n + 1) : 1; st.id = q.id; st.t = this.time;
+    }
+    if (s.bounty > 0 && this.isEnemy(src, q) && this.bountyMarked(q)) k *= 1 + s.bounty;   // Bounty Mark
+    return k;
+  }
+  ncOnHit(b, q, hm) {
+    const src = b.ownerRef, s = src && src.stats;
+    if (!s || b.chained || !this.isEnemy(src, q)) return;
+    if (s.ammoLeech > 0 && q.stats) {   // Ammo Leech: every 3 hits (per level) take a round out of their mag
+      src.fx.leech = (src.fx.leech || 0) + s.ammoLeech / 3;
+      while (src.fx.leech >= 1) {
+        src.fx.leech -= 1;
+        if (q.ammo > 0) { q.ammo--; if (q.ammo <= 0) this.startReload(q); this.emit({ t: 'nc', k: 'leech', p: q.id, x: q.pos.x, y: this.chest(q) + 0.4, z: q.pos.z }); }
+      }
+    }
+    if (s.rhythm > 0 && !b.rhythmShot && !src.fx.rhyReady) {   // Battle Rhythm
+      src.fx.rhy = (src.fx.rhy || 0) + 1;
+      if (src.fx.rhy >= Math.max(1, Math.round(NEWC.rhythm.hits / s.rhythm))) { src.fx.rhy = 0; src.fx.rhyReady = true; this.emit({ t: 'nc', k: 'rhythmReady', p: src.id }); }
+    }
+    if (s.bounty > 0 && hm > 1 && src.alive && this.bountyMarked(q)) {   // Bounty Mark heal
+      const h0 = src.hp; src.hp = Math.min(this.maxHp(src), src.hp + b.dmg * hm * NEWC.bountyHeal * s.bounty); this.healPing(src, h0);
+    }
+  }
+  ncBulletEnd(b, impact, hitQ) {
+    const src = b.ownerRef, s = src && src.stats;
+    if (!s || !b.shot || b.swap) return;
+    if (!hitQ && s.pressure > 0 && src.fx.press && this.time - src.fx.press.t > NEWC.press.grace) src.fx.press.n = 0;   // Pressure Stack: a miss resets it
+    if (impact && s.gravWell > 0) this.addWell(src, b.pos, s.gravWell);
+  }
+  addWell(o, pos, lv) {
+    const W = NEWC.well, mine = this.wells.filter(w => w.o === o);
+    if (mine.length >= W.max) this.wells = this.wells.filter(w => w !== mine[0]);
+    this.wells.push({ x: pos.x, y: pos.y, z: pos.z, t: W.t, o, lv });
+    this.emit({ t: 'nc', k: 'well', p: o.id, x: Math.round(pos.x * 100) / 100, y: Math.round(pos.y * 100) / 100, z: Math.round(pos.z * 100) / 100, r: W.r });
+  }
+  updateWells(dt) {
+    if (!this.wells || !this.wells.length) return;
+    const W = NEWC.well;
+    for (const w of this.wells) {
+      w.t -= dt;
+      for (const q of this.players) {
+        if (!q.alive || q.reviving || q.heavy || q.flying || !this.isEnemy(w.o, q)) continue;
+        const dx = w.x - q.pos.x, dy = w.y - this.chest(q), dz = w.z - q.pos.z, d = Math.hypot(dx, dy, dz);
+        if (d > W.r || d < 0.35) continue;
+        const a = W.pull * w.lv * (1 - 0.5 * d / W.r) * dt / q.size;
+        q.vel.x += dx / d * a; q.vel.z += dz / d * a; if (dy > 0) q.vel.y += dy / d * a * 0.5;
+        q.fx.pullT = this.time + 0.15;
+      }
+    }
+    this.wells = this.wells.filter(w => w.t > 0);
+  }
+  // Snapshot row for the new cards (0 when there's nothing to show): [flags, pressure stacks, rhythm progress 0-1 (-1 none),
+  // gamble roll (-1 none), gilded shells, ascension (tier + rounds << 2), purge charge (-1 used)].
+  // flags: 1 bounty leader, 2 overdrive round, 4 rooted, 8 cold shot ready, 16 opening salvo, 32 overcharged shot ready, 64 last round chambered
+  ncRow(p) {
+    const s = p.stats, f = p.fx, r2 = v => Math.round(v * 100) / 100;
+    const flags = (this.bountyMarked(p) && this.players.some(q => q.stats.bounty > 0 && q.kind === 'hero') ? 1 : 0) | (s.overdrive > 0 && p.ncOd === 1 ? 2 : 0) |
+      ((f.rootT || 0) > this.time ? 4 : 0) | (s.coldBarrel > 0 && this.time - (f.lastFire ?? -99) >= NEWC.cold.wait ? 8 : 0) | (this.salvoOn(p) ? 16 : 0) |
+      (f.rhyReady ? 32 : 0) | (s.lastRound > 0 && p.ammo === 1 && p.reloadT <= 0 ? 64 : 0);
+    const press = s.pressure > 0 && f.press && this.time - f.press.t <= NEWC.press.win ? f.press.n : 0;
+    const rhy = s.rhythm > 0 ? r2(Math.min(1, (f.rhy || 0) / Math.max(1, Math.round(NEWC.rhythm.hits / s.rhythm)))) : -1;
+    const gam = s.gamble > 0 && f.gam != null ? f.gam : -1, shell = f.shell || 0, asc = s.ascend > 0 ? p.ncAsc || 0 : 0;
+    const pg = p.smod === 'purge' ? (f.purgeUsed ? -1 : r2(f.purge || 0)) : 0;
+    if (!flags && !press && rhy < 0 && gam < 0 && !shell && !asc && !pg) return 0;
+    return [flags, press, rhy, gam, shell, asc, pg];
+  }
+
   // ------------------------------------------------------------ network
   // Extra look flags for the renderer: 1 tiny tank, 4 life drain (Drain Life card), 8 bullet catcher, 16 regenerating health
   // (has regen and isn't full), 32 crouching, 64 Brawl air jump ready. (2 was the old personal Pillar Shield; the pillar's shield is now its own box.)
@@ -3503,7 +3964,8 @@ export class Game {
       bc: this.barricades.map(b => [b.id, r2(b.x), r2(b.y0), r2(b.z), r2(b.len), r2(b.h), r2(b.th), r2(Math.max(0, b.hp) / b.maxHp), b.owner, r3(b.ang), b.kind === 'concrete' ? 1 : b.kind === 'pillar' ? 2 : b.kind === 'block' ? 3 : b.kind === 'cube' ? 4 : b.kind === 'plank' ? 5 : b.kind === 'slab' ? 6 : b.kind === 'steel' ? 7 : b.kind === 'spikes' ? 8 : 0]),
       ob: this.dyn.map(o => [o.id, r2(o.pos.x), r2(o.pos.y), r2(o.pos.z), r2(o.h), o.tipped || 0, r2(o.tx || 0), r2(o.tz || 0)]),
       sh: this.shields.map(s => [s.id, r2(s.x), r2(s.y0), r2(s.z), r2(s.w), r2(s.h), r2(s.d), s.owner, (s.shock ? 1 : 0) | (s.leech ? 2 : 0) | (s.box ? 4 : 0), s.box ? r2(Math.max(0, s.hp) / s.maxHp) : 1, r2(s.ang || 0)]),
-      mn: this.mines.map(m => [m.id, r2(m.x), r2(m.y), r2(m.z), m.owner, m.armT <= 0 ? 1 : 0, r2(m.sz || 1)]),
+      mn: this.mines.map(m => m.snare ? [m.id, r2(m.x), r2(m.y), r2(m.z), m.owner, m.armT <= 0 ? 1 : 0, 1, 1] : [m.id, r2(m.x), r2(m.y), r2(m.z), m.owner, m.armT <= 0 ? 1 : 0, r2(m.sz || 1)]),   // (v1.2.15: [7] 1 = Snare Plate)
+      tp: this.level.traps ? Math.round(this.time * 100) / 100 : null,   // v1.2.15 trap clock (traps.js)
       lz: h && h.type === 'laser' ? [r2(h.pos), h.state === 'warn' ? 1 : h.state === 'on' ? 2 : 0] : null,
       tg: this.telegraphs.length ? telegraphRows(this) : null, sw: this.shockwaves.length ? shockRows(this) : null, bo: bossRow(this),
       rt: this.rituals.length ? this.ritualRows() : null, rl: this.relics.length ? this.relicRows() : null,
@@ -3526,11 +3988,11 @@ export class Game {
     const hs = p.fx.holyShield, ts = p.fx.tshield;
     const holy = (hs && hs.hp > 0 && hs.until > this.time ? 1 : 0) | (p.fx.robe ? 2 : 0);
     return [r2(this.katanaFrac(p)), p.fx.slashN || 0, r2(this.hairFrac(p)), Math.ceil(p.fx.hair || 0), Math.round(p.hairMax || 0), p.fx.hold ? (p.smod === 'grove' ? 2 : p.smod === 'spaceking' ? 3 : 1) : 0,
-      ts ? r2(Math.max(0, ts.hp) / ts.max) : -1, holy, p.fx.mount ? p.fx.mount.id : 0];   // v1.2.8: [8] the Gun Nest turret you're manning
+      ts ? r2(Math.max(0, ts.hp) / ts.max) : -1, holy, p.fx.mount ? p.fx.mount.id : 0, this.ncRow(p)];   // v1.2.8: [8] the Gun Nest turret you're manning; v1.2.15: [9] new card state (ncRow)
   }
 
   levelForNet() {
-    const { seed, name, hx, hz, theme, boxes, dynamic, lava, ice, hazard, poly, shape, open, zones, pads, loot, side, brawl } = this.level;
-    return { seed, name, hx, hz, theme, boxes, dynamic, lava, ice, hazard, poly, shape, open, zones, pads, loot, side, brawl };
+    const { seed, name, hx, hz, theme, boxes, dynamic, lava, ice, hazard, poly, shape, open, zones, pads, loot, side, brawl, gravK, rmod, traps } = this.level;
+    return { seed, name, hx, hz, theme, boxes, dynamic, lava, ice, hazard, poly, shape, open, zones, pads, loot, side, brawl, gravK, rmod, traps };   // (v1.2.15: gravK too, so joiners predict 2D and Low Gravity jumps)
   }
 }

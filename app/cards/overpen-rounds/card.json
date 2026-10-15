@@ -1,0 +1,16 @@
+{
+  "id": "overpen-rounds",
+  "name": "Overpen Rounds",
+  "rarity": "uncommon",
+  "icon": "🎯",
+  "description": "Any damage past what kills a target carries on to the nearest enemy behind them.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "overpen",
+      "op": "add",
+      "value": 1
+    }
+  ],
+  "details": "The leftover damage flies on as a plain bullet to the nearest enemy within 12 m that isn't behind you. Extra copies multiply what carries on."
+}

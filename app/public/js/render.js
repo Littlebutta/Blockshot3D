@@ -6,6 +6,7 @@ import { buildPlayerModel, buildCosmetics, attachCosmetics, buildTurretModel, ad
 import { groundBelow } from './physics.js';
 import { amonBodyBaked } from './amonui.js';
 import { arenaEdges, edgeDistance } from './levelgen.js';
+import { trapState } from './traps.js';
 import { makeRock, makeLog, makeTree, mushroomPatch, makeFern, makeBush, makePine, iceCrystal, snowDrift, neonPylon, oysterCluster,
   makeCherryTree, makeTorii, stoneLantern, bambooClump, makePalm, tikiTorch, beachUmbrella, seaPlane, crater, moonRock, satDish, moduleHab, starField, planetDisc, obsidianSpire, lavaPool } from './scenery.js';
 
@@ -113,7 +114,7 @@ export class Renderer {
     addEventListener('resize', () => this.resize());
     this.canvas.addEventListener('mousemove', e => { this.mouse.x = e.clientX / innerWidth * 2 - 1; this.mouse.y = -(e.clientY / innerHeight) * 2 + 1; });
     document.addEventListener('mousemove', e => {
-      if (document.pointerLockElement !== this.canvas || this.settings.view !== 'first') return;
+      if (document.pointerLockElement !== this.canvas || this.settings.view !== 'first' || this.lookFreeze) return;   // (v1.2.15: the emote wheel holds the view still)
       const k = 0.0022 * (this.settings.sensitivity || 1);
       this.yaw -= e.movementX * k;
       this.pitch = clamp(this.pitch - e.movementY * k, -1.4, 1.4);
@@ -982,6 +983,7 @@ export class Renderer {
     if (st) this.addStyleProps(level, theme, G);
     this.buildDynamics(level, theme, G, topMats, edgeMats);
     this.buildHazard(level, G);
+    this.buildTraps(level, G);
     for (const [, m] of this.barricades) this.scene.remove(m);
     this.barricades.clear();
     const ext = Math.max(level.hx, level.hz) + 6;
@@ -1033,6 +1035,11 @@ export class Renderer {
         const H = d.hMax || d.h || 1, geo = new THREE.BoxGeometry(d.w, H, d.d); geo.translate(0, -H / 2, 0);
         const sideM = this.bandMaterial(theme, H, 0);
         mesh = new THREE.Mesh(geo, [sideM, sideM, new THREE.MeshStandardMaterial({ color: 0xffd166, roughness: 0.5 }), topMats[0], sideM, sideM]);
+      } else if (d.kind === 'crusher') {   // v1.2.15: a steel slab with a hazard band that slams down (origin on its bottom face)
+        const geo = new THREE.BoxGeometry(d.w, d.h, d.d); geo.translate(0, d.h / 2, 0);
+        const steel = new THREE.MeshStandardMaterial({ color: 0x4a4f5a, metalness: 0.6, roughness: 0.45 }), stripe = new THREE.MeshStandardMaterial({ map: this.stripeTex(), roughness: 0.6 });
+        mesh = new THREE.Mesh(geo, [stripe, stripe, steel, new THREE.MeshStandardMaterial({ color: 0x24262c, metalness: 0.7, roughness: 0.4 }), stripe, stripe]);
+        const piston = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 8, 10), steel); piston.position.y = d.h + 4; mesh.add(piston);
       } else if (d.kind === 'crate') {
         const geo = new THREE.BoxGeometry(d.w, d.h, d.d);
         mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: new THREE.Color(0xa8845a).lerp(new THREE.Color(theme.top), 0.2), map: this.crateTex(), roughness: 0.9 }));
@@ -1136,6 +1143,79 @@ export class Renderer {
     return (this._waterTex = t);
   }
 
+  // v1.2.15 trap arenas: spike floors, laser fences, sweeping lasers (traps.js) and floor marks under crushers
+  stripeTex() {
+    if (this._stripeTex) return this._stripeTex;
+    const c = document.createElement('canvas'); c.width = 64; c.height = 64; const x = c.getContext('2d');
+    x.fillStyle = '#ffc93a'; x.fillRect(0, 0, 64, 64); x.fillStyle = '#16171c';
+    for (let i = -64; i < 128; i += 22) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i + 11, 0); x.lineTo(i + 11 - 64, 64); x.lineTo(i - 64, 64); x.fill(); }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return (this._stripeTex = t);
+  }
+  buildTraps(level, G) {
+    this.traps = [];
+    for (const d of level.dynamic || []) if (d.kind === 'crusher') {
+      const mark = new THREE.Mesh(new THREE.PlaneGeometry(d.w, d.d), new THREE.MeshBasicMaterial({ color: 0xff3030, transparent: true, opacity: 0.2, depthWrite: false }));
+      mark.rotation.x = -Math.PI / 2; mark.position.set(d.x, 0.025, d.z); G.add(mark);
+      this.traps.push({ kind: 'crushMark', id: d.id, top: d.top, mark });
+    }
+    for (const tr of level.traps || []) {
+      if (tr.kind === 'spikes') {
+        const g = new THREE.Group(); g.position.set(tr.x, 0, tr.z);
+        const rim = new THREE.Mesh(new THREE.BoxGeometry(tr.w + 0.3, 0.03, tr.d + 0.3), new THREE.MeshStandardMaterial({ map: this.stripeTex(), roughness: 0.7 }));
+        rim.position.y = 0.012; g.add(rim);
+        const plateM = new THREE.MeshStandardMaterial({ color: 0x3a3d45, metalness: 0.5, roughness: 0.5, emissive: 0xff2020, emissiveIntensity: 0 });
+        const plate = new THREE.Mesh(new THREE.BoxGeometry(tr.w, 0.05, tr.d), plateM); plate.position.y = 0.025; plate.receiveShadow = true; g.add(plate);
+        const sp = 0.42, nx = Math.max(1, Math.floor(tr.w / sp)), nz = Math.max(1, Math.floor(tr.d / sp));
+        const cones = new THREE.InstancedMesh(new THREE.ConeGeometry(0.11, 0.5, 5), new THREE.MeshStandardMaterial({ color: 0xd8dde6, metalness: 0.7, roughness: 0.3, flatShading: true }), nx * nz);
+        const m = new THREE.Matrix4(); let k = 0;
+        for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) { m.makeTranslation((i + 0.5) * tr.w / nx - tr.w / 2, 0.25, (j + 0.5) * tr.d / nz - tr.d / 2); cones.setMatrixAt(k++, m); }
+        cones.castShadow = true; const lift = new THREE.Group(); lift.add(cones); g.add(lift); G.add(g);
+        this.traps.push({ tr, lift, plateM });
+      } else if (tr.kind === 'fence') {
+        const g = new THREE.Group(), len = Math.hypot(tr.bx - tr.ax, tr.bz - tr.az);
+        g.position.set((tr.ax + tr.bx) / 2, 0, (tr.az + tr.bz) / 2); g.rotation.y = -Math.atan2(tr.bz - tr.az, tr.bx - tr.ax);
+        const postM = new THREE.MeshStandardMaterial({ color: 0x2c2f38, metalness: 0.6, roughness: 0.4, emissive: 0xff2030, emissiveIntensity: 0.3 });
+        for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.5, 0.3), postM); p.position.set(s * len / 2, 1.25, 0); p.castShadow = true; g.add(p); }
+        const beamM = new THREE.MeshBasicMaterial({ color: 0xff3048, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
+        const beam = new THREE.Mesh(new THREE.PlaneGeometry(len - 0.3, 2.3), beamM); beam.position.y = 1.2; g.add(beam);
+        const lines = new THREE.Group();
+        for (let i = 0; i < 6; i++) { const l = new THREE.Mesh(new THREE.BoxGeometry(len - 0.3, 0.04, 0.04), new THREE.MeshBasicMaterial({ color: 0xff5060 })); l.position.y = 0.2 + i * 0.4; lines.add(l); }
+        g.add(lines); G.add(g);
+        this.traps.push({ tr, beam, lines, beamM });
+      } else if (tr.kind === 'sweep') {
+        const len = (tr.axis === 'x' ? level.hx : level.hz) * 2 + 1;
+        const beam = new THREE.Mesh(tr.axis === 'x' ? new THREE.BoxGeometry(len, 0.1, 0.1) : new THREE.BoxGeometry(0.1, 0.1, len), new THREE.MeshBasicMaterial({ color: 0xff2a3a }));
+        const glow = new THREE.Mesh(tr.axis === 'x' ? new THREE.BoxGeometry(len, 0.35, 0.35) : new THREE.BoxGeometry(0.35, 0.35, len), new THREE.MeshBasicMaterial({ color: 0xff6070, transparent: true, opacity: 0.3, depthWrite: false }));
+        for (const m of [beam, glow]) { m.position.y = 0.55; G.add(m); }
+        this.traps.push({ tr, beam, glow });
+      }
+    }
+  }
+  updateTraps(T) {
+    if (!this.traps || !this.traps.length) return;
+    const blink = Math.floor(performance.now() / 120) % 2 === 0;
+    for (const e of this.traps) {
+      if (e.kind === 'crushMark') {
+        const d = this.dynMeshes.get(e.id); if (!d) continue;
+        const k = 1 - Math.min(1, d.mesh.position.y / (e.top || 3.4));
+        e.mark.material.opacity = 0.12 + 0.55 * k + (Math.abs(d.mesh.position.y - e.top) > 0.01 && k < 0.05 && blink ? 0.3 : 0);
+        continue;
+      }
+      if (T == null) continue;
+      const s = trapState(e.tr, T);
+      if (e.tr.kind === 'spikes') {
+        const want = s.s === 2 ? 0 : s.s === 1 ? -0.38 : -0.55;
+        e.lift.position.y += (want - e.lift.position.y) * (s.s === 2 ? 0.6 : 0.2);
+        e.plateM.emissiveIntensity = s.s === 1 ? (blink ? 0.9 : 0.2) : s.s === 2 ? 0.25 : 0;
+      } else if (e.tr.kind === 'fence') {
+        e.beam.visible = s.s === 2; e.beamM.opacity = 0.4 + 0.15 * Math.sin(performance.now() / 60);
+        e.lines.visible = s.s === 2 || (s.s === 1 && blink);
+      } else {
+        for (const m of [e.beam, e.glow]) { if (e.tr.axis === 'x') m.position.z = s.pos; else m.position.x = s.pos; }
+      }
+    }
+  }
   buildHazard(level, G) {
     this.saws = []; this.laser = null;
     const h = level.hazard;
@@ -1293,6 +1373,15 @@ export class Renderer {
     for (const mn of list || []) {
       seen.add(mn.id);
       let m = this.mineMeshes.get(mn.id);
+      if (!m && mn.snare) {   // v1.2.15 Snare Plate: a flat see-through plate with jaws (only you and your team see it)
+        m = new THREE.Group();
+        const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.04, 20), new THREE.MeshStandardMaterial({ color: mn.color, transparent: true, opacity: 0.5, metalness: 0.4 }));
+        m.add(plate);
+        for (let k = 0; k < 8; k++) { const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 4), new THREE.MeshStandardMaterial({ color: 0xc9ced8, metalness: 0.7 })); const a = k / 8 * Math.PI * 2; tooth.position.set(Math.cos(a) * 0.42, 0.07, Math.sin(a) * 0.42); m.add(tooth); }
+        const light = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial({ color: mn.color }));
+        light.position.y = 0.05; m.add(light); m.userData.light = light; m.userData.color = new THREE.Color(mn.color); m.userData.snare = true;
+        this.scene.add(m); this.mineMeshes.set(mn.id, m);
+      }
       if (!m) {
         m = new THREE.Group();
         m.add(new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 0.12, 16), new THREE.MeshStandardMaterial({ color: 0x2a2b30, metalness: 0.5 })));
@@ -1301,6 +1390,7 @@ export class Renderer {
         this.scene.add(m); this.mineMeshes.set(mn.id, m);
       }
       m.position.set(mn.x, mn.y + 0.06, mn.z); m.scale.setScalar(mn.sz || 1);
+      if (m.userData.snare) { m.position.y = mn.y + 0.02; m.userData.light.material.color.set(mn.armed ? 0xffb347 : m.userData.color); continue; }
       m.userData.light.material.color.set(mn.armed ? (blink ? 0xff2030 : 0x400008) : m.userData.color);
     }
     for (const [id, m] of this.mineMeshes) if (!seen.has(id)) { this.scene.remove(m); this.mineMeshes.delete(id); }
@@ -1670,6 +1760,11 @@ export class Renderer {
       });
     }
     if (v.raider && !tank) addRaiderMarks(model, v.kind);
+    if (v.kind === 'decoy') model.root.traverse(o => {   // v1.2.15 Afterimage: a see-through copy
+      if (!o.isMesh || !o.material) return;
+      o.material = (Array.isArray(o.material) ? o.material : [o.material]).map(m => { const c = m.clone(); c.transparent = true; c.opacity = 0.42; c.depthWrite = false; return c; });
+      if (o.material.length === 1) o.material = o.material[0];
+    });
     const hairMod = (v.hairFrac ?? -1) >= 0;   // Super Saiyan Hair replaces the hat
     const cos = v.cosmetics && hairMod ? { ...v.cosmetics, hat: 'none' } : v.cosmetics;
     if (v.kind !== 'hazardTurret' && v.kind !== 'blockTurret' && v.kind !== 'mount' && v.kind !== 'boss' && !tank && cos) attachCosmetics(model, cos);
@@ -1683,7 +1778,7 @@ export class Renderer {
     }
     for (const m of model.hitMeshes) m.userData.player = v.id;
     // Anime mode (local setting): humanoid players swap their body and cosmetics for a body pillow (gun stays).
-    const humanoid = !tank && (!v.kind || v.kind === 'hero' || v.raider) && v.kind !== 'turret' && v.kind !== 'drone';
+    const humanoid = !tank && (!v.kind || v.kind === 'hero' || v.raider || v.kind === 'decoy' || v.kind === 'soldier') && v.kind !== 'turret' && v.kind !== 'drone';
     let pillow = null, bodyParts = null;
     if (humanoid) {
       bodyParts = model.root.children.filter(o => o !== model.gunPivot && o !== model.shield);
@@ -2548,6 +2643,7 @@ export class Renderer {
       if (this.settings.slop) { m.scale.setScalar(b.r * 2.4); m.material.color.setHSL((performance.now() / 600 + b.id * 0.17) % 1, 1, 0.6); }
       else if (m.userData.fx === 'flame') { const age = (performance.now() - m.userData.born) / 1000; m.scale.setScalar(b.r * (1 + age * 6)); m.material.color.setHSL(0.08 - Math.min(0.08, age * 0.2), 1, 0.55); }
       else if (m.userData.fx === 'wave') m.scale.set(b.r * 2.2, b.r * 0.6, b.r * 2.2);
+      else if (m.userData.fx === 'swap') { const k = 1 + 0.2 * Math.sin(performance.now() / 70); m.scale.setScalar(b.r * k); }   // v1.2.15 Swap Shot orb
       else if (m.userData.fx === 'bee') {   // Bees: a little striped body that buzzes
         const v = b.vel, age = (performance.now() - m.userData.born) / 1000;
         m.scale.set(b.r * 1.1, b.r * 1.1, b.r * 1.9); if (v) m.lookAt(m.position.x + v.x, m.position.y + v.y, m.position.z + v.z);
@@ -2701,6 +2797,86 @@ export class Renderer {
       core.material.opacity = 0.85 * k; rim.material.opacity = k;
       if (Math.random() < dt * 25) this.burst(e.x + (Math.random() - 0.5) * 2, e.y + Math.random() * R * 2, e.z + (Math.random() - 0.5) * 2, '#c45bff', 1, 1.2);
     } });
+  }
+  // v1.2.15 Spite Charge: a red warning ring on the ground that pulses until the blast
+  spiteRing(x, y, z, r, fuse) {
+    const m = new THREE.Mesh(new THREE.RingGeometry(r * 0.9, r, 40), new THREE.MeshBasicMaterial({ color: 0xff2a2a, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+    m.rotation.x = -Math.PI / 2; m.position.set(x, y + 0.05, z); this.scene.add(m);
+    this.fx.push({ m, life: fuse, max: fuse, update: f => { f.m.material.opacity = 0.45 + 0.45 * Math.sin((f.max - f.life) * 40); } });
+  }
+  // v1.2.15 Gravity Well: a ring that shrinks in on the impact point
+  wellFx(x, y, z, r, color) {
+    if (this.settings.effects === 'off') return;
+    const m = new THREE.Mesh(new THREE.TorusGeometry(1, 0.05, 6, 32), new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2; m.position.set(x, Math.max(0.1, y), z); this.scene.add(m);
+    this.fx.push({ m, life: 0.5, max: 0.5, update: f => { const k = f.life / f.max; f.m.scale.setScalar(Math.max(0.05, r * k)); f.m.material.opacity = 0.8 * (1 - k * 0.5); f.m.rotation.z += 0.3; } });
+  }
+  // v1.2.15: a short rising word (Chain Encore counter)
+  floatText(x, y, z, text, color) {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 64;
+    const g = c.getContext('2d'); g.font = '700 40px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = 6; g.strokeStyle = '#000'; g.strokeText(text, 64, 34); g.fillStyle = color; g.fillText(text, 64, 34);
+    const tex = new THREE.CanvasTexture(c), m = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false }));
+    m.position.set(x, y, z); m.scale.set(1.2, 0.6, 1); this.scene.add(m);
+    this.fx.push({ m, life: 0.8, max: 0.8, update: (f, dt) => { f.m.position.y += dt * 1.2; f.m.material.opacity = Math.min(1, f.life / 0.3); if (f.life <= 0) tex.dispose(); } });
+  }
+  // v1.2.15 emotes and pings (main.js emote wheel)
+  emojiTex(text, color) {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d'); g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (color) { g.fillStyle = 'rgba(10,12,20,.75)'; g.beginPath(); g.arc(64, 64, 58, 0, 7); g.fill(); g.lineWidth = 7; g.strokeStyle = color; g.stroke(); }
+    g.font = '80px system-ui, "Segoe UI Emoji", "Apple Color Emoji", sans-serif'; g.fillText(text, 64, 70);
+    return new THREE.CanvasTexture(c);
+  }
+  emote(pid, text) {
+    const tex = this.emojiTex(text), m = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false }));
+    m.renderOrder = 5; this.scene.add(m);
+    this.fx.push({ m, life: 2.6, max: 2.6, update: (f, dt) => {
+      const e = this.players.get(pid), age = f.max - f.life;
+      if (e) f.m.position.set(e.root.position.x, e.root.position.y + 2.4 * (e.root.scale.y || 1) + 0.3 + Math.sin(age * 5) * 0.06, e.root.position.z);
+      f.m.visible = !!e && e.root.visible;
+      const k = Math.min(1, age / 0.18), s = 1.1 * (k < 1 ? 0.3 + k * 0.9 : 1);
+      f.m.scale.set(s, s, 1); f.m.material.opacity = Math.min(1, f.life / 0.4);
+      if (f.life <= 0) tex.dispose();
+    } });
+  }
+  ping(x, y, z, color, icon) {
+    const g = new THREE.Group(), col = new THREE.Color(color);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.75, 32), new THREE.MeshBasicMaterial({ color: col, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.04; g.add(ring);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 6, 8, 1, true), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.5, depthWrite: false }));
+    beam.position.y = 3; g.add(beam);
+    const tex = this.emojiTex(icon, color), sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false }));
+    sp.position.y = 2.2; sp.scale.set(1.1, 1.1, 1); sp.renderOrder = 5; g.add(sp);
+    g.position.set(x, y, z); this.scene.add(g);
+    this.fx.push({ m: g, life: 4.5, max: 4.5, update: (f, dt) => {
+      const age = f.max - f.life, a = Math.min(1, f.life / 0.6);
+      const k = (age * 1.4) % 1; ring.scale.setScalar(0.6 + k * 1.6); ring.material.opacity = (1 - k) * a;
+      beam.material.opacity = 0.45 * a; sp.material.opacity = a; sp.position.y = 2.2 + Math.sin(age * 4) * 0.08;
+      if (f.life <= 0) tex.dispose();
+    } });
+  }
+  // v1.2.15: words over heads (Gambler's Mag roll, Bounty Mark, rooted by a Snare Plate). tags: Map id -> text
+  syncNcTags(list, tags) {
+    const seen = new Set();
+    this.ncTags ||= new Map();
+    for (const v of list) {
+      const text = tags(v);
+      if (!text) continue;
+      seen.add(v.id);
+      let t = this.ncTags.get(v.id);
+      if (!t) {
+        const c = document.createElement('canvas'); c.width = 512; c.height = 64;
+        const tex = new THREE.CanvasTexture(c), s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+        s.scale.set(4, 0.5, 1); this.scene.add(s); t = { s, c, tex, text: null }; this.ncTags.set(v.id, t);
+      }
+      if (t.text !== text) {
+        const g = t.c.getContext('2d'); g.clearRect(0, 0, 512, 64); g.font = '700 34px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,.8)'; g.strokeText(text, 256, 34); g.fillStyle = text.includes('BOUNTY') ? '#ff6a5a' : text.includes('ROOTED') ? '#ffb347' : '#ffe08a'; g.fillText(text, 256, 34);
+        t.tex.needsUpdate = true; t.text = text;
+      }
+      t.s.position.set(v.pos.x, v.pos.y + 2.75 * (v.size || 1), v.pos.z);
+    }
+    for (const [id, t] of this.ncTags) if (!seen.has(id)) { this.scene.remove(t.s); t.tex.dispose(); this.ncTags.delete(id); }
   }
   ring(x, y, z, radius, color) {
     if (this.settings.effects === 'off') return;
@@ -2979,6 +3155,7 @@ export class Renderer {
     this.syncPlayers(view.players, localId);
     this.syncSpecMarks(view.players, localId);
     this.syncJumpMark(view.players.find(p => p.id === localId));
+    if (view.ncTag) this.syncNcTags(view.players, view.ncTag);
     this.syncBullets(view.bullets);
     this.syncBarricades(view.barricades);
     this.syncDynamics(view.dynamics);
@@ -2991,6 +3168,7 @@ export class Renderer {
     this.coreMode = !!view.core; this.syncCore(view.core);
     this.syncRelics(view.relics);
     this.updateHazards(view.laser, dt);
+    this.updateTraps(view.trapT);
     this.updateFx(dt);
     this.updateNapalm(dt); this.updateBlotches(dt);
     const local = view.players.find(p => p.id === localId);
@@ -3086,7 +3264,7 @@ export class Renderer {
           if (lead.length() > 6) lead.setLength(6);
           focus.addScaledVector(lead, 0.3);
         }
-        zoom = clamp(Math.sqrt(L.hx / 19), 1, 1.2);
+        zoom = clamp(Math.sqrt(L.hx / 19), 1, 1.2) * clamp(this.settings.topZoom || 1, 0.6, 2.2);   // v1.2.13: scroll wheel zoom (Devin)
       } else {
         const others = view.players.filter(p => p.alive);
         focus = new THREE.Vector3();

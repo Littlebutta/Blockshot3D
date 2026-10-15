@@ -101,6 +101,36 @@ function genBoxes(rng, hx, hz, rectsOut, inside = null, areaFrac = 1, asym = fal
 
 // ---------- moving / physics objects ----------
 let dynId = 0;
+// v1.2.15 trap arenas, in the same 18 x 11 units as CLASSIC (x != 0 is mirrored to -x).
+// crushers [x, z, w, d, period, phase]; spikes [x, z, w, d, period, offset, on]; fences [ax, az, bx, bz, period, offset, on];
+// sweeps [axis, from, to, period, offset] (axis 'x': a beam along x that moves in z); slides [x, z, w, d, amp, period, phase]
+const TRAP_MAPS = [
+  { name: 'Crusher Hall', boxes: [[0,0,1.5,1.5,3],[6,7,3,1,1],[6,-7,3,1,1],[13,0,1,4,1],[15,6,2,2,2],[15,-6,2,2,2],[2.5,3,1,1,1],[2.5,-3,1,1,1]],
+    crushers: [[5,0,3.2,3.2,5,0],[9.5,4,3,3,6,1.7],[9.5,-4,3,3,6,4.2],[0,6,3,3,5.5,2.4],[0,-6,3,3,5.5,0.4]] },
+  { name: 'Spike Garden', boxes: [[0,0,2,2,3],[7,5.5,1.5,1.5,3],[7,-5.5,1.5,1.5,3],[13,0,1.5,5,1],[3.5,8,2,1,1],[3.5,-8,2,1,1],[10.5,0,1,1,2]],
+    spikes: [[3.5,0,3,3,4,0,1.4],[7,0,3,3,4,1.3,1.4],[10.5,4,3,3,4,2.6,1.4],[10.5,-4,3,3,4,0.6,1.4],[0,4.5,3,3,4.5,2,1.6],[0,-4.5,3,3,4.5,0,1.6],[3.5,5,2.4,2.4,5,3.3,1.5],[3.5,-5,2.4,2.4,5,1,1.5]] },
+  { name: 'Laser Grid', boxes: [[4,3.5,1,1,3],[4,-3.5,1,1,3],[10,0,1,1,3],[10,6.5,2.4,1,1],[10,-6.5,2.4,1,1],[0,0,2,2,1],[14.5,3,1,2,1],[14.5,-3,1,2,1]],
+    sweeps: [['x',-9,9,9,0],['z',-14,14,13,3]],
+    fences: [[7,-3,7,3,5,0,1.8],[0,3,0,8.5,6,2,2],[0,-3,0,-8.5,6,5,2],[12.5,4,12.5,8.5,5,2.5,1.8],[12.5,-4,12.5,-8.5,5,0.5,1.8]] },
+  { name: 'Rail Yard', boxes: [[9,0,1.2,4,3],[13,6,2.5,1.5,1],[13,-6,2.5,1.5,1],[6.5,7.5,2,1,2],[6.5,-7.5,2,1,2],[15,0,1,2.5,1]],
+    spikes: [[0,0,5,3.6,4,0,1.5],[0,4.2,5,3.6,4,1.4,1.5],[0,-4.2,5,3.6,4,2.8,1.5],[0,8.2,5,3.6,4,0.7,1.5],[0,-8.2,5,3.6,4,2.1,1.5]],
+    slides: [[1.4,0,2.4,2.4,6,7,0],[-1.4,0,2.4,2.4,6,7,3.14]] },
+];
+function trapLayout(rng, hx, hz, boxes, rects) {
+  const L = TRAP_MAPS[Math.floor(rng() * TRAP_MAPS.length)], sx = hx / 18, sz = hz / 11, mir = x => (x !== 0 ? [1, -1] : [1]);
+  for (const [x, z, w, d, h, y0 = 0] of L.boxes) for (const m of mir(x)) boxes.push({ x: m * x * sx, z: z * sz, w: w * sx, d: d * sz, h, y0 });
+  for (const b of boxes) rects.push([b.x - b.w / 2, b.x + b.w / 2, b.z - b.d / 2, b.z + b.d / 2]);
+  toMeters(boxes);
+  const dynamic = [], traps = [];
+  for (const [x, z, w, d, period, phase] of L.crushers || []) for (const m of mir(x)) dynamic.push({ id: 'd' + (++dynId), kind: 'crusher', x: m * x * sx, z: z * sz, y0: 3.4, top: 3.4, w: w * sx, d: d * sz, h: 1.3, period, phase: phase + (m < 0 ? period / 2 : 0) });
+  for (const [x, z, w, d, amp, period, phase] of L.slides || []) dynamic.push({ id: 'd' + (++dynId), kind: 'slide', x: x * sx, z: z * sz, y0: 0, w: w * sx, d: d * sz, h: unitToM(1), axis: 'z', amp: amp * sz, period, phase });
+  let n = 0;
+  for (const [x, z, w, d, period, off, on] of L.spikes || []) for (const m of mir(x)) traps.push({ id: ++n, kind: 'spikes', x: m * x * sx, z: z * sz, w: w * sx, d: d * sz, period, off: off + (m < 0 ? period / 2 : 0), on });
+  for (const [ax, az, bx, bz, period, off, on] of L.fences || []) for (const m of mir(ax || bx)) traps.push({ id: ++n, kind: 'fence', ax: m * ax * sx, az: az * sz, bx: m * bx * sx, bz: bz * sz, period, off: off + (m < 0 ? period / 2 : 0), on });
+  for (const [axis, a, b, period, off] of L.sweeps || []) { const k = axis === 'x' ? sz : sx; traps.push({ id: ++n, kind: 'sweep', axis, a: a * k, b: b * k, period, off }); }
+  return { name: L.name, dynamic, traps };
+}
+
 function freeRect(rects, r, margin = 1.2) {
   return rects.every(q => r[1] + margin <= q[0] || r[0] >= q[1] + margin || r[3] + margin <= q[2] || r[2] >= q[3] + margin);
 }
@@ -274,7 +304,7 @@ export function pickTheme(rng, themeSet = 'standard') {
 export function generateLevel(nPlayers, source, seed, themeSet, spawnCount = nPlayers, opts = {}) {
   const rng = mulberry32(seed);
   let { hx, hz } = arenaSize(nPlayers);
-  let boxes = [], name, dynamic = [], lava = false, ice = false, poly = null, shape = 'rect';
+  let boxes = [], name, dynamic = [], lava = false, ice = false, poly = null, shape = 'rect', traps = null;
   if (opts.noLava && (source === 'lava' || source === 'ice')) source = 'generated';
   const roll = rng();
   // Liquid-floor maps (Lava Lake, Ice Sheets): forced by the map setting, or a 15% roll in Mixed among the
@@ -286,8 +316,12 @@ export function generateLevel(nPlayers, source, seed, themeSet, spawnCount = nPl
   }
   const isLava = !!liquid;
   const classic = !isLava && (source === 'classic' || (source === 'mixed' && roll < 0.5));
+  const trapped = !isLava && (source === 'traps' || (classic && rng() < 0.35));   // v1.2.15: trap arenas (in Mixed and Classic too)
   const rects = [];
-  if (isLava) {
+  if (trapped) {
+    const T = trapLayout(rng, hx, hz, boxes, rects);
+    name = T.name; dynamic = T.dynamic; traps = T.traps;
+  } else if (isLava) {
     ice = liquid === 'ice'; lava = true;   // 'lava' marks any liquid floor (floating platforms); 'ice' picks the water rules
     name = ice ? 'Ice Sheets' : 'Lava Lake';
     dynamic = lavaLayout(rng, hx, hz, spawnCount, ice);
@@ -334,14 +368,14 @@ export function generateLevel(nPlayers, source, seed, themeSet, spawnCount = nPl
   const theme = lava ? pickTheme(rng, 'standard') : pickTheme(rng, themeSet);
   // Forest: sliding blocks and rising pillars don't make sense among trees and boulders, so they stay put
   // as ordinary static blocks (crates and barrels still move).
-  if (!lava && ART.themes[theme] && ART.themes[theme].style === 'forest') {
+  if (!lava && !traps && ART.themes[theme] && ART.themes[theme].style === 'forest') {
     dynamic = dynamic.filter(o => {
       if (o.kind !== 'slide' && o.kind !== 'piston') return true;
       boxes.push({ x: o.x, z: o.z, w: o.w, d: o.d, h: o.kind === 'piston' ? unitToM(2) : o.h, y0: 0 });
       return false;
     });
   }
-  return { seed, name, hx, hz, lava, ice, theme, boxes, dynamic, poly, shape };
+  return { seed, name, hx, hz, lava, ice, theme, boxes, dynamic, poly, shape, traps };
 }
 
 // Spawn points on the arena's inner perimeter, one cluster per group (player or team).
@@ -387,5 +421,6 @@ export function clearSpawns(level, points) {
     p.x + 1.3 <= b.x - b.w / 2 || p.x - 1.3 >= b.x + b.w / 2 || p.z + 1.3 <= b.z - b.d / 2 || p.z - 1.3 >= b.z + b.d / 2);
   level.boxes = level.boxes.filter(b => b.wall || clear(b));
   level.dynamic = level.dynamic.filter(o => o.kind === 'float' || clear({ x: o.x, z: o.z, w: o.w + (o.axis === 'z' ? 0 : 0), d: o.d + (o.amp ? o.amp * 2 : 0) }));
+  if (level.traps) level.traps = level.traps.filter(t => t.kind !== 'spikes' || clear(t));   // (v1.2.15: no spike floor under a spawn)
   return level;
 }

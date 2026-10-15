@@ -1,0 +1,30 @@
+{
+  "id": "implosion-rounds",
+  "name": "Implosion Rounds",
+  "rarity": "combo",
+  "icon": "🕳️",
+  "description": "Pull them in, then blow them up.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "gravWell",
+      "op": "add",
+      "value": 1.5
+    },
+    {
+      "stat": "explosive",
+      "op": "add",
+      "value": 1
+    },
+    {
+      "stat": "fireRate",
+      "op": "mul",
+      "value": 0.85
+    }
+  ],
+  "details": "Every blast also drags nearby enemies toward it.",
+  "combo": [
+    "gravity-well",
+    "volatile-payload"
+  ]
+}

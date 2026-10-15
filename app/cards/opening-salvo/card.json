@@ -1,0 +1,16 @@
+{
+  "id": "opening-salvo",
+  "name": "Opening Salvo",
+  "rarity": "common",
+  "icon": "🎺",
+  "description": "For the first 3 seconds of each round you move 30% faster and reload instantly.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "salvo",
+      "op": "add",
+      "value": 3
+    }
+  ],
+  "details": "The clock starts when the fight starts (after the countdown). An empty mag refills at once while it lasts. Extra copies make it last longer."
+}

@@ -1,0 +1,16 @@
+{
+  "id": "cold-barrel",
+  "name": "Cold Barrel",
+  "rarity": "common",
+  "icon": "🧊",
+  "description": "If you haven't fired for 1.5 s, your next shot deals +60% damage and flies 50% faster. Rewards patient aim.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "coldBarrel",
+      "op": "add",
+      "value": 0.6
+    }
+  ],
+  "details": "A snowflake next to your ammo shows when the barrel is cold. Encore shots don't use it up."
+}
