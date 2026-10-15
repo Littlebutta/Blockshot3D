@@ -907,3 +907,7 @@ body:not([data-screen=title]) #suggestBtn{display:none}
 #sgTitle,#sgText{width:100%;box-sizing:border-box;font:inherit;font-size:14px;color:#e8ecf5;background:#0e1220;border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:8px 10px;resize:vertical}
 .sgRow{display:flex;align-items:center;justify-content:space-between;gap:12px}
 #sgStatus{font-size:13px;color:#aab3c6}
+/* v1.2.17 Add to Steam (title screen, top left, desktop app only) */
+#steamAddBtn{position:fixed;left:16px;top:calc(12px + env(safe-area-inset-top,0px));z-index:5;padding:6px 12px;font-size:13px}
+#steamAddMsg{text-align:left;position:fixed;left:16px;top:calc(48px + env(safe-area-inset-top,0px));z-index:5;max-width:min(360px,calc(100vw - 32px));font-size:12.5px;line-height:1.35;padding:7px 10px;border-radius:8px;background:rgba(8,10,18,.72);color:var(--fg)}
+body:not([data-screen=title]) #steamAddBtn,body:not([data-screen=title]) #steamAddMsg{display:none}

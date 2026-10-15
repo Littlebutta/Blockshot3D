@@ -231,6 +231,12 @@ export class Game {
   maxHp(p) { return p.stats.health + (p.bonusHp || 0); }
   chest(p) { return p.pos.y + CHEST * p.size; }
   player(id) { return this.players.find(p => p.id === id); }
+  // v1.2.17: the view a player is using ('first' | 'shoulder' | 'third'), from their inputs; a turret or pet counts as its owner's
+  viewOf(id) {
+    let p = this.player(id); if (p && p.ownerId != null) p = this.player(p.ownerId) || p;
+    const i = p && p.kind === 'hero' && !p.isBot && p.input;
+    return i && i.fp ? (i.ots ? 'shoulder' : 'first') : 'third';
+  }
   emit(e) { this.events.push(e); }
   takeEvents() { if (this.unitsEv) this.closeUnits(); const e = this.events; this.events = []; return e; }
   // v1.2.6: the unit roster ('units': the whole list of transient units) goes out at most once a step; a critter swarm sent
@@ -272,6 +278,7 @@ export class Game {
     const mx = fin(i.mx) ? i.mx : 0, mz = fin(i.mz) ? i.mz : 0, ml = Math.hypot(mx, mz);
     inp.mx = ml > 1 ? mx / ml : mx; inp.mz = ml > 1 ? mz / ml : mz;
     inp.fp = !!i.fp;   // first-person view: shots leave from the eye, straight down the crosshair
+    inp.ots = !!i.ots;   // v1.2.17: over the shoulder (the kill cam replays a win from the winner's own view)
     inp.jump = !!i.jump; inp.shoot = !!i.shoot; inp.block = !!i.block; inp.crouch = !!i.crouch; inp.use = !!i.use; inp.reload = !!i.reload; inp.drop = !!i.drop; inp.dash = !!i.dash; inp.ready = i.ready | 0;
     inp.blockSeq = i.blockSeq | 0; inp.reloadSeq = i.reloadSeq | 0; inp.useSeq = i.useSeq | 0; inp.rot = (i.rot | 0) & 7;   // rot: Core Defense carry turn (scroll wheel)
     inp.jumpSeq = (i.jumpSeq ?? i.js) | 0; inp.shotSeq = (i.shotSeq ?? i.ss) | 0;   // v1.2.6: press counters, so a quick tap is never lost between two steps
@@ -3334,7 +3341,7 @@ export class Game {
     this.phase = 'roundEnd'; this.phaseT = 2.0; this.roundWinner = w; this.unitsOnlyT = null;
     if (w != null && w !== 'waves' && w in this.scores) this.scores[w]++;
     // v1.2.15 kill cam: a versus round that just ended on a kill waits for the replay (main.js kcStart)
-    const lk = this.lastKill, kc = w != null && lk && this.time - lk.t < 1.2 && lk.k != null && lk.k !== lk.p && !this.isWaves() && !this.isSide() && !this.isOpen() && !this.isPractice() && !this.settings.commander ? { k: lk.k, p: lk.p } : null;
+    const lk = this.lastKill, kc = w != null && lk && this.time - lk.t < 1.2 && lk.k != null && lk.k !== lk.p && !this.isWaves() && !this.isSide() && !this.isOpen() && !this.isPractice() && !this.settings.commander ? { k: lk.k, p: lk.p, v: this.viewOf(lk.k) } : null;
     if (kc) this.phaseT += 3.2;
     this.emit({ t: 'roundEnd', w, wave: this.isWaves() ? this.round : 0, kc });
   }

@@ -91,9 +91,10 @@
     <button class="btn ghost" data-go="settings">Settings</button>
     <button class="btn ghost" id="quitBtn">Quit</button>
   </nav>
+  <button class="btn ghost small hidden" id="steamAddBtn" type="button" title="Adds Blockshot 3D to your Steam library, with its artwork">Add to Steam</button><div id="steamAddMsg" class="hidden"></div>
   <button class="btn ghost small" id="patchBtn" type="button">Patch list</button>
   <button class="btn ghost small" id="suggestBtn" type="button">Suggestions</button>
-  <div id="versionTag" class="versiontag">v1.2.16</div>
+  <div id="versionTag" class="versiontag">v1.2.17</div>
   <div id="updLine" class="updline hidden"></div>
   <div id="suggestWin" class="hidden"><div class="plCard panel"><div class="plHead"><h2>Suggestions</h2><button class="btn ghost small" id="suggestClose" type="button">Close</button></div>
     <p class="hint">Tell us what you'd like fixed or added. Pick what kind it is so it lands in the right pile. It goes straight to the developer.</p>
@@ -372,7 +373,7 @@
     <label class="field">Upscaler
       <select id="sUpscale" title="Renders at a lower resolution, then an FSR 1-style upscaler (edge-aware upscale + contrast-adaptive sharpening) fills the screen. Pairs well with ray tracing. Replaces Render scale while on"><option value="off">Off</option><option value="quality">Quality (77%)</option><option value="balanced">Balanced (67%)</option><option value="performance">Performance (50%)</option></select></label>
     <label class="field">Anti-aliasing
-      <select id="sAA"><option value="off">Off</option><option value="fxaa">FXAA (fastest)</option><option value="smaa">SMAA</option><option value="msaa">MSAA 4× (sharpest)</option></select></label>
+      <select id="sAA"><option value="off">Off</option><option value="fxaa">FXAA (fastest)</option><option value="smaa">SMAA</option><option value="msaa">MSAA 4×</option><option value="msaa8">MSAA 8× (smoother)</option><option value="ssaa">Supersampling (best, heavy)</option></select></label>
     <label class="field">Render scale <span class="val" id="sScaleV"></span><input type="range" id="sScale" min="0.5" max="1" step="0.05"></label>
     <label class="field">GUI scale (menus and HUD) <span class="val" id="sUiScaleV"></span><input type="range" id="sUiScale" min="0.7" max="1.5" step="0.05"></label>
     <label class="check"><input type="checkbox" id="sVsync"> V-sync</label>

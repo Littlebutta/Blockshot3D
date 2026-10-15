@@ -1,6 +1,22 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.17', date: 'Oct 15', notes: {
+    Added: [
+      'Add to Steam button (top left of the menu): puts Blockshot 3D in your Steam library with its own artwork. Steam closes and reopens if it is running.',
+      'Anti-aliasing: MSAA 8x and Supersampling (best edges, heaviest).',
+    ],
+    Changed: [
+      'Graphics optimization: ambient occlusion, ray tracing and reflections no longer draw the whole scene again for each effect. Ray tracing went from about 4x the draw calls of normal graphics to under 2x, and ambient occlusion costs only a few screen passes now.',
+      'Changing a graphics setting no longer rebuilds every effect from scratch, so small changes hitch much less.',
+      'The automatic resolution drop during heavy fights no longer see-saws up and down (the "drops to 40, creeps back to 60" with ray tracing).',
+      'Less bloom overall, and much less on light-colored maps.',
+      'The end-of-round kill cam now shows the winner\'s own view: first person, over the shoulder or overhead.',
+    ],
+    Fixed: [
+      'Super Saiyan Hair sits on the head of every character (on most it was down at their feet).',
+    ],
+  } },
   { v: '1.2.16', date: 'Oct 15', notes: {
     Added: [
       'Patch list (this window): what changed in the last few updates.',
