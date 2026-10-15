@@ -64,6 +64,10 @@ function steamRunning() {
   try { return /steam\.exe/i.test(execFileSync('tasklist', ['/FI', 'IMAGENAME eq steam.exe', '/NH'], { encoding: 'utf8', windowsHide: true })); } catch { return false; }
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// v1.2.19 fix (Devin: added, but Play said "launch unavailable"): the helper runs as plain Node through ELECTRON_RUN_AS_NODE,
+// and the Steam it started inherited that setting, so every game Steam then launched (this one) started as bare Node and
+// quit at once. Steam is now always started without it.
+function cleanEnv() { const e = { ...process.env }; delete e.ELECTRON_RUN_AS_NODE; delete e.ELECTRON_NO_ATTACH_CONSOLE; return e; }
 
 function usersOf(dir) {
   return fs.existsSync(path.join(dir, 'userdata')) ? fs.readdirSync(path.join(dir, 'userdata')).filter(u => /^\d+$/.test(u) && u !== '0') : [];
@@ -75,14 +79,16 @@ async function addToSteam({ exe, artDir, logFile, beforeRestart }) {
   const dir = steamDir(); if (!dir) return { ok: false, error: "Couldn't find Steam on this PC." };
   const users = usersOf(dir);
   if (!users.length) return { ok: false, error: 'Sign in to Steam once on this PC first.' };
-  writeAll(dir, users, exe, artDir);
-  if (!steamRunning()) return { ok: true, restarted: false, accounts: users.length };
-  // Steam is open: a helper outside the game restarts it (see the top of this file)
+  // pressing it again checks the entry: right exe, folder, id and artwork; anything off is rewritten
+  const state = writeAll(dir, users, exe, artDir);
+  if (!steamRunning()) return { ok: true, restarted: false, accounts: users.length, state, exe };
+  // Steam is open: a helper outside the game restarts it (see the top of this file). Done even when the entry was already
+  // right, because a Steam started by 1.2.18 carries the setting that stops the game launching.
   if (beforeRestart) try { beforeRestart(); } catch { /* ignore */ }
   const { spawn: sp } = require('child_process');
   const child = sp(process.execPath, [__filename, JSON.stringify({ dir, exe, artDir, logFile })], { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, detached: true, stdio: 'ignore', windowsHide: true });
   child.unref();
-  return { ok: true, restarted: true, accounts: users.length };
+  return { ok: true, restarted: true, accounts: users.length, state, exe };
 }
 // the helper: close Steam, write again, start Steam
 async function restartHelper({ dir, exe, artDir, logFile }) {
@@ -90,34 +96,49 @@ async function restartHelper({ dir, exe, artDir, logFile }) {
   try {
     log('closing Steam');
     const steamExe = path.join(dir, 'steam.exe');
-    try { spawn(steamExe, ['-shutdown'], { detached: true, stdio: 'ignore', windowsHide: true }).unref(); } catch (e) { log('shutdown failed: ' + e.message); }
+    try { spawn(steamExe, ['-shutdown'], { detached: true, stdio: 'ignore', windowsHide: true, env: cleanEnv() }).unref(); } catch (e) { log('shutdown failed: ' + e.message); }
     let t = 0; for (; t < 180 && steamRunning(); t++) await sleep(500);
     log(steamRunning() ? 'Steam did not close in 90 s' : `Steam closed after ${t / 2} s`);
     await sleep(1500);
-    writeAll(dir, usersOf(dir), exe, artDir); log('shortcut and artwork written');
-    spawn(steamExe, [], { detached: true, stdio: 'ignore' }).unref(); log('Steam started');
+    log('shortcut ' + writeAll(dir, usersOf(dir), exe, artDir) + ' -> ' + exe);
+    spawn(steamExe, [], { detached: true, stdio: 'ignore', env: cleanEnv() }).unref(); log('Steam started');
   } catch (e) { log('error: ' + (e && e.stack || e)); }
 }
+// returns 'added' (new entry), 'fixed' (an entry was wrong: other exe path, folder, id or missing art) or 'ok' (already right)
 function writeAll(dir, users, exe, artDir) {
-  const quoted = `"${exe}"`, appid = appIdFor(quoted, NAME);
+  const quoted = `"${exe}"`, appid = appIdFor(quoted, NAME), startDir = `"${path.dirname(exe)}"`;
+  const ART = [['capsule.png', `${appid}p.png`], ['wide.png', `${appid}.png`], ['hero.png', `${appid}_hero.png`], ['logo.png', `${appid}_logo.png`], ['icon.png', `${appid}_icon.png`]];
+  const rank = { ok: 0, fixed: 1, added: 2 }; let worst = 'ok';
   for (const u of users) {
     const cfg = path.join(dir, 'userdata', u, 'config'), file = path.join(cfg, 'shortcuts.vdf'), grid = path.join(cfg, 'grid');
     fs.mkdirSync(grid, { recursive: true });
     let root = { shortcuts: {} };
-    try { if (fs.existsSync(file)) { root = parseVdf(fs.readFileSync(file)); fs.copyFileSync(file, file + '.blockshot-backup'); } } catch { root = { shortcuts: {} }; }
+    try { if (fs.existsSync(file)) root = parseVdf(fs.readFileSync(file)); } catch { root = { shortcuts: {} }; }
     const list = root.shortcuts || (root.shortcuts = {});
-    const same = s => s && typeof s.Exe === 'string' && s.Exe.replace(/"/g, '').toLowerCase() === exe.toLowerCase();
-    let key = Object.keys(list).find(k => same(list[k]));
-    if (key == null) key = String(Object.keys(list).length ? Math.max(...Object.keys(list).map(Number).filter(Number.isFinite)) + 1 : 0);
-    const icon = path.join(grid, `${appid}_icon.png`);
-    list[key] = { ...(list[key] || {}), appid: { i32: appid | 0 }, AppName: NAME, Exe: quoted, StartDir: `"${path.dirname(exe)}"`, icon, ShortcutPath: '', LaunchOptions: '',
-      IsHidden: { i32: 0 }, AllowDesktopConfig: { i32: 1 }, AllowOverlay: { i32: 1 }, OpenVR: { i32: 0 }, Devkit: { i32: 0 }, DevkitGameID: '', DevkitOverrideAppID: { i32: 0 },
-      LastPlayTime: (list[key] && list[key].LastPlayTime) || { i32: 0 }, FlatpakAppID: '', tags: (list[key] && list[key].tags) || {} };
-    fs.writeFileSync(file, writeVdf(root));
-    for (const [src, dst] of [['capsule.png', `${appid}p.png`], ['wide.png', `${appid}.png`], ['hero.png', `${appid}_hero.png`], ['logo.png', `${appid}_logo.png`], ['icon.png', `${appid}_icon.png`]]) {
+    const exeOf = s => s && typeof s.Exe === 'string' ? s.Exe.replace(/"/g, '').toLowerCase() : '';
+    // this exe, else an older Blockshot 3D entry (game moved or unzipped somewhere else): that one gets pointed here
+    const keys = Object.keys(list);
+    let key = keys.find(k => exeOf(list[k]) === exe.toLowerCase());
+    if (key == null) key = keys.find(k => list[k] && list[k].AppName === NAME);
+    const old = key != null ? list[key] : null, icon = path.join(grid, `${appid}_icon.png`);
+    let state = 'ok';
+    if (!old) state = 'added';
+    else if (old.Exe !== quoted || old.StartDir !== startDir || !old.appid || (old.appid.i32 >>> 0) !== appid || old.icon !== icon ||
+      old.LaunchOptions || (old.IsHidden && old.IsHidden.i32) || ART.some(([, d]) => !fs.existsSync(path.join(grid, d)))) state = 'fixed';
+    if (state !== 'ok') {
+      if (key == null) key = String(keys.length ? Math.max(...keys.map(Number).filter(Number.isFinite)) + 1 : 0);
+      list[key] = { ...(old || {}), appid: { i32: appid | 0 }, AppName: NAME, Exe: quoted, StartDir: startDir, icon, ShortcutPath: '', LaunchOptions: '',
+        IsHidden: { i32: 0 }, AllowDesktopConfig: { i32: 1 }, AllowOverlay: { i32: 1 }, OpenVR: { i32: 0 }, Devkit: { i32: 0 }, DevkitGameID: '', DevkitOverrideAppID: { i32: 0 },
+        LastPlayTime: (old && old.LastPlayTime) || { i32: 0 }, FlatpakAppID: '', tags: (old && old.tags) || {} };
+      try { if (fs.existsSync(file)) fs.copyFileSync(file, file + '.blockshot-backup'); } catch { /* no backup */ }
+      fs.writeFileSync(file, writeVdf(root));
+    }
+    for (const [src, dst] of ART) {
       try { fs.copyFileSync(path.join(artDir, src), path.join(grid, dst)); } catch { /* art missing: the shortcut still works */ }
     }
+    if (rank[state] > rank[worst]) worst = state;
   }
+  return worst;
 }
 
 module.exports = { addToSteam, restartHelper, parseVdf, writeVdf, appIdFor };
