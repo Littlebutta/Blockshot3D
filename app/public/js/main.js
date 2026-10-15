@@ -2257,11 +2257,11 @@ if (window.steamBridge && window.steamBridge.addToSteam) {
   $('steamAddBtn').classList.remove('hidden');
   $('steamAddBtn').onclick = async () => {
     const b = $('steamAddBtn'), m = $('steamAddMsg'); sound.play('ui');
-    b.disabled = true; m.classList.remove('hidden'); m.textContent = t('Adding to Steam… (Steam closes and opens again if it is running)');
+    b.disabled = true; m.classList.remove('hidden'); m.textContent = t('Adding to Steam…');
     let r; try { r = await window.steamBridge.addToSteam(); } catch (err) { r = { ok: false, error: String(err && err.message || err) }; }
     b.disabled = false;
-    m.textContent = r && r.ok ? (r.restarted ? t('Added! Steam is starting again; Blockshot 3D is in your library.') : t('Added! Start Steam and Blockshot 3D is in your library.')) : t("Couldn't add it: ") + ((r && r.error) || '?');
-    setTimeout(() => m.classList.add('hidden'), 12000);
+    m.textContent = r && r.ok ? (r.restarted ? t('Added! Steam is restarting to show it (about 10-30 seconds). Restart Blockshot 3D afterwards so multiplayer reconnects to Steam.') : t('Added! Start Steam and Blockshot 3D is in your library.')) : t("Couldn't add it: ") + ((r && r.error) || '?');
+    setTimeout(() => m.classList.add('hidden'), 20000);
   };
 }
 // v1.2.16 Suggestions (title screen, next to the Patch list): saved by category on this PC and uploaded to the suggestions

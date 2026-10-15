@@ -1,6 +1,11 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.18', date: 'Oct 15', notes: {
+    Fixed: [
+      'Add to Steam: it closed Steam and added nothing. The game is now added first, then Steam restarts on its own and shows it with its artwork. Restart Blockshot 3D afterwards so multiplayer reconnects to Steam.',
+    ],
+  } },
   { v: '1.2.17', date: 'Oct 15', notes: {
     Added: [
       'Add to Steam button (top left of the menu): puts Blockshot 3D in your Steam library with its own artwork. Steam closes and reopens if it is running.',

@@ -221,7 +221,8 @@ const updater = require('./updater.cjs');
 // v1.2.17 Add to Steam (electron/steamshortcut.cjs): the packaged game's own .exe, with the artwork in electron/steam-art
 ipcMain.handle('app:addToSteam', () => {
   if (!app.isPackaged) return { ok: false, error: 'Only the installed game can be added to Steam.' };
-  return require('./steamshortcut.cjs').addToSteam({ exe: process.execPath, artDir: path.join(__dirname, 'steam-art'), openExternal: u => shell.openExternal(u) })
+  const beforeRestart = () => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } };   // stop calling into Steam before it closes
+  return require('./steamshortcut.cjs').addToSteam({ exe: process.execPath, artDir: path.join(__dirname, 'steam-art'), logFile: path.join(app.getPath('documents'), 'Blockshot3D', 'add-to-steam.log'), beforeRestart })
     .catch(err => ({ ok: false, error: String(err && err.message || err) }));
 });
 // v1.2.16 Suggestions (electron/suggest.cjs)

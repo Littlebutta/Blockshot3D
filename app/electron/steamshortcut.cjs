@@ -1,7 +1,11 @@
 // v1.2.17 "Add to Steam" (title screen, top left; Devin): adds this game to the Steam library as a non-Steam game, with
 // its artwork (electron/steam-art: library capsule, wide capsule, hero banner, logo, icon). Windows only.
 // Steam keeps its shortcuts in userdata/<account>/config/shortcuts.vdf (binary KeyValues) and reads it only when it
-// starts, and writes it back when it closes, so a running Steam is asked to exit first (steam://exit) and started again.
+// starts, and may write it back when it closes, so a running Steam has to restart.
+// v1.2.17 fix (Devin: "it just closed Steam", nothing added): the game is itself connected to Steam (multiplayer), and
+// when Steam went away it took the game's work with it. Now the files are written first, and a small helper process
+// that does not depend on Steam (this file, run by the game's .exe as plain Node) closes Steam, writes the files again
+// in case Steam overwrote them on the way out, and starts Steam back up. It logs to Documents/Blockshot3D/add-to-steam.log.
 const fs = require('fs'), path = require('path'), { execFileSync, spawn } = require('child_process');
 const NAME = 'Blockshot 3D';
 
@@ -61,19 +65,40 @@ function steamRunning() {
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// adds (or refreshes) the shortcut for every Steam account on this PC; openExternal: electron shell.openExternal
-async function addToSteam({ exe, artDir, openExternal }) {
+function usersOf(dir) {
+  return fs.existsSync(path.join(dir, 'userdata')) ? fs.readdirSync(path.join(dir, 'userdata')).filter(u => /^\d+$/.test(u) && u !== '0') : [];
+}
+// adds (or refreshes) the shortcut for every Steam account on this PC.
+// opts: { exe, artDir, logFile, beforeRestart() } (beforeRestart: the game lets go of Steam before Steam closes)
+async function addToSteam({ exe, artDir, logFile, beforeRestart }) {
   if (process.platform !== 'win32') return { ok: false, error: 'Adding to Steam works in the Windows version of the game.' };
   const dir = steamDir(); if (!dir) return { ok: false, error: "Couldn't find Steam on this PC." };
-  const users = fs.existsSync(path.join(dir, 'userdata')) ? fs.readdirSync(path.join(dir, 'userdata')).filter(u => /^\d+$/.test(u) && u !== '0') : [];
+  const users = usersOf(dir);
   if (!users.length) return { ok: false, error: 'Sign in to Steam once on this PC first.' };
-  const wasRunning = steamRunning();
-  if (wasRunning) {   // Steam would overwrite the list when it closes, and only reads it when it starts
-    await openExternal('steam://exit');
-    for (let t = 0; t < 60 && steamRunning(); t++) await sleep(500);
-    if (steamRunning()) return { ok: false, error: 'Steam is still open. Close Steam and press the button again.' };
-    await sleep(800);
-  }
+  writeAll(dir, users, exe, artDir);
+  if (!steamRunning()) return { ok: true, restarted: false, accounts: users.length };
+  // Steam is open: a helper outside the game restarts it (see the top of this file)
+  if (beforeRestart) try { beforeRestart(); } catch { /* ignore */ }
+  const { spawn: sp } = require('child_process');
+  const child = sp(process.execPath, [__filename, JSON.stringify({ dir, exe, artDir, logFile })], { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, detached: true, stdio: 'ignore', windowsHide: true });
+  child.unref();
+  return { ok: true, restarted: true, accounts: users.length };
+}
+// the helper: close Steam, write again, start Steam
+async function restartHelper({ dir, exe, artDir, logFile }) {
+  const log = m => { try { fs.mkdirSync(path.dirname(logFile), { recursive: true }); fs.appendFileSync(logFile, `${new Date().toISOString()} ${m}\n`); } catch { /* no log */ } };
+  try {
+    log('closing Steam');
+    const steamExe = path.join(dir, 'steam.exe');
+    try { spawn(steamExe, ['-shutdown'], { detached: true, stdio: 'ignore', windowsHide: true }).unref(); } catch (e) { log('shutdown failed: ' + e.message); }
+    let t = 0; for (; t < 180 && steamRunning(); t++) await sleep(500);
+    log(steamRunning() ? 'Steam did not close in 90 s' : `Steam closed after ${t / 2} s`);
+    await sleep(1500);
+    writeAll(dir, usersOf(dir), exe, artDir); log('shortcut and artwork written');
+    spawn(steamExe, [], { detached: true, stdio: 'ignore' }).unref(); log('Steam started');
+  } catch (e) { log('error: ' + (e && e.stack || e)); }
+}
+function writeAll(dir, users, exe, artDir) {
   const quoted = `"${exe}"`, appid = appIdFor(quoted, NAME);
   for (const u of users) {
     const cfg = path.join(dir, 'userdata', u, 'config'), file = path.join(cfg, 'shortcuts.vdf'), grid = path.join(cfg, 'grid');
@@ -93,8 +118,7 @@ async function addToSteam({ exe, artDir, openExternal }) {
       try { fs.copyFileSync(path.join(artDir, src), path.join(grid, dst)); } catch { /* art missing: the shortcut still works */ }
     }
   }
-  if (wasRunning) { try { spawn(path.join(dir, 'steam.exe'), [], { detached: true, stdio: 'ignore' }).unref(); } catch { /* start it yourself */ } }
-  return { ok: true, restarted: wasRunning, accounts: users.length };
 }
 
-module.exports = { addToSteam, parseVdf, writeVdf, appIdFor };
+module.exports = { addToSteam, restartHelper, parseVdf, writeVdf, appIdFor };
+if (require.main === module && process.argv[2]) restartHelper(JSON.parse(process.argv[2]));
