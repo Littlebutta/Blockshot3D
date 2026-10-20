@@ -3,17 +3,17 @@
   "name": "Iron Lung",
   "rarity": "common",
   "icon": "🫁",
-  "description": "More health, slower reloads.",
+  "description": "Lots more health, slightly slower reloads.",
   "modifiers": [
     {
       "stat": "health",
       "op": "add",
-      "value": 40
+      "value": 65
     },
     {
       "stat": "reloadTime",
       "op": "mul",
-      "value": 1.4
+      "value": 1.2
     }
   ],
   "image": "art.png",

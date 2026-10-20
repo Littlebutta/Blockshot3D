@@ -14,5 +14,5 @@
   ],
   "weaponMod": "katana",
   "noCursed": true,
-  "details": "Your gun becomes a samurai sword. Click to slash everything in front of you (140% of your bullet damage, with all your bullet effects); a slash also cuts enemy bullets out of the air, so they never hit, explode or burn. Hold to charge a flying slash wave that carries all your bullet cards and cuts bullets in its path. More fire rate = faster swings and faster charging. No ammo, no reload."
+  "details": "Your gun becomes a samurai sword. Click to slash everything in front of you (140% of your bullet damage, with all your bullet effects); a slash also cuts enemy bullets out of the air, so they never hit, explode or burn. Hold (after a short moment) to charge a flying slash wave that carries all your bullet cards and cuts bullets in its path; at full charge it fires by itself and the next one starts charging while you keep holding. More fire rate = faster swings and faster charging. No ammo, no reload."
 }

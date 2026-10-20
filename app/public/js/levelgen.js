@@ -21,10 +21,13 @@ export function mulberry32(a) {
 
 // Arena half-size grows with player count.
 // Grows quickly up to 8 players, then more gently up to the 20-player cap.
+// v1.2.22 (Devin): big lobbies get noticeably bigger maps (more room per player past 8), and past 20 players the
+// area keeps growing with the player count (the side length with its square root) up to the 100-player cap.
 export function arenaSize(n) {
-  n = Math.max(2, Math.min(RULES.maxPlayers || 20, n));
-  const a = Math.min(8, n), b = Math.max(0, n - 8);
-  return { hx: Math.round(15 + 2 * a + 1.1 * b), hz: Math.round(9 + 1.5 * a + 0.8 * b) };
+  n = Math.max(2, Math.min(RULES.maxPlayers || 100, n));
+  const a = Math.min(8, n), b = Math.max(0, Math.min(20, n) - 8), c = Math.max(0, n - 20);
+  const k = c ? Math.pow(n / 20, 0.6) : 1;
+  return { hx: Math.round((15 + 2 * a + 1.7 * b) * k), hz: Math.round((9 + 1.5 * a + 1.2 * b) * k) };
 }
 
 // Classic layouts, designed for an 18 x 11 half-size arena and stretched to fit.
@@ -115,6 +118,10 @@ const TRAP_MAPS = [
   { name: 'Rail Yard', boxes: [[9,0,1.2,4,3],[13,6,2.5,1.5,1],[13,-6,2.5,1.5,1],[6.5,7.5,2,1,2],[6.5,-7.5,2,1,2],[15,0,1,2.5,1]],
     spikes: [[0,0,5,3.6,4,0,1.5],[0,4.2,5,3.6,4,1.4,1.5],[0,-4.2,5,3.6,4,2.8,1.5],[0,8.2,5,3.6,4,0.7,1.5],[0,-8.2,5,3.6,4,2.1,1.5]],
     slides: [[1.4,0,2.4,2.4,6,7,0],[-1.4,0,2.4,2.4,6,7,3.14]] },
+  // v1.2.22 (Devin): pinch pistons [cx, cz, axis, gap, len, depth, period, phase] (axis: which way the jaws slide)
+  { name: 'Pinch Alley', boxes: [[0,0,2,2,3],[8,6,2,1,1],[8,-6,2,1,1],[14,0,1.2,4,2],[4,9,3,1,1],[4,-9,3,1,1]],
+    pinches: [[5,0,'z',3,3,2.6,5,0],[11,5.5,'x',2.6,2.6,2.6,6,2],[11,-5.5,'x',2.6,2.6,2.6,6,5],[0,6.5,'x',2.8,2.6,2.6,5.5,1.2],[0,-6.5,'x',2.8,2.6,2.6,5.5,3.8]],
+    crushers: [[15.5,6.5,2.6,2.6,6,1]] },
 ];
 function trapLayout(rng, hx, hz, boxes, rects) {
   const L = TRAP_MAPS[Math.floor(rng() * TRAP_MAPS.length)], sx = hx / 18, sz = hz / 11, mir = x => (x !== 0 ? [1, -1] : [1]);
@@ -123,6 +130,12 @@ function trapLayout(rng, hx, hz, boxes, rects) {
   toMeters(boxes);
   const dynamic = [], traps = [];
   for (const [x, z, w, d, period, phase] of L.crushers || []) for (const m of mir(x)) dynamic.push({ id: 'd' + (++dynId), kind: 'crusher', x: m * x * sx, z: z * sz, y0: 3.4, top: 3.4, w: w * sx, d: d * sz, h: 1.3, period, phase: phase + (m < 0 ? period / 2 : 0) });
+  for (const [x, z, axis, gap, len, dep, period, phase] of L.pinches || []) for (const m of mir(x)) for (const side of [-1, 1]) {
+    const cx = m * x * sx, cz = z * sz, k = axis === 'x' ? sx : sz, Ln = len * k, G = gap * k, D = dep * (axis === 'x' ? sz : sx);
+    const c = axis === 'x' ? cx : cz, pos = c + side * (Ln / 2 + G);
+    dynamic.push({ id: 'd' + (++dynId), kind: 'pinch', axis, c, side, len: Ln, gap: G, x: axis === 'x' ? pos : cx, z: axis === 'x' ? cz : pos, y0: 0,
+      w: axis === 'x' ? Ln : D, d: axis === 'x' ? D : Ln, h: 2.6, period, phase: phase + (m < 0 ? period / 2 : 0) });
+  }
   for (const [x, z, w, d, amp, period, phase] of L.slides || []) dynamic.push({ id: 'd' + (++dynId), kind: 'slide', x: x * sx, z: z * sz, y0: 0, w: w * sx, d: d * sz, h: unitToM(1), axis: 'z', amp: amp * sz, period, phase });
   let n = 0;
   for (const [x, z, w, d, period, off, on] of L.spikes || []) for (const m of mir(x)) traps.push({ id: ++n, kind: 'spikes', x: m * x * sx, z: z * sz, w: w * sx, d: d * sz, period, off: off + (m < 0 ? period / 2 : 0), on });
@@ -292,6 +305,105 @@ export function boundaryPoint(level, ang, inset = 1.8) {
   return { x: cx + ux * t, z: cz + uz * t };
 }
 
+// ---------- v1.2.22 (Devin) shaped arenas: star (a leg per player), cross, ring, bowtie, spiral-free "wheel" ----------
+// The playable area is a convex hull (level.poly, so walls, bullets and clamping work as for any polygon arena) with the
+// parts outside the shape filled by tall blocks (merged into as few boxes as possible). inside(x, z, m): in the shape
+// with m meters to spare. Legs/arms point at the same angles spawnPoints uses (PI + g * 2PI / G), so each player gets one.
+export const SHAPED = ['star', 'cross', 'ring', 'flower', 'wheel', 'pods', 'hive', 'bowtie'];
+const SHAPED_NAMES = { star: 'Star', cross: 'Cross', ring: 'Ring', flower: 'Flower', wheel: 'Wheel', pods: 'Pods', hive: 'Hive', bowtie: 'Bowtie' };
+// distance from (x, z) to the segment a-b
+const segDist = (x, z, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, L = dx * dx + dz * dz, k = L ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L)) : 0; return Math.hypot(x - ax - dx * k, z - az - dz * k); };
+const circleHull = (R, K = 24) => Array.from({ length: K }, (_, i) => { const a = i * 2 * Math.PI / K; return [Math.cos(a) * R, Math.sin(a) * R]; });
+function shapedArena(kind, nPlayers, rng) {
+  const N = kind === 'cross' ? 4 : Math.max(5, Math.min(24, nPlayers));
+  let R, hull, inside, legAng = null;
+  const ang0 = Math.PI;
+  if (kind === 'star' || kind === 'cross' || kind === 'wheel' || kind === 'flower') {
+    R = kind === 'cross' ? 28 + nPlayers * 0.6 : Math.max(26, 16 + N * 1.7);
+    const flower = kind === 'flower';
+    const wt = kind === 'cross' ? 6 : flower ? Math.min(7, R * Math.sin(Math.PI / N) * 0.9) : 3.6, wb = kind === 'cross' ? 6 : flower ? 2.6 : Math.max(wt, Math.min(7, R * Math.sin(Math.PI / N) * 0.95)), core = kind === 'cross' ? 7 : kind === 'wheel' ? R * 0.42 : Math.max(6, wb * 1.25, flower ? 7 : 0);
+    legAng = Array.from({ length: N }, (_, i) => ang0 + i * 2 * Math.PI / N);
+    hull = [];
+    for (const a of legAng) {
+      const ux = Math.cos(a), uz = Math.sin(a), vx = -uz, vz = ux;
+      hull.push([ux * R - vx * wt, uz * R - vz * wt], [ux * R + vx * wt, uz * R + vz * wt]);
+    }
+    const rim = kind === 'wheel' ? [R - 3.5, R + 1] : null;   // wheel: an outer ring road joins the spokes
+    inside = (x, z, m = 0) => {
+      const rho = Math.hypot(x, z);
+      if (rho <= core - m) return true;
+      if (rim && rho >= rim[0] + m && rho <= rim[1]) return true;
+      for (const a of legAng) {
+        const ux = Math.cos(a), uz = Math.sin(a), t = x * ux + z * uz, d = Math.abs(-x * uz + z * ux);
+        if (t >= -m && t <= R && d <= wb + (wt - wb) * Math.min(1, Math.max(0, t / R)) - m) return true;
+      }
+      return false;
+    };
+  } else if (kind === 'ring') {
+    R = Math.max(24, 18 + nPlayers * 1.3);
+    const hole = R * 0.42, K = 20;
+    hull = Array.from({ length: K }, (_, i) => { const a = i * 2 * Math.PI / K; return [Math.cos(a) * R, Math.sin(a) * R]; });
+    inside = (x, z, m = 0) => Math.hypot(x, z) >= hole + m;
+  } else if (kind === 'pods') {
+    // v1.2.26 (Devin: more shapes like the star): round rooms (one per player) round a middle room, joined by corridors
+    // to the middle and to the rooms either side
+    const N = Math.max(4, Math.min(14, nPlayers)), D = Math.max(20, 11 + N * 2.3), ri = Math.max(5, Math.min(8, D * Math.sin(Math.PI / N) * 0.78)), c = 8, bw = 1.7;
+    legAng = Array.from({ length: N }, (_, i) => ang0 + i * 2 * Math.PI / N);
+    const C = legAng.map(a => [Math.cos(a) * D, Math.sin(a) * D]);
+    R = D + ri;
+    hull = circleHull(R + 1);
+    inside = (x, z, m = 0) => {
+      if (Math.hypot(x, z) <= c - m) return true;
+      for (let i = 0; i < N; i++) {
+        const [cx, cz] = C[i], [nx, nz] = C[(i + 1) % N];
+        if (Math.hypot(x - cx, z - cz) <= ri - m || segDist(x, z, 0, 0, cx, cz) <= bw - m || segDist(x, z, cx, cz, nx, nz) <= bw - m) return true;
+      }
+      return false;
+    };
+  } else if (kind === 'hive') {
+    // v1.2.26: a honeycomb of hexagon rooms with doorways between neighbours (a second ring of rooms for big lobbies)
+    const rings = nPlayers > 9 ? 2 : 1, s = Math.max(8, Math.min(12, 6 + nPlayers * 0.5)), inr = s * Math.sqrt(3) / 2, wall = 1.4, door = 1.8;
+    const cells = [];
+    for (let q = -rings; q <= rings; q++) for (let r = Math.max(-rings, -q - rings); r <= Math.min(rings, -q + rings); r++) cells.push([s * 1.5 * q, s * Math.sqrt(3) * (r + q / 2)]);
+    const nrm = Array.from({ length: 6 }, (_, k) => [Math.cos(Math.PI / 6 + k * Math.PI / 3), Math.sin(Math.PI / 6 + k * Math.PI / 3)]);
+    const pairs = [];
+    for (let i = 0; i < cells.length; i++) for (let j = i + 1; j < cells.length; j++) if (Math.hypot(cells[i][0] - cells[j][0], cells[i][1] - cells[j][1]) < inr * 2.2) pairs.push([cells[i], cells[j]]);
+    R = Math.max(...cells.map(([x, z]) => Math.hypot(x, z))) + s;
+    hull = circleHull(R + 0.5);
+    inside = (x, z, m = 0) => {
+      for (const [cx, cz] of cells) if (nrm.every(([nx, nz]) => (x - cx) * nx + (z - cz) * nz <= inr - wall / 2 - m)) return true;
+      for (const [a, b] of pairs) if (segDist(x, z, a[0], a[1], b[0], b[1]) <= door - m) return true;
+      return false;
+    };
+  } else if (kind === 'bowtie') {
+    // v1.2.26: two wide halves that meet at a narrow waist, with a hole in each half to circle round
+    R = Math.max(26, Math.min(60, 18 + nPlayers * 1.2));
+    const Z = R * 0.72, waist = 4 + Math.min(4, nPlayers * 0.15), hole = R * 0.16;
+    hull = [[-R, -Z], [R, -Z], [R, Z], [-R, Z]];
+    inside = (x, z, m = 0) => Math.abs(x) <= R - m && Math.abs(z) <= waist + (Z - waist) * Math.min(1, Math.abs(x) / (R * 0.75)) - m && Math.hypot(Math.abs(x) - R * 0.55, z) >= hole + m;
+  }
+  const hx = Math.ceil(Math.max(...hull.map(v => Math.abs(v[0])))) + 1, hz = Math.ceil(Math.max(...hull.map(v => Math.abs(v[1])))) + 1;
+  // fill: grid cells inside the hull but outside the shape, merged into rectangles (row runs, then equal runs stacked)
+  const g = 1.6, tmp = { hx, hz, poly: hull }, edges = arenaEdges(tmp), nx = Math.ceil(hx * 2 / g), nz = Math.ceil(hz * 2 / g);
+  const runs = [];
+  for (let j = 0; j < nz; j++) {
+    const z = -hz + (j + 0.5) * g; let start = -1;
+    for (let i = 0; i <= nx; i++) {
+      const x = -hx + (i + 0.5) * g;
+      const fill = i < nx && edgeDistance(edges, x, z) > -g && !inside(x, z, -0.4);
+      if (fill && start < 0) start = i;
+      if (!fill && start >= 0) { runs.push({ i0: start, i1: i, j0: j, j1: j + 1 }); start = -1; }
+    }
+  }
+  const merged = [];
+  for (const r of runs) {
+    const up = merged.find(q => q.j1 === r.j0 && q.i0 === r.i0 && q.i1 === r.i1);
+    if (up) up.j1 = r.j1; else merged.push({ ...r });
+  }
+  const boxes = merged.map(q => ({ x: -hx + (q.i0 + q.i1) / 2 * g, z: -hz + (q.j0 + q.j1) / 2 * g, w: (q.i1 - q.i0) * g, d: (q.j1 - q.j0) * g, h: 3.2, ch: 40, y0: 0, fill: true }));
+  return { name: SHAPED_NAMES[kind], hx, hz, poly: hull, inside, boxes, legAng };
+}
+
 // themeSet: 'standard' | 'experimental' | 'all' | a single theme name ('forest', 'castle', ...)
 export function pickTheme(rng, themeSet = 'standard') {
   const one = ART.themes.findIndex(t => t.name.toLowerCase() === String(themeSet).toLowerCase());
@@ -315,10 +427,29 @@ export function generateLevel(nPlayers, source, seed, themeSet, spawnCount = nPl
     if (kinds.length) liquid = kinds[Math.floor(rng() * kinds.length)];
   }
   const isLava = !!liquid;
-  const classic = !isLava && (source === 'classic' || (source === 'mixed' && roll < 0.5));
-  const trapped = !isLava && (source === 'traps' || (classic && rng() < 0.35));   // v1.2.15: trap arenas (in Mixed and Classic too)
+  // v1.2.22 (Devin): shaped arenas. 'star' / 'shapes' in the lobby, and now and then in Mixed / Random generated
+  let shapedInside = null;
+  const srng = mulberry32((seed ^ 0x5eed5) >>> 0);   // (its own random stream, so the other map kinds come out as before)
+  let shaped = !isLava && (SHAPED.includes(source) ? source : source === 'shapes' ? SHAPED[Math.floor(srng() * SHAPED.length)] : null);
+  if (!shaped && !isLava && !opts.shape && (source === 'mixed' || source === 'generated') && spawnCount >= 3 && srng() < 0.18) shaped = SHAPED[Math.floor(srng() * SHAPED.length)];
+  if (shaped === 'cross' && spawnCount > 4 && source !== 'cross') shaped = 'star';   // (the cross only has four arms)
+  if (opts.shaped) shaped = opts.shaped;
+  if (shaped) {
+    const A = shapedArena(shaped, spawnCount, rng), rects = [];
+    hx = A.hx; hz = A.hz; poly = A.poly; shape = shaped; name = A.name;
+    const inside = (r, m) => [[r[0], r[2]], [r[1], r[2]], [r[0], r[3]], [r[1], r[3]], [(r[0] + r[1]) / 2, (r[2] + r[3]) / 2]].every(([x, z]) => A.inside(x, z, m));
+    boxes = genBoxes(rng, hx, hz, rects, inside, 0.5, false);
+    toMeters(boxes);
+    boxes.push(...A.boxes);
+    for (const b of A.boxes) rects.push([b.x - b.w / 2, b.x + b.w / 2, b.z - b.d / 2, b.z + b.d / 2]);
+    dynamic = placeDynamics(rng, hx, hz, rects, { inside }).filter(o => A.inside(o.x, o.z, 1));
+    shapedInside = A.inside;
+  }
+  const classic = !isLava && !shaped && (source === 'classic' || (source === 'mixed' && roll < 0.5));
+  const trapped = !isLava && !shaped && (source === 'traps' || (classic && rng() < 0.35));   // v1.2.15: trap arenas (in Mixed and Classic too)
   const rects = [];
-  if (trapped) {
+  if (shaped) { /* built above */ }
+  else if (trapped) {
     const T = trapLayout(rng, hx, hz, boxes, rects);
     name = T.name; dynamic = T.dynamic; traps = T.traps;
   } else if (isLava) {
@@ -375,7 +506,9 @@ export function generateLevel(nPlayers, source, seed, themeSet, spawnCount = nPl
       return false;
     });
   }
-  return { seed, name, hx, hz, lava, ice, theme, boxes, dynamic, poly, shape, traps };
+  const lv = { seed, name, hx, hz, lava, ice, theme, boxes, dynamic, poly, shape, traps };
+  if (shapedInside) Object.defineProperty(lv, 'insideFn', { value: shapedInside, enumerable: false });   // (host only: spawns)
+  return lv;
 }
 
 // Spawn points on the arena's inner perimeter, one cluster per group (player or team).
@@ -407,10 +540,43 @@ export function spawnPoints(level, groupSizes, opts = {}) {
       return pts;
     });
   }
+  // v1.2.22 (Devin): keep spawns apart in big lobbies. When the perimeter can't fit every group SPAWN_GAP apart, the
+  // extra groups go on inner rings (each RING_STEP further in), spread round evenly and offset from the ring outside.
+  const E = level.edges || arenaEdges(level), per = E.reduce((a, e) => a + e.len, 0);
+  const SPAWN_GAP = 9, RING_STEP = 9, cap0 = Math.max(2, Math.floor(per / SPAWN_GAP));
+  const vv = level.poly || [[-level.hx, -level.hz], [level.hx, -level.hz], [level.hx, level.hz], [-level.hx, level.hz]];
+  const at = (u, inset) => {   // a point a fraction u of the way round the walls, on the outline shrunk inset meters in
+    const ks = [1 - inset / level.hx, 1 - inset / level.hz], V = vv.map(([x, z]) => [x * ks[0], z * ks[1]]);
+    const L = V.map((p, i) => Math.hypot(V[(i + 1) % V.length][0] - p[0], V[(i + 1) % V.length][1] - p[1])), P = L.reduce((a, b) => a + b, 0);
+    let d = ((u % 1) + 1) % 1 * P;
+    for (let i = 0; i < V.length; i++) { if (d <= L[i]) { const k = d / L[i], [ax, az] = V[i], [bx, bz] = V[(i + 1) % V.length]; return { x: ax + (bx - ax) * k, z: az + (bz - az) * k }; } d -= L[i]; }
+    return { x: 0, z: 0 };
+  };
+  if (G > cap0 && !level.insideFn) {
+    const rings = []; let left = G, r = 0;
+    while (left > 0) { const shrink = Math.max(0.25, 1 - r * RING_STEP / Math.max(8, Math.min(level.hx, level.hz))); const cap = Math.max(1, Math.floor(cap0 * shrink)); const n = Math.min(left, cap); rings.push(n); left -= n; r++; }
+    let gi = 0; const out = [];
+    rings.forEach((n, ri) => { for (let k = 0; k < n; k++, gi++) {
+      const m = groupSizes[gi], u = (k + (ri % 2) * 0.5) / n, pts = [];
+      for (let q = 0; q < m; q++) pts.push(at(u + (q - (m - 1) / 2) * 1.6 / per, 2.2 + ri * RING_STEP));
+      out.push(pts);
+    } });
+    return out;
+  }
+  if (G >= 6 && !level.insideFn) {   // v1.2.22: many groups: even spacing by distance along the walls (angles bunch up in corners)
+    return groupSizes.map((m, g) => Array.from({ length: m }, (_, q) => at(g / G + (q - (m - 1) / 2) * 1.6 / per, 2.2)));
+  }
   return groupSizes.map((m, g) => {
     const base = Math.PI + g * 2 * Math.PI / G, pts = [];
     const step = Math.min(0.22, 1.6 / Math.max(1, G) / Math.max(1, m) + 0.08);
-    for (let k = 0; k < m; k++) pts.push(boundaryPoint(level, base + (k - (m - 1) / 2) * step, 1.8));
+    for (let k = 0; k < m; k++) {
+      const a = base + (k - (m - 1) / 2) * step, p = boundaryPoint(level, a, 1.8);
+      if (level.insideFn && !level.insideFn(p.x, p.z, 1.2)) {   // v1.2.22 shaped arenas: walk in along the ray until it is open ground
+        const L0 = Math.hypot(p.x, p.z);
+        for (let t = L0; t > 0; t -= 0.8) { const x = Math.cos(a) * t, z = Math.sin(a) * t; if (level.insideFn(x, z, 1.2)) { p.x = x; p.z = z; break; } }
+      }
+      pts.push(p);
+    }
     return pts;
   });
 }

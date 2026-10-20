@@ -7,7 +7,7 @@ import { recommend, PAIRS, cardEffects } from './synergy.js';
 import { slopify, slopVerb, slopCardName, slopBadge, slopTypos, slopInit, setSlop, slopTick, slopOn } from './slop.js';
 import * as THREE from '/vendor/three/build/three.module.js';
 import { buildPlayerModel, attachCosmetics } from './art.js';
-import { FIGHTERS, FIGHTER_IDS, fighterOf } from './brawl.js';
+import { FIGHTERS, FIGHTER_IDS, fighterOf, BRAWL, BITEM_INFO, bItemRows } from './brawl.js';
 import { coreRows } from './core.js';
 import { loadCards, cardLines, hasDownside, validateCard, rarityOf, cardWeight } from './cards.js';
 import { Game, CRITTER_MAX, MOUNT } from './sim.js';
@@ -29,9 +29,12 @@ import { owView, VEH_KINDS, owLootPick, LOOT_DISCARD } from './openworld.js';
 import { Sound } from './audio.js';
 import { Net, SteamNet } from './net.js';
 import { loadSettings, saveSettings, settingsFileText, parseSettingsFile, GFX_PRESETS, DEFAULT_BINDS, BIND_LABELS, bindsOf, codeLabel } from './settings.js';
-import { tipFor, TYPE_NOTES, STAT_AMP, MOD_AMP } from './cardinfo.js';
+import { tipFor, TYPE_NOTES, STAT_AMP, MOD_AMP, BOOSTED_BY } from './cardinfo.js';
 import { PRICES, BET, priceOf, owns, initEconomy, buy, matchPay, fmtCash } from './economy.js';
 import { loadArtAssets } from './art.js';
+import { openInfo, closeInfo, infoOpen } from './infopop.js';
+import { budgetRow, budgetView } from './budget.js';
+import { tournRows, giftOffer, giftAccept, giftDecline } from './tourn.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -83,6 +86,15 @@ function killFeed(e) {
   setTimeout(() => el.classList.add('old'), 5000);
   setTimeout(() => el.remove(), 5500);
 }
+function emoteFeed(id, m) {
+  const r = rosterOf(id), el = document.createElement('div');
+  el.className = 'emoteRow';
+  el.innerHTML = `<b style="color:${r.color}">${esc(id === S.localId ? t('You') : r.name)}</b> <span class="em">${m.icon}</span> <span class="x">${esc(t(m.label))}</span>`;
+  const feed = $('killfeed'); feed.appendChild(el);
+  while (feed.children.length > 6) feed.firstChild.remove();
+  setTimeout(() => el.classList.add('old'), 4500);
+  setTimeout(() => el.remove(), 5000);
+}
 // v1.2.11 death recap (sim.js deathRecap): who killed you, everyone who hurt you in your last 8 s, and the killer's cards.
 const DMG_KIND = { hit: 'shots', blast: 'explosions', fire: 'fire', poison: 'poison', toxic: 'toxic cloud', drain: 'life drain', dot: 'damage over time' };
 let deathLogT = 0;
@@ -112,7 +124,8 @@ function showDeathLog(e) {
 function tickDeathLog(dt) {
   if (!(deathLogT > 0)) return;
   const me = S && S.view && S.view.players.find(p => p.id === S.localId);
-  if ((deathLogT -= dt) <= 0 || !S || !S.inGame || (me && me.alive) || (S.view && S.view.phase === 'picking')) {
+  // v1.2.21 (Devin): stays up until the round ends (or you are back in), no timer
+  if (!S || !S.inGame || (me && me.alive) || (S.view && (S.view.phase === 'picking' || S.view.phase === 'over'))) {
     deathLogT = 0; $('deathLog').classList.add('fade'); setTimeout(() => { if (!(deathLogT > 0)) $('deathLog').classList.add('hidden'); }, 450);
   }
 }
@@ -148,11 +161,12 @@ function roundSplash(w) {
   if (!S || !S.inGame) return;
   const el = $('roundSplash'), L = keyLabel(w), mine = w === myKey();
   const goal = S.matchSettings.roundsToWin || 5, sc = Math.min(goal, (S.view.scores || {})[w] || 0);
+  el.classList.remove('modSplash');
   el.style.setProperty('--c', L.color || 'var(--accent)');
   el.style.setProperty('--on', inkOn(L.color));
   const waves = waveMode();
   el.querySelector('.rsSmall').textContent = waves ? t('Wave {n}', { n: S.view.round || 1 }) : t('Round {n}', { n: S.view.round || 1 });
-  el.querySelector('.rsBig').textContent = waves ? t(mine ? 'Wave cleared!' : 'The squad has fallen') : mine ? t('You won the round') : S.matchSettings.mode === 'tdm' ? `${L.name} takes the round` : t('{name} wins the round', { name: L.name });
+  el.querySelector('.rsBig').textContent = waves ? t(mine ? 'Wave cleared!' : 'The squad has fallen') : mine ? t('You won the round') : teamPlay() ? `${L.name} takes the round` : t('{name} wins the round', { name: L.name });
   el.querySelector('.rsText').textContent = '';
   el.querySelector('.rsPips').innerHTML = goal > 12 || (waves && !mine) ? '' : Array.from({ length: goal }, (_, i) => `<i class="${i < sc - 1 ? 'on' : i === sc - 1 ? 'new' : ''}"></i>`).join('');
   el.classList.remove('hidden', 'out'); void el.offsetWidth; el.classList.add('in');
@@ -169,15 +183,19 @@ function modSplash(n, id) {
   el.querySelector('.rsBig').textContent = t(m.name);
   el.querySelector('.rsPips').innerHTML = '';
   el.querySelector('.rsText').textContent = t(m.text);
+  el.classList.add('modSplash');
   el.classList.remove('hidden', 'out'); void el.offsetWidth; el.classList.add('in');
   $('banner').classList.remove('show'); bannerT = 0;
   sound.play('cardDeal', 0.8);
-  splashT = 2.6;
+  // v1.2.21 (Devin): longer on screen, then the tag keeps the full text open a few more seconds
+  splashT = 5;
+  const tag = $('rmodTag'); if (tag) { tag.classList.add('open'); clearTimeout(modSplash.t); modSplash.t = setTimeout(() => tag.classList.remove('open'), 14000); }
 }
 function setRmodTag(id) {
   const el = $('rmodTag'); if (!el) return;
   const m = ROUND_MODS[id];
-  el.classList.toggle('hidden', !m); if (m) { el.textContent = '✦ ' + t(m.name); el.title = t(m.text); }
+  // v1.2.21: name + text; the text shows on hover (also while dead/spectating) and for a while after the splash
+  el.classList.toggle('hidden', !m); if (m) { el.innerHTML = `<b>✦ ${esc(t(m.name))}</b><span>${esc(t(m.text))}</span>`; el.removeAttribute('title'); }
 }
 // ---- v1.2.15 kill cam: the last few seconds of views are kept; when the host says the round ended on a kill
 // (roundEnd e.kc), the 2 s around the winning kill are replayed from the killer's view (v1.2.17: e.kc.v), then the round splash.
@@ -188,7 +206,8 @@ function kcRecord() {
   if (!kcMode() || !S.view || !S.view.players) { KC.buf.length = 0; return; }
   if (S.killCam) return;
   const now = performance.now();
-  KC.buf.push({ t: now, players: S.view.players.map(kcCopy), bullets: (S.view.bullets || []).map(kcCopy) });
+  const kv = tournView(S.view);
+  KC.buf.push({ t: now, players: kv.players.map(kcCopy), bullets: (kv.bullets || []).map(kcCopy) });
   while (KC.buf.length && now - KC.buf[0].t > 3000) KC.buf.shift();
 }
 // v1.2.20 (Devin): a wipe into and out of the replay so it reads apart from live play; the view switches while the band
@@ -231,7 +250,7 @@ function kcEnd(splash) {
 function hideSplash() {
   const el = $('roundSplash'); if (!el || el.classList.contains('hidden')) return;
   el.classList.add('out'); splashT = 0;
-  setTimeout(() => { if (el.classList.contains('out')) el.classList.add('hidden'); el.classList.remove('in', 'out'); }, 260);
+  setTimeout(() => { if (el.classList.contains('out')) el.classList.add('hidden'); el.classList.remove('in', 'out', 'modSplash'); }, 260);
 }
 function flashHurt() { const h = $('hurt'); h.style.opacity = 1; setTimeout(() => { h.style.opacity = 0; }, 140); }
 
@@ -345,9 +364,33 @@ function cosChanged() {
     else S.net.send({ t: 'toHost', msg: { k: 'setCos', cos: myCos() } });
   }
 }
+// v1.2.21 (Devin): customize the emote wheel and buy more emotes. Pick a wheel slot, then an emote for it.
+let emoteSlotSel = 0;
+function renderEmoteShop() {
+  const box = $('cosEmotes'); if (!box) return;
+  const slots = emoteSlots(), cash = settings.cash || 0;
+  box.innerHTML = `<h3>Emote wheel <small class="hint">(hold ${esc(codeLabel(bindsOf(settings).emote[0] || 'KeyQ'))} in a match)</small></h3>
+    <div class="emSlots">${slots.map((k, i) => { const m = EMOTES.find(q => q.k === k); return `<button type="button" class="emSlot${i === emoteSlotSel ? ' sel' : ''}" data-eslot="${i}" title="Slot ${i + 1}: ${esc(m.label)}"><b>${m.icon}</b><span>${esc(m.label)}</span></button>`; }).join('')}</div>
+    <p class="hint">Slot ${emoteSlotSel + 1} selected. Click an emote to put it there. 📍 pings only work in team and co-op modes.</p>
+    <div class="emGrid">${EMOTES.map(m => { const have = emoteOwned(m.k); return `<button type="button" class="emItem${have ? '' : ' locked'}${slots.includes(m.k) ? ' on' : ''}" data-emote="${m.k}" title="${esc(m.label)}${m.ping ? ' (team ping)' : ''}"${!have && cash < m.price ? ' data-short="1"' : ''}><b>${m.icon}</b><span>${esc(m.label)}</span>${have ? '' : `<i>💰 ${m.price}</i>`}</button>`; }).join('')}</div>
+    <div class="row left"><button type="button" class="btn ghost small" id="emReset">Reset wheel</button></div>`;
+  box.querySelectorAll('[data-eslot]').forEach(b => b.onclick = () => { emoteSlotSel = +b.dataset.eslot; sound.play('ui'); renderEmoteShop(); });
+  box.querySelectorAll('[data-emote]').forEach(b => b.onclick = () => {
+    const k = b.dataset.emote, m = EMOTES.find(q => q.k === k);
+    if (!emoteOwned(k)) {
+      if ((settings.cash || 0) < m.price) { toast(`You need 💰 ${m.price - (settings.cash || 0)} more`); return; }
+      settings.cash -= m.price; settings.owned ||= {}; settings.owned['emote:' + k] = true; sound.play('coin'); refreshCash(); toast(`Bought ${m.icon} ${m.label}!`);
+    }
+    const a = emoteSlots(), j = a.indexOf(k);
+    if (j >= 0 && j !== emoteSlotSel) a[j] = a[emoteSlotSel];   // already on the wheel: swap the two
+    a[emoteSlotSel] = k; settings.emoteSlots = a; saveSettings(settings);
+    emoteSlotSel = (emoteSlotSel + 1) % a.length; renderEmoteShop();
+  });
+  $('emReset').onclick = () => { settings.emoteSlots = null; saveSettings(settings); renderEmoteShop(); };
+}
 function openCustomize() {
   tryOn = null;
-  renderCosFields();
+  renderCosFields(); renderEmoteShop();
   refreshCash();
   show('customize');
   if (!preview) {
@@ -419,6 +462,7 @@ function openCardDetail(c) {
   const sec = (title, body, cls = '') => `<section class="${cls}"><h5>${esc(title)}</h5>${body}</section>`;
   const parts = [];
   parts.push(`<h3 data-noi18n>${esc(c.name)}</h3>`);
+  const boost = boostChips(c); if (boost) parts.push(boost);
   if (c.details) parts.push(sec('How it works', `<p data-noi18n>${esc(c.details)}</p>`));
   const note = TYPE_NOTES[c.rarity] || (c.weaponMod ? TYPE_NOTES.mod : c.shieldMod ? TYPE_NOTES.shieldmod : '');
   if (note) parts.push(sec(RARITY[rarityOf(c)].label, `<p>${esc(note)}</p>`, 'type ' + c.rarity));
@@ -444,6 +488,16 @@ function openCardDetail(c) {
 }
 // v1.2.20 (Devin): how this card's stats stack and get amplified, and what they amplify (cardinfo.js STAT_AMP / MOD_AMP,
 // partner stats from synergy.js PAIRS, plus the other cards that raise those partners and any combos it is part of)
+// v1.2.21 (Devin): highlighted chips for the stats that make this card stronger (cardinfo.js BOOSTED_BY), plus whether you have them
+function boostChips(c) {
+  const base = cardById.get(c.holyFrom || c.cursedFrom) || c, keys = new Set();
+  const mk = base.weaponMod || base.shieldMod;
+  if (mk && BOOSTED_BY[mk]) BOOSTED_BY[mk].forEach(k => keys.add(k));
+  for (const k of cardEffects(c).up) (BOOSTED_BY[k] || []).forEach(x => keys.add(x));
+  const list = [...keys].filter(k => STAT_INFO[k]).slice(0, 8);
+  if (!list.length) return '';
+  return `<div class="cdboost"><span>⬆ ${esc(t('Boosted by'))}</span>${list.map(k => `<b data-stat="${esc(k)}">${esc(STAT_INFO[k].label)}</b>`).join('')}</div>`;
+}
 function synergyHtml(c) {
   const out = [], lab = k => (STAT_INFO[k] || { label: k }).label, base = cardById.get(c.holyFrom || c.cursedFrom) || c;
   const mk = base.weaponMod || base.shieldMod || base.special;
@@ -599,6 +653,7 @@ const inPlay = () => S && S.inGame && currentScreen === 'none';
 // move keys / dragging pan it, the scroll wheel zooms, Jump goes back to following the fight.
 const spectating = () => {
   if (!inPlay() || S.amon || !S.view || S.matchSettings.mode === 'open' || S.matchSettings.side) return false;
+  if (S.matchSettings.commander && ['play', 'roundEnd', 'countdown'].includes(S.view.phase)) return true;   // v1.2.26 (Devin): commander mode pans like spectating
   const me = S.view.players.find(p => p.id === S.localId);
   return !!me && !me.alive && (S.view.phase === 'play' || S.view.phase === 'roundEnd');
 };
@@ -616,7 +671,7 @@ function pressAction(code, e) {
   if (inPlay()) {
     if (bound('reload', code)) I.reloadSeq++;
     if (bound('block', code)) I.blockSeq++;
-    if (bound('use', code)) I.useSeq++;
+    if (bound('use', code)) { I.useSeq++; if (S.tn && spectating() && tournWatchNext()) { toast(t('Watching arena {n}', { n: S.tWatch + 1 })); tvCache = null; } }   // v1.2.26 tournament: watch another arena
     const side = S.matchSettings.side;   // (2D: up also jumps; down + jump drops through instead)
     if ((bound('jump', code) && !(side && held('down'))) || (side && !S.matchSettings.brawl && bound('up', code))) I.jumpSeq++;   // (v1.2.13: not in Brawl)
     if (bound('shoot', code) && (settings.view !== 'first' || locked())) I.shotSeq++;
@@ -654,18 +709,44 @@ function menuBack() {
 
 // ---- v1.2.15 emote and ping wheel: hold the key, move the mouse toward a slot, let go. Emotes show over your head
 // for everyone; pings mark the spot you were aiming at for your team (team and co-op modes only).
+// v1.2.21 (Devin): the wheel is customizable (Shop & Customize > Emote wheel: settings.emoteSlots, 8 slots) and the
+// shop sells more emotes (price > 0: bought with cash, saved as settings.owned['emote:<k>']). Pings stay team/co-op only.
 const EMOTES = [
   { k: 'laugh', icon: '😂', label: 'Ha ha' }, { k: 'cool', icon: '😎', label: 'Too easy' },
   { k: 'here', icon: '📍', label: 'Look here', ping: 1 }, { k: 'attack', icon: '⚔️', label: 'Attack here', ping: 1 },
   { k: 'help', icon: '🆘', label: 'Help me', ping: 1 }, { k: 'danger', icon: '⚠️', label: 'Careful', ping: 1 },
   { k: 'gg', icon: '👋', label: 'GG' }, { k: 'angry', icon: '😡', label: 'Grr' },
+  { k: 'defend', icon: '🛡️', label: 'Defend here', ping: 1 }, { k: 'loot', icon: '💎', label: 'Loot here', ping: 1 },
+  { k: 'thanks', icon: '🙏', label: 'Thanks', price: 60 }, { k: 'sorry', icon: '😅', label: 'Oops', price: 60 },
+  { k: 'wow', icon: '😮', label: 'Wow', price: 60 }, { k: 'cry', icon: '😭', label: 'Why...', price: 80 },
+  { k: 'think', icon: '🤔', label: 'Hmm', price: 80 }, { k: 'skull', icon: '💀', label: 'Dead', price: 100 },
+  { k: 'fire', icon: '🔥', label: 'On fire', price: 100 }, { k: 'clap', icon: '👏', label: 'Nice one', price: 100 },
+  { k: 'love', icon: '❤️', label: 'Love it', price: 120 }, { k: 'sleep', icon: '😴', label: 'Boring', price: 120 },
+  { k: 'clown', icon: '🤡', label: 'Clown', price: 150 }, { k: 'salt', icon: '🧂', label: 'Salty', price: 150 },
+  { k: 'eyes', icon: '👀', label: 'I see you', price: 150 }, { k: 'muscle', icon: '💪', label: 'Strong', price: 150 },
+  { k: 'trophy', icon: '🏆', label: 'Champion', price: 250 }, { k: 'crown', icon: '👑', label: 'King', price: 300 },
+  { k: 'ghost', icon: '👻', label: 'Boo', price: 200 }, { k: 'rage', icon: '🤬', label: 'RAGE', price: 200 },
+  { k: 'party', icon: '🎉', label: 'Party', price: 200 }, { k: 'goat', icon: '🐐', label: 'GOAT', price: 350 },
+  { k: 'brain', icon: '🧠', label: 'Big brain', price: 300 }, { k: 'popcorn', icon: '🍿', label: 'Watching', price: 250 },
+  { k: 'dance', icon: '🕺', label: 'Dance', price: 400 }, { k: 'rocket', icon: '🚀', label: 'To the moon', price: 300 },
+  { k: 'bee', icon: '🐝', label: 'Bzzz', price: 250 }, { k: 'squid', icon: '🦑', label: 'Nom', price: 250 },
+  { k: 'bomb', icon: '💣', label: 'Boom', price: 250 }, { k: 'shield', icon: '🔰', label: 'Blocked', price: 200 },
 ];
+const EMOTE_DEFAULT = ['laugh', 'cool', 'here', 'attack', 'help', 'danger', 'gg', 'angry'];
+const emoteOwned = k => { const m = EMOTES.find(q => q.k === k); return !!m && (!m.price || !!(settings.owned && settings.owned['emote:' + k])); };
+function emoteSlots() {
+  const a = Array.isArray(settings.emoteSlots) ? settings.emoteSlots : [];
+  return EMOTE_DEFAULT.map((d, i) => emoteOwned(a[i]) ? a[i] : d);
+}
+let wheelList = [];   // the 8 emotes on the wheel right now
 const EW = { open: false, dx: 0, dy: 0, sel: -1, at: null, last: 0 };
 const teamPings = () => !!S && (['tdm', 'waves', 'core'].includes(S.matchSettings.mode) || (S.matchSettings.mode === 'open' && (S.matchSettings.owType === 'extract' || owSquads(S.matchSettings))));
 function buildWheel() {
-  const el = $('emoteWheel'); if (el.childElementCount) return;
-  EMOTES.forEach((m, i) => {
-    const a = i / EMOTES.length * Math.PI * 2, d = document.createElement('div');
+  const el = $('emoteWheel'), list = emoteSlots().map(k => EMOTES.find(q => q.k === k));
+  if (el.childElementCount && list.every((m, i) => wheelList[i] === m)) return;
+  el.innerHTML = ''; wheelList = list;
+  list.forEach((m, i) => {
+    const a = i / list.length * Math.PI * 2, d = document.createElement('div');
     d.className = 'ewSlot' + (m.ping ? ' ping' : ''); d.style.left = `calc(50% + ${Math.sin(a) * 105}px)`; d.style.top = `calc(50% - ${Math.cos(a) * 105}px)`;
     d.innerHTML = `<b>${m.icon}</b><span>${m.label}</span>`; el.appendChild(d);
   });
@@ -676,7 +757,7 @@ function openWheel() {
   buildWheel(); EW.open = true; EW.dx = EW.dy = 0; EW.sel = -1; EW.at = S.lastAimPt ? { ...S.lastAimPt } : null;
   renderer.lookFreeze = true;
   const pings = teamPings();
-  [...$('emoteWheel').querySelectorAll('.ewSlot')].forEach((d, i) => { d.classList.toggle('off', !!EMOTES[i].ping && (!pings || !EW.at)); d.classList.remove('sel'); });
+  [...$('emoteWheel').querySelectorAll('.ewSlot')].forEach((d, i) => { d.classList.toggle('off', !!wheelList[i].ping && (!pings || !EW.at || spectating())); d.classList.remove('sel'); });
   $('emoteWheel').querySelector('.ewCenter').textContent = pings ? t('Emote or ping') : t('Emote');
   $('emoteWheel').classList.remove('hidden');
 }
@@ -685,7 +766,7 @@ function wheelMove(e) {
   EW.dx += e.movementX || 0; EW.dy += e.movementY || 0;
   const L = Math.hypot(EW.dx, EW.dy); if (L > 120) { EW.dx *= 120 / L; EW.dy *= 120 / L; }
   let sel = -1;
-  if (L > 22) { const a = (Math.atan2(EW.dx, -EW.dy) + Math.PI * 2) % (Math.PI * 2); sel = Math.round(a / (Math.PI * 2 / EMOTES.length)) % EMOTES.length; }
+  if (L > 22) { const a = (Math.atan2(EW.dx, -EW.dy) + Math.PI * 2) % (Math.PI * 2); sel = Math.round(a / (Math.PI * 2 / wheelList.length)) % wheelList.length; }
   const slots = $('emoteWheel').querySelectorAll('.ewSlot');
   if (sel >= 0 && slots[sel].classList.contains('off')) sel = -1;
   if (sel !== EW.sel) { EW.sel = sel; slots.forEach((d, i) => d.classList.toggle('sel', i === sel)); if (sel >= 0) sound.play('cardHover', 0.4); }
@@ -693,7 +774,7 @@ function wheelMove(e) {
 function closeWheel(send) {
   if (!EW.open) return;
   EW.open = false; renderer.lookFreeze = false; $('emoteWheel').classList.add('hidden');
-  const m = EMOTES[EW.sel]; if (!send || !m || !S || !S.inGame) return;
+  const m = wheelList[EW.sel]; if (!send || !m || !S || !S.inGame) return;
   const now = performance.now(); if (now - EW.last < 700) return; EW.last = now;
   const msg = { k: 'emote', e: m.k, ...(m.ping && EW.at ? { x: +EW.at.x.toFixed(2), y: +EW.at.y.toFixed(2), z: +EW.at.z.toFixed(2) } : {}) };
   if (S.role === 'peer') S.net.send({ t: 'toHost', msg }); else emoteFrom(S.localId, msg);
@@ -710,7 +791,12 @@ function emoteFrom(from, msg) {
 function emoteEvent(e) {
   const m = EMOTES.find(q => q.k === e.e); if (!m) return;
   const r = rosterOf(e.p);
-  if (!m.ping) { renderer.emote(e.p, m.icon); if (e.p !== S.localId) sound.play('pip', 0.35); return; }
+  if (!m.ping) {
+    // v1.2.21 (Devin): spectators (out of the round) can emote too; theirs show in the kill feed area for everyone
+    const pv = S.view && S.view.players.find(p => p.id === e.p);
+    if (pv && !pv.alive) emoteFeed(e.p, m); else renderer.emote(e.p, m.icon);
+    if (e.p !== S.localId) sound.play('pip', 0.35); return;
+  }
   if (!friendOf(e.p) || !teamPings()) return;
   renderer.ping(e.x, e.y, e.z, r.color || '#ffffff', m.icon); sound.play('pip', 0.7);
   if (e.p !== S.localId) toast(`${r.name}: ${t(m.label)}`);
@@ -771,6 +857,8 @@ function bindInput() {
   // Right-click any card (pick screen, directory, combo, peek window...) to open its detail window; right-click again to close.
   document.addEventListener('contextmenu', e => {
     if (cardDetailOpen()) { e.preventDefault(); closeCardDetail(); return; }
+    const di = e.target.closest && e.target.closest('[data-info]');   // v1.2.25: right-click info popups (infopop.js)
+    if (di && !e.target.closest('.card')) { e.preventDefault(); if (infoOpen()) closeInfo(); else openInfo(di.dataset.info, e.clientX, e.clientY); return; }
     const fs = e.target.closest && e.target.closest('.fsel');
     if (fs) { e.preventDefault(); openFighterDetail(fs.dataset.f); return; }
     const el = e.target.closest && e.target.closest('.card, .peekicon');
@@ -797,6 +885,11 @@ function bindInput() {
 
 function gatherInput(local) {
   // Commander mode: your bot does all the moving, aiming and shooting. The cursor never aims it.
+  renderer.freeCam = !!(S && S.matchSettings && S.matchSettings.commander);
+  if (renderer.freeCam) {   // v1.2.26: move keys / drag pan the camera, scroll zooms, Jump goes back to following your bot
+    const bl = currentScreen !== 'none', f = bl ? 0 : (held('up') ? 1 : 0) - (held('down') ? 1 : 0), r = bl ? 0 : (held('right') ? 1 : 0) - (held('left') ? 1 : 0);
+    renderer.specInput = { f, r, fast: !!(keys.ShiftLeft || keys.ShiftRight), follow: !bl && held('jump') };
+  }
   if (S && S.matchSettings && S.matchSettings.commander) return { mx: 0, mz: 0, jump: false, shoot: false, block: false, blockSeq: I.blockSeq, reloadSeq: I.reloadSeq, aim: null, aimPoint: null };
   const blocked = currentScreen !== 'none';
   const fp = settings.view === 'first';
@@ -820,6 +913,7 @@ function gatherInput(local) {
     use: !blocked && held('use'),         // extraction: hold on a fallen teammate to revive them
     reload: !blocked && held('reload'),   // v1.2.15 Blood Volley: hold Reload
     blockSeq: I.blockSeq, reloadSeq: I.reloadSeq, useSeq: I.useSeq, jumpSeq: I.jumpSeq, shotSeq: I.shotSeq, ready: I.ready, rot: I.rot, aim: aim ? aim.aim : null, aimPoint: aim ? aim.aimPoint : null, fp, ots: fp && !!settings.ots,
+    fps: Math.round(NR.frame.hz()),   // v1.2.25: the host's shot budget eases off when anyone's frame rate drops
   };
 }
 
@@ -982,7 +1076,7 @@ function validateLobby() {
   const L = S.lobby;
   if (L.settings.mode === 'waves' || L.settings.mode === 'core' || L.settings.mode === 'practice' || L.settings.mode === 'open' || L.settings.mode === 'amon') return '';
   if (L.players.length < 2) return 'Add at least one bot or wait for another player to join.';
-  if (L.settings.mode === 'tdm' && new Set(L.players.map(p => p.team || 0)).size < 2) return 'Put players on at least two different teams.';
+  if (teamPlay(L.settings) && new Set(L.players.map(p => p.team || 0)).size < 2) return 'Put players on at least two different teams.';
   return '';
 }
 function lobbyOpenSeats() {
@@ -992,7 +1086,7 @@ function lobbyOpenSeats() {
 }
 function renderLobby() {
   if (!S || S.inGame) return;
-  const L = S.lobby, host = isHostSide(), tdm = L.settings.mode === 'tdm' || owSquads(L.settings) || (L.settings.mode === 'amon' && !!L.settings.amonVs);   // (v28: AMON Versus can be played in teams)
+  const L = S.lobby, host = isHostSide(), tdm = teamPlay(L.settings) || owSquads(L.settings) || (L.settings.mode === 'amon' && !!L.settings.amonVs);   // (v28: AMON Versus can be played in teams)
   const mode = owSquads(L.settings) ? 'tdm' : L.settings.mode;
   $('lobbyTitle').textContent = S.role === 'solo' ? 'Solo lobby' : S.role === 'host' ? `Hosting room ${S.code || '…'}` : `Room ${S.code || ''}`;
   if (S.role === 'solo') $('lobbyInfo').textContent = 'Add bots, pick a mode and start.';
@@ -1002,7 +1096,7 @@ function renderLobby() {
     const addrs = (serverInfo.lan || []).map(a => `http://${a}:${serverInfo.port}`);
     $('lobbyInfo').innerHTML = `Friends open ${addrs.length ? addrs.map(a => `<b>${esc(a)}</b>`).join(' or ') : 'this server\'s address'} in their browser, choose Multiplayer and join room <b>${esc(S.code || '…')}</b>.`;
   } else $('lobbyInfo').textContent = 'The host controls the match settings. You can pick your own team and color.';
-  const colors = assignColors(L.players, mode);
+  const colors = assignColors(L.players, teamPlay(L.settings) ? 'tdm' : mode);
   const teamOpts = ART.teamNames.map((n, i) => `<option value="${i}">${esc(n)}</option>`).join('');
   const diffOpts = Object.entries(DIFFICULTY).map(([k, d]) => `<option value="${k}">${d.label}</option>`).join('');
   const rowOf = (p, i) => {
@@ -1044,19 +1138,25 @@ function renderLobby() {
     b.disabled = !host;
     if (b.classList.contains('soloonly')) b.classList.toggle('hidden', S.role !== 'solo');
   }
-  for (const el of document.querySelectorAll('#lobby [data-modes]')) el.classList.toggle('hidden', !el.dataset.modes.split(' ').includes(L.settings.mode) || (el.classList.contains('sidehint') && !L.settings.side));
+  for (const el of document.querySelectorAll('#lobby [data-modes]')) el.classList.toggle('hidden', !el.dataset.modes.split(' ').includes(L.settings.mode));
+  // v1.2.26 lobby redesign: one short line for the mode, settings in tabs (right-click anything for the details)
+  $('modeLine').textContent = t(MODE_LINES[L.settings.mode] || '');
+  { const tb = document.querySelector(`#setTabs [data-tab="${lobbyTab}"]`); if (!tb || tb.classList.contains('hidden')) lobbyTab = 'match'; }
+  for (const b of document.querySelectorAll('#setTabs [data-tab]')) b.classList.toggle('sel', b.dataset.tab === lobbyTab);
+  for (const p of document.querySelectorAll('#lobby .spane')) p.classList.toggle('hidden', p.dataset.pane !== lobbyTab);
   for (const el of document.querySelectorAll('#lobby [data-maps]')) el.classList.toggle('hidden', L.settings.mapSource !== el.dataset.maps || mode === 'waves' || mode === 'core' || mode === 'practice' || mode === 'amon');
   $('roundsText').textContent = t(mode === 'waves' || mode === 'core' ? 'Waves to survive' : 'Rounds to win');
   const st = L.settings;
   $('setRounds').value = String(st.roundsToWin);
   $('setTeams').value = st.mode === 'tdm' ? 'tdm' : 'ffa'; $('setTeams').disabled = !host;
+  $('setTTeams').checked = !!st.tTeams; $('setTLives').value = String(st.tLives || 4);
   $('setCombos').checked = st.combos !== false;
   $('setThemes').value = st.themes || 'all';
   $('setHazards').checked = !!st.hazards;
   $('setRoundMods').value = ROUND_MODS[st.roundMods] || st.roundMods === 'random' ? st.roundMods : 'off';
-  $('setSide').checked = !!st.side; $('setStocks').value = String(st.stocks || 3); $('setBrawlFlat').checked = !!st.brawlFlat;
+  $('setSide').checked = !!st.side; $('setStocks').value = String(st.stocks || 3); $('setBrawlFlat').checked = !!st.brawlFlat; $('setBrawlItems').checked = st.brawlItems !== false; $('setBudget').checked = st.budget !== false;
   $('setCommander').checked = !!st.commander;
-  $('setPickTime').value = String(st.pickTime ?? 30); $('setAmonTimer').value = st.amonTimer ? '1' : '0'; $('setAmonVs').value = st.amonVs ? '1' : '0';
+  $('setPickTime').value = String(st.pickTime ?? 30); $('setAmonTimer').value = st.amonTimer ? '1' : '0'; $('setAmonVs').value = st.amonVs ? '1' : '0'; $('setAmonCmd').checked = st.amonCmd !== false;
   $('setRerolls').value = String(st.rerolls); $('setMaps').value = st.mapSource; $('setMapLava').checked = st.mapLava !== false; $('setMapIce').checked = st.mapIce !== false; $('setFF').checked = !!st.friendlyFire;
   $('setSpeed').checked = !!st.speed; $('setWaveDiff').value = coopDiffKey(st);
   $('setOwType').value = st.owType || 'br'; $('setOwBots').value = st.owBots || 'some'; $('setOwSquads').checked = !!st.owSquads;
@@ -1074,7 +1174,14 @@ function renderLobby() {
   $('lobbyError').textContent = host ? err : 'Waiting for the host to start the match.';
 }
 const owSquads = st => st.mode === 'open' && st.owType !== 'extract' && !!st.owSquads;
-const LOBBY_INPUTS = ['setSide', 'setOwType', 'setOwBots', 'setOwSquads', 'setRounds', 'setRerolls', 'setMaps', 'setFF', 'setCombos', 'setHazards', 'setRoundMods', 'setCommander', 'setPickTime', 'setThemes', 'setSpeed', 'setWaveDiff', 'setCoopScale', 'setGmSpawn', 'setDummies', 'setDummyMode', 'setDummyHp', 'setGod', 'setAmonTimer'];
+const LOBBY_INPUTS = ['setSide', 'setOwType', 'setOwBots', 'setOwSquads', 'setRounds', 'setRerolls', 'setMaps', 'setFF', 'setCombos', 'setHazards', 'setRoundMods', 'setCommander', 'setPickTime', 'setThemes', 'setSpeed', 'setWaveDiff', 'setCoopScale', 'setGmSpawn', 'setDummies', 'setDummyMode', 'setDummyHp', 'setGod', 'setAmonTimer', 'setAmonCmd', 'setBudget', 'setBrawlItems', 'setTTeams', 'setTLives'];
+let lobbyTab = 'match';
+const MODE_LINES = {
+  ffa: 'Everyone for themselves (or turn on teams). Losers pick cards.', tdm: 'Team deathmatch. The losing team picks cards.',
+  tourn: 'Everyone fights their own 1v1 arena each round. Run out of losses and you\'re out.', waves: 'Survive the raider waves together. Boss on the last wave.',
+  core: 'Build a fort and protect the core.', open: 'Drop from the bus: battle royale or extraction.', brawl: 'Smash-style: knock rivals off the stage.',
+  amon: 'Autobattler: build a 5x5 army.', practice: 'Try any card on target dummies.',
+};
 let colorPopFor = null;
 function openColorPop(anchor) {
   const pop = $('colorPop'), L = S.lobby, colors = assignColors(L.players, L.settings.mode);
@@ -1101,6 +1208,8 @@ function setMyColor(c) {
   if (isHostSide()) claimColor(S.localId, c);
   else S.net.send({ t: 'toHost', msg: { k: 'setColor', color: c } });
 }
+// turning teams on with everyone on one team: split them into two teams to start
+function splitTeams() { const L = S.lobby; if (teamPlay(L.settings) && new Set(L.players.map(p => p.team || 0)).size < 2) L.players.forEach((p, i) => { p.team = i % 2; }); }
 function bindLobby() {
   $('playerList').addEventListener('change', e => {
     const t = e.target;
@@ -1135,24 +1244,33 @@ function bindLobby() {
     S.lobby.players = S.lobby.players.filter(q => q.id !== id);
     lobbyChanged();
   });
-  $('addBot').onclick = () => {
-    if (!isHostSide() || S.lobby.players.length >= RULES.maxPlayers) return;
-    S.botCounter++;
-    S.lobby.players.push({ id: 'b' + S.botCounter, name: 'Bot ' + S.botCounter, team: leastTeam(), isBot: true, difficulty: $('botDiff').value, cosmetics: randomCos() });
+  const addBots = n => {
+    if (!isHostSide()) return;
+    for (let k = 0; k < n && S.lobby.players.length < RULES.maxPlayers; k++) {
+      S.botCounter++;
+      S.lobby.players.push({ id: 'b' + S.botCounter, name: 'Bot ' + S.botCounter, team: leastTeam(), isBot: true, difficulty: $('botDiff').value, cosmetics: randomCos() });
+    }
     sound.play('ui'); lobbyChanged();
   };
+  $('addBot').onclick = () => addBots(1);
+  $('addBot10').onclick = () => addBots(10);   // v1.2.25: 100-player lobbies
+  $('clearBots').onclick = () => { if (!isHostSide()) return; S.lobby.players = S.lobby.players.filter(p => !p.isBot); sound.play('ui'); lobbyChanged(); };
   const set = (k, f) => e => { if (!isHostSide()) return; S.lobby.settings[k] = f(e.target); lobbyChanged(); };
   $('modeBtns').addEventListener('click', e => {
     const b = e.target.closest('[data-mode]'); if (!b || !isHostSide()) return;
     if (b.dataset.mode === 'practice' && S.role !== 'solo') return;
-    S.lobby.settings.mode = b.dataset.mode; sound.play('ui'); lobbyChanged();
+    S.lobby.settings.mode = b.dataset.mode; splitTeams(); sound.play('ui'); lobbyChanged();
   });
+  $('setTabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; lobbyTab = b.dataset.tab; sound.play('ui'); renderLobby(); });
+  // v1.2.26 tournament settings
+  $('setTTeams').onchange = e => { if (!isHostSide()) return; S.lobby.settings.tTeams = e.target.checked; splitTeams(); sound.play('ui'); lobbyChanged(); };
+  $('setTLives').onchange = set('tLives', t => Math.max(1, Math.min(10, +t.value || 4)));
   $('setRounds').onchange = set('roundsToWin', t => +t.value);
   $('setTeams').onchange = e => {
     if (!isHostSide()) return;
     const L = S.lobby; L.settings.mode = e.target.value === 'tdm' ? 'tdm' : 'ffa';
     // turning teams on with everyone on one team: split them into two teams to start
-    if (L.settings.mode === 'tdm' && new Set(L.players.map(p => p.team || 0)).size < 2) L.players.forEach((p, i) => { p.team = i % 2; });
+    splitTeams();
     sound.play('ui'); lobbyChanged();
   };
   $('setRerolls').onchange = set('rerolls', t => +t.value);
@@ -1196,10 +1314,13 @@ function bindLobby() {
   $('setSide').onchange = set('side', t => t.checked);
   $('setStocks').onchange = set('stocks', t => +t.value);
   $('setBrawlFlat').onchange = set('brawlFlat', t => t.checked);
+  $('setBrawlItems').onchange = set('brawlItems', t => t.checked);
+  $('setBudget').onchange = set('budget', t => t.checked);
   $('setCommander').onchange = set('commander', t => t.checked);
   $('setPickTime').onchange = set('pickTime', t => +t.value);
   $('setAmonTimer').onchange = set('amonTimer', t => t.value === '1');
   $('setAmonVs').onchange = set('amonVs', t => t.value === '1');
+  $('setAmonCmd').onchange = set('amonCmd', t => t.checked);
   $('startBtn').onclick = startMatch;
   $('leaveLobby').onclick = () => leaveSession();
   $('fselLeave').onclick = () => leaveMatch();   // v28: picking has no time limit, so the pick screen has its own way out
@@ -1244,7 +1365,7 @@ function lateJoin(id, name, token) {
   if (g.seatsTaken() >= RULES.maxPlayers && !(old && !old.connected)) g.retireBot();
   const lp = { id, name, team, isBot: false, token, cosmetics: back ? back.cosmetics : null, prefColor: back ? back.prefColor : null };
   S.lobby.players = S.lobby.players.filter(p => p.id !== id); S.lobby.players.push(lp);
-  const colors = assignColors(S.lobby.players, S.lobby.settings.mode);
+  const colors = assignColors(S.lobby.players, teamPlay(S.lobby.settings) ? 'tdm' : S.lobby.settings.mode);
   const r = { id, name, team, isBot: false, difficulty: 'normal', color: old ? old.color : colors[colors.length - 1], cosmetics: lp.cosmetics, kind: 'hero' };
   // tell the newcomer about the match first, then everyone else about the newcomer
   const roster = [...S.roster.values()].filter(x => !x.transient && x.id !== id).map(x => ({ id: x.id, name: x.name, team: x.team, isBot: x.isBot, color: x.color, cosmetics: x.cosmetics, kind: 'hero' }));
@@ -1306,6 +1427,9 @@ function onHostMsg(m) {
     case 'ping': (S.hostNet ||= new HostNetStats()).onPing(from, msg, r => S.net.send({ t: 'toPeer', id: from, msg: r })); break;
     case 'amon': if (S.amonGame) S.amonGame.action(from, msg.a); break;
     case 'pick': if (S.game) S.game.pick(from, msg.card); break;
+    case 'giftOffer': if (S.game) giftOffer(S.game, from, msg.to, msg.card); break;   // v1.2.26 tournament card trades
+    case 'giftAccept': if (S.game) giftAccept(S.game, from, msg.card); break;
+    case 'giftDecline': if (S.game) giftDecline(S.game, from); break;
     case 'lootPick': if (S.game && S.game.ow) owLootPick(S.game, from, msg.card); break;
     case 'reroll': if (S.game) S.game.reroll(from); break;
     case 'comboChoice': if (S.game) S.game.comboChoice(from, !!msg.accept); break;
@@ -1441,7 +1565,7 @@ function startMatch() {
   const err = validateLobby();
   if (err) { $('lobbyError').textContent = err; return; }
   if (S.lobby.settings.mode === 'brawl' && !S.fselPicks) { startFighterSelect(); return; }   // brawl: everyone picks a fighter first
-  const colors = assignColors(S.lobby.players, owSquads(S.lobby.settings) ? 'tdm' : S.lobby.settings.mode === 'core' ? 'waves' : S.lobby.settings.mode);
+  const colors = assignColors(S.lobby.players, owSquads(S.lobby.settings) || teamPlay(S.lobby.settings) ? 'tdm' : S.lobby.settings.mode === 'core' ? 'waves' : S.lobby.settings.mode);
   const waves = S.lobby.settings.mode === 'waves' || S.lobby.settings.mode === 'core' || (S.lobby.settings.mode === 'open' && !owSquads(S.lobby.settings));
   let roster = S.lobby.players.map((p, i) => ({ id: p.id, name: p.name, team: waves ? 0 : (p.team || 0), isBot: !!p.isBot, difficulty: p.difficulty || 'normal', color: colors[i], cosmetics: p.cosmetics || null, kind: 'hero' }));
   if (S.lobby.settings.mode === 'practice') roster = practiceRoster(roster.find(r => r.id === S.localId) || roster[0]);
@@ -1553,7 +1677,7 @@ function setModeTip(ms) {
   else if (ms.mode === 'amon') h = `<b>AMON</b>: drag cards from the store onto storage or the board to buy; drop a card on another copy to upgrade; drag onto the money bag to sell. Scroll zooms, hold middle mouse to rotate, ${k('up')}${k('left')}${k('down')}${k('right')} pans, Q / E switch fields, Tab leaderboard. In battle, click one of your units and press Space to take control of it (left button attacks, right button blocks if it can).`;
   else if (ms.brawl) h = `<b>Brawl</b>: ${k('jump')} again in the air for a second jump. In the air, hold ${k('dash')} to charge a dash toward the mouse and let go to dash (once per jump). Near a ledge you hang on: ${k('jump')} climbs up. While respawning, ${k('jump')} drops in early. ${k('down')} + ${k('jump')} drops through platforms.`;
   else if (ms.side) h = `<b>2D</b>: ${k('left')} / ${k('right')} move, ${k('up')} or ${k('jump')} jumps, ${k('down')} + ${k('jump')} drops through a platform. The mouse aims anywhere. Block as you touch the red wall to bounce off it.`;
-  else if (ms.core) h = `<b>Core defense</b>: tap ${k('use')} to pick up a block, plank, slab, steel or spikes (or catch one as it falls). Hold ${k('use')} to show the hologram of where it goes (aim at a block to stack on top), scroll the mouse wheel to turn it, and let go to place it. Stack up to four high. No shooting while carrying; unsupported blocks fall. <b>Enter</b> readies you for the wave.`;
+  else if (ms.core) h = `<b>Core defense</b>: tap ${k('use')} to pick up a block, plank, slab, steel or spikes (or catch one as it falls). Hold ${k('use')} to show the hologram of where it goes (aim at a block to stack on top), scroll the mouse wheel to turn it, and let go to place it. Stack up to four high. No shooting while carrying; unsupported blocks fall. Hold ${k('use')} next to the core to pick it up and move it (press again to set it down). <b>Enter</b> readies you for the wave.`;
   else if (ms.mode === 'open') h = `<b>Open world</b>: ${k('jump')} leaves the bus and opens the chute. ${k('use')} gets in or out of vehicles${ms.owType === 'extract' ? ' and, held on a fallen teammate, revives them' : ''}. ${k('crouch')} crouches, ${k('view')} switches first / third person. Walk into an item to choose a card.`;
   else if (ms.mode === 'practice') h = `<b>Practice</b>: P opens the practice panel. Right click a card there for its details.`;
   el.innerHTML = h; el.classList.toggle('hidden', !h); el.classList.toggle('top', !!(ms && (ms.mode === 'amon' || ms.brawl)));   // AMON store / brawl fighter cards sit at the bottom
@@ -1655,7 +1779,7 @@ function ncTag(v) {
 function friendOf(ownerId) {
   if (!S || ownerId === S.localId) return true;
   const mode = S.matchSettings && S.matchSettings.mode, o = S.roster.get(ownerId), me = S.roster.get(S.localId);
-  return (mode === 'tdm' || mode === 'waves' || mode === 'core') && !!o && !!me && (o.team || 0) === (me.team || 0);
+  return (teamPlay() || mode === 'waves' || mode === 'core') && !!o && !!me && (o.team || 0) === (me.team || 0);
 }
 
 // dt: real time since the last frame (up to 0.25 s). v1.2.6: the sim catches up in steps of 35 ms at most, so a long
@@ -1680,24 +1804,29 @@ function hostFrame(dt, ts = 1) {
     phase: g.phase, phaseT: g.phaseT, scores: g.scores, round: g.round,
     waiting: g.phase === 'picking' ? g.players.filter(p => !p.picked).length : 0,
     players: g.players.filter(p => p.connected).map(viewOfPlayer),
-    bullets: g.bullets.map(b => ({ id: b.id, pos: b.pos, vel: b.vel, ring: b.ring || 0, r: b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r, color: b.color, fx: b.fx, tgt: b.swarm === 'bee' && b.swTgt ? b.swTgt.id : 0 })),
+    bullets: g.bullets.map(b => ({ id: b.id, pos: b.pos, vel: b.vel, ring: b.ring || 0, r: b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r, color: b.color, fx: b.fx, tgt: b.swarm === 'bee' && b.swTgt ? b.swTgt.id : 0, o: b.owner })),
     dynamics: g.dyn.map(o => ({ id: o.id, x: o.pos.x, y: o.pos.y, z: o.pos.z, h: o.h, tip: o.tipped || 0, tx: o.tx || 0, tz: o.tz || 0 })),
-    shields: g.shields.map(sh => ({ id: sh.id, x: sh.x, y0: sh.y0, z: sh.z, w: sh.w, h: sh.h, d: sh.d, ang: sh.ang || 0, shock: !!sh.shock, leech: !!sh.leech, box: !!sh.box, hp: sh.box ? Math.max(0, sh.hp) / sh.maxHp : 1, color: (g.player(sh.owner) || {}).color || '#ffffff' })),
-    mines: g.mines.filter(m => !m.snare || friendOf(m.owner)).map(m => ({ id: m.id, x: m.x, y: m.y, z: m.z, armed: m.armT <= 0, sz: m.sz || 1, snare: !!m.snare, color: (g.player(m.owner) || {}).color || '#ffffff' })),
+    shields: g.shields.map(sh => ({ id: sh.id, x: sh.x, y0: sh.y0, z: sh.z, w: sh.w, h: sh.h, d: sh.d, ang: sh.ang || 0, shock: !!sh.shock, leech: !!sh.leech, box: !!sh.box, hp: sh.box ? Math.max(0, sh.hp) / sh.maxHp : 1, color: (g.player(sh.owner) || {}).color || '#ffffff', o: sh.owner })),
+    mines: g.mines.filter(m => !m.snare || friendOf(m.owner)).map(m => ({ id: m.id, x: m.x, y: m.y, z: m.z, armed: m.armT <= 0, sz: m.sz || 1, snare: !!m.snare, color: (g.player(m.owner) || {}).color || '#ffffff', o: m.owner })),
     trapT: g.level && g.level.traps ? g.time : null,
     laser: g.hazard && g.hazard.type === 'laser' ? [g.hazard.pos, g.hazard.state === 'warn' ? 1 : g.hazard.state === 'on' ? 2 : 0] : null,
     telegraphs: g.telegraphs.length ? telegraphRows(g) : null, shocks: g.shockwaves.length ? shockRows(g) : null, boss: bossRow(g), final: g.isFinalRound(),
     rituals: g.rituals.length ? g.ritualRows() : null, relics: g.relics.length ? g.relicRows() : null,
     ow: g.ow ? { ...owView(g), taken: g.ow.taken } : null,
-    barricades: g.barricades.map(b => ({ id: b.id, kind: b.kind, x: b.x, y0: b.y0, z: b.z, len: b.len, h: b.h, th: b.th, ang: b.ang, hp: Math.max(0, b.hp) / b.maxHp, color: b.ownerRef.color })),
+    barricades: g.barricades.map(b => ({ id: b.id, kind: b.kind, x: b.x, y0: b.y0, z: b.z, len: b.len, h: b.h, th: b.th, ang: b.ang, hp: Math.max(0, b.hp) / b.maxHp, color: b.ownerRef.color, o: b.owner })),
     core: g.settings.core ? coreRows(g) : null,
   };
-  S.brawlRows = g.isBrawl() ? g.heroes().filter(p => p.connected).map(p => [p.id, Math.round(p.pct || 0), p.stocks || 0, p.fighter || 'classic']) : null;
+  S.view.bitems = g.isBrawl() ? bItemRows(g) : null; S.view.bud = budgetRow(g); S.tn = tournRows(g);
+  S.brawlRows = g.isBrawl() ? g.brawlRows() : null; S.brawlT = g.isBrawl() ? Math.max(0, Math.ceil(BRAWL.suddenT - g.time)) : null;
   if (S.role === 'host') {
     S.sendT -= dt;
     if (S.sendT <= 0) {
-      S.sendT = S.sendT < -0.05 ? 1 / 30 : S.sendT + 1 / 30;   // v30: keep an even 30 a second (was reset each send, so it drifted to the frame rate)
+      // v1.2.25: big lobbies send fewer, fuller updates (30 a second up to 30 players, 20 up to 60, then 15), which keeps
+      // each joiner's stream and the host's upload in check (every joiner gets the whole match)
+      const np = g.players.length, hz = np <= 30 ? 30 : np <= 60 ? 20 : 15;
+      S.sendT = S.sendT < -0.05 ? 1 / hz : S.sendT + 1 / hz;   // v30: keep an even rate (was reset each send, so it drifted to the frame rate)
       const s = g.snapshot(); s.ev = S.outEvents; S.outEvents = [];
+      if (hz !== 30) s.hz = hz;
       s.pz = [...(S.pausers || [])].map(id => rosterOf(id).name);
       s.tm = Math.round(t0);   // v1.2.6: when this state was taken (host clock), so joiners place things by it, not by arrival
       if (ts < 0.999) s.tk = Math.round(ts * 100) / 100;   // slow motion: joiners extrapolate slower too
@@ -1771,7 +1900,7 @@ function snapTime(s, now) {
 const snapAge = (st, k, t, cap) => Math.max(0, Math.min(cap, (t - st) / 1000 * k));
 // Drawn position of a remote body / a bullet: snapshot position + velocity since then + a correction that fades out (off).
 function placeBody(v, t, out) {
-  const a = snapAge(v.st, v.k, t, 0.1), T = v.tgt, V = v.vel, O = v.off;
+  const a = snapAge(v.st, v.k, t, S.snapHz < 30 ? 0.16 : 0.1), T = v.tgt, V = v.vel, O = v.off;   // (v1.2.25: longer gaps in big lobbies)
   out.x = T.x + V.x * a + O.x; out.y = T.y + V.y * a + O.y; out.z = T.z + V.z * a + O.z; return out;
 }
 function placeBullet(b, t, out) {
@@ -1831,22 +1960,22 @@ function applySnap(s) {
       if (Math.hypot(dx, dy, dz) < 2.5) setXYZ(b.off, dx, dy, dz);
     }
     placeBullet(b, now, b.pos);
-    b.r = r; b.ring = ring || 0; const fe = bfx.get(id); b.fx = fe && fe[1]; b.tgt = (fe && fe[2]) || 0; b.color = (S.roster.get(co || o) || {}).color || '#ffffff';
+    b.r = r; b.ring = ring || 0; const fe = bfx.get(id); b.fx = fe && fe[1]; b.tgt = (fe && fe[2]) || 0; b.latch = !!(fe && fe[3]); b.color = (S.roster.get(co || o) || {}).color || '#ffffff'; b.o = o;
     nb.set(id, b);
   }
   S.bmap = nb;
   const col = o => (S.roster.get(o) || {}).color || '#ffffff';
   S.view.dynamics = (s.ob || []).map(([id, x, y, z, h, tip, tx, tz]) => ({ id, x, y, z, h, tip, tx: tx || 0, tz: tz || 0 }));
-  S.view.shields = (s.sh || []).map(([id, x, y0, z, w, h, d, o, f, hp, ang]) => ({ id, x, y0, z, w, h, d, ang: ang || 0, shock: !!(f & 1), leech: !!(f & 2), box: !!(f & 4), hp: hp ?? 1, color: col(o) }));
-  S.view.mines = (s.mn || []).filter(r => !r[7] || friendOf(r[4])).map(([id, x, y, z, o, armed, sz, sn]) => ({ id, x, y, z, armed: !!armed, sz: sz || 1, snare: !!sn, color: col(o) }));
+  S.view.shields = (s.sh || []).map(([id, x, y0, z, w, h, d, o, f, hp, ang]) => ({ id, x, y0, z, w, h, d, ang: ang || 0, shock: !!(f & 1), leech: !!(f & 2), box: !!(f & 4), hp: hp ?? 1, color: col(o), o }));
+  S.view.mines = (s.mn || []).filter(r => !r[7] || friendOf(r[4])).map(([id, x, y, z, o, armed, sz, sn]) => ({ id, x, y, z, armed: !!armed, sz: sz || 1, snare: !!sn, color: col(o), o }));
   S.view.laser = s.lz || null;
   if (s.tp != null) S.trapClk = { t: s.tp, at: performance.now() }; else if ('tp' in s) S.trapClk = null;
   if (s.ow) { if (s.ow.lt) S.owTaken = new Set(s.ow.lt); s.ow.taken = S.owTaken || new Set(); }
   S.view.ow = s.ow || null;
   for (const [id, pct, stocks, fighter] of s.bw || []) { const v = S.pmap.get(id); if (v) { v.pct = pct; v.stocks = stocks; v.fighter = fighter; } }
-  S.brawlRows = s.bw || null;
+  S.brawlRows = s.bw || null; S.brawlT = s.bwt ?? null; S.view.bitems = s.bi || null; S.view.bud = s.bud || null; S.snapHz = s.hz || 30; S.tn = s.tn || null;
   S.view.telegraphs = s.tg || null; S.view.shocks = s.sw || null; S.view.boss = s.bo || null; S.view.rituals = s.rt || null; S.view.relics = s.rl || null;
-  S.view.barricades = (s.bc || []).map(([id, x, y0, z, len, h, th, hp, o, ang, kind]) => ({ id, x, y0, z, len, h, th, ang: ang || 0, kind: ['sandbag', 'concrete', 'pillar', 'block', 'cube', 'plank', 'slab', 'steel', 'spikes'][kind || 0] || 'sandbag', hp, color: col(o) }));
+  S.view.barricades = (s.bc || []).map(([id, x, y0, z, len, h, th, hp, o, ang, kind]) => ({ id, x, y0, z, len, h, th, ang: ang || 0, kind: ['sandbag', 'concrete', 'pillar', 'block', 'cube', 'plank', 'slab', 'steel', 'spikes'][kind || 0] || 'sandbag', hp, color: col(o), o }));
   S.view.core = s.co || null;
   S.predSolids = predWorld(s);
   S.view.players = [...S.pmap.values()]; S.view.bullets = [...S.bmap.values()];   // (only change here; peerFrame moves what's in them)
@@ -1956,7 +2085,7 @@ function predictShot(me, inp) {
   while (sp.length && sp[0] < now - rtt - 250) sp.shift();
   if (!(rate > 0) || me.ammo - sp.length <= 0 || now - (S.lastShotFx || 0) < 1000 / (rate + 0.05) + 25 || now - (S.reloadAt || -1e9) < rtt + 150) return;
   const co = S.view.core, ow = S.view.ow;
-  if (co && co.cr && co.cr.some(r => r[0] === S.localId)) return;   // Core Defense: carrying a block
+  if (co && ((co.cr && co.cr.some(r => r[0] === S.localId)) || (co.cc && co.cc.some(r => r[0] === S.localId && r[1] >= 1)))) return;   // Core Defense: carrying a block (or the core)
   if (ow && (owStateOf(S.view, S.localId) || (ow.veh || []).some(r => r[6] === S.localId))) return;   // open world: bus, chute or a vehicle
   S.lastShotFx = now; sp.push(now);
   sound.play(settings.pillow ? 'uwu' : 'shoot', 0.9);
@@ -2408,13 +2537,15 @@ function payMatch(won, tally) {
 
 // ---------------------------------------------------------------- events
 const rosterOf = id => (S && S.roster.get(id)) || { name: '?', color: '#ffffff', team: 0, cards: [] };
+// v1.2.26: team deathmatch, or a tournament played in teams
+function teamPlay(st = S && S.matchSettings) { return !!st && (st.mode === 'tdm' || (st.mode === 'tourn' && !!st.tTeams)); }
 const myKey = () => S.matchSettings.mode === 'waves' || (S.matchSettings.mode === 'open' && S.matchSettings.owType === 'extract') ? 'players'
-  : S.matchSettings.mode === 'tdm' || owSquads(S.matchSettings) ? 't' + rosterOf(S.localId).team : S.localId;
+  : teamPlay() || owSquads(S.matchSettings) ? 't' + rosterOf(S.localId).team : S.localId;
 function keyLabel(k) {
   if (k === 'players') return { name: 'Squad', color: 'var(--accent)' };
   if (k === 'waves') return { name: 'Raiders', color: '#ff5f5f' };
   if (k === 'roamers') return { name: 'Roaming bots', color: '#ff5f5f' };
-  if (S.matchSettings.mode === 'tdm' || owSquads(S.matchSettings)) { const t = +k.slice(1); return { name: `${ART.teamNames[t]} team`, color: ART.teamColors[t] }; }
+  if (teamPlay() || owSquads(S.matchSettings)) { const t = +k.slice(1); return { name: `${ART.teamNames[t]} team`, color: ART.teamColors[t] }; }
   const r = rosterOf(k); return { name: k === S.localId ? 'You' : r.name, color: r.color };
 }
 function localPos() { const me = S.view.players.find(p => p.id === S.localId); return me ? me.pos : null; }
@@ -2464,10 +2595,30 @@ function ncEvent(e, me, vol) {
     case 'parry': renderer.glowSprite(e.x, e.y, e.z, '#ffffff', 2.2, 0.25); renderer.burst(e.x, e.y, e.z, '#ffffff', 18, 7); sound.play('block', vol(e.x, e.z)); if (e.p === me) { flashWhite(); sound.play('hitConfirm', 0.9); } break;
     case 'leech': renderer.burst(e.x, e.y, e.z, '#b07bff', 5, 2.5); break;
     case 'chain': renderer.floatText(e.x, e.y, e.z, `×${e.n}`, col); break;
+    case 'squidOn': renderer.burst(e.x, e.y, e.z, '#c46bff', 8, 3); sound.play('hurt', vol(e.x, e.z) * 0.5); break;   // v1.2.22 squid latched
+    case 'squidOff': renderer.burst(e.x, e.y, e.z, '#ffffff', 14, 5); sound.play('block', vol(e.x, e.z) * 0.7); if (e.p === me) toast('Shook it off!'); break;
   }
 }
+// v1.2.22 (Devin): a squid chewing on you shows how to get it off
+function squidTip(on) {
+  const el = $('squidTip'); if (!el) return;
+  if (on && el.classList.contains('hidden')) { const B = bindsOf(settings); el.innerHTML = `🦑 ${esc(t('Squid on you!'))} <b>${esc(t('Mash'))} ${esc(codeLabel(B.jump[0] || 'Space'))}</b> ${esc(t('or'))} <b>${esc(t('Block'))} (${esc(codeLabel(B.block[0] || 'Mouse2'))})</b>`; }
+  el.classList.toggle('hidden', !on);
+}
 function flashWhite() { const h = $('hurt'); h.style.background = 'rgba(255,255,255,.35)'; h.style.opacity = 1; setTimeout(() => { h.style.opacity = 0; setTimeout(() => { h.style.background = ''; }, 200); }, 90); }
+// v1.2.26 tournament: effects from other arenas are not shown or heard (their text, like the kill feed, still is)
+const FX_FNS = ['burst', 'addShake', 'ring', 'line', 'holyBeam', 'punch', 'gunKick', 'deathPop', 'toxicCloud', 'slashFx', 'shotKick', 'shockArea', 'portal', 'poisonBlotch', 'napalmSplat', 'muzzleFlash', 'meteorWarn', 'lockFlash', 'healPulse', 'healField', 'cutFx', 'coreBlast', 'aoeFlash', 'angelAscend'];
+const noop = () => {};
 function handleEvent(e) {
+  if (S && S.tn && e.t !== 'tMove' && (e.x != null || e.p != null) && !inMyArena(e.p ?? e.by ?? e.o ?? e.src ?? e.k)) {
+    const saved = FX_FNS.map(f => renderer[f]), sp = sound.play;
+    FX_FNS.forEach(f => { if (renderer[f]) renderer[f] = noop; }); sound.play = noop;
+    try { handleEvent0(e); } finally { FX_FNS.forEach((f, i) => { if (saved[i]) renderer[f] = saved[i]; }); sound.play = sp; }
+    return;
+  }
+  handleEvent0(e);
+}
+function handleEvent0(e) {
   const me = S.localId, lp = localPos();
   const vol = (x, z) => lp ? Math.max(0.15, 1 - Math.hypot(x - lp.x, z - lp.z) / 45) : 0.7;
   switch (e.t) {
@@ -2555,7 +2706,7 @@ function handleEvent(e) {
     case 'ritualStart': break;
     // Cursed Sacrifice hums darkly, Sacred Grove hums a soft choir, quietly, while someone charges (everyone nearby hears it)
     case 'kingHum': sound.play('opera', e.p === me ? 0.2 : vol(e.x, e.z) * 0.16); renderer.burst(e.x, e.y + 1.2, e.z, '#ffd23a', 6, 1.5); break;
-    case 'kingSummon': renderer.holyBeam(e.x, e.y, e.z, 1.2); renderer.burst(e.x, e.y + 1, e.z, '#ffd23a', 50, 7); sound.play('choir', vol(e.x, e.z)); toast(e.p === me ? `The Space King answers: ${e.name}` : `${rosterOf(e.p).name} summoned ${e.name}!`); break;
+    case 'kingSummon': renderer.holyBeam(e.x, e.y, e.z, 1.2); renderer.burst(e.x, e.y + 1, e.z, '#ffd23a', 50, 7); sound.play('choir', vol(e.x, e.z)); toast(e.p === me ? 'Big Brother is here!' : `${rosterOf(e.p).name} called ${e.name}!`); break;
     case 'ritualHum': sound.play(e.holy ? 'choir' : 'darkHum', (e.p === me ? 0.3 : vol(e.x, e.z) * 0.26) * (e.holy ? 0.6 : 1)); break;
     case 'ritualReady':
       if (e.holy) { renderer.burst(e.x, e.y + 0.3, e.z, '#fff1a8', 30, 3); sound.play('choir', vol(e.x, e.z)); if (e.p === me) toast('The grove is blessed: keep charging inside it'); }
@@ -2608,7 +2759,7 @@ function handleEvent(e) {
         sound.play(mine ? 'roundWin' : 'roundLose');
         break;
       }
-      banner(S.matchSettings.mode === 'waves' ? (mine ? 'Wave cleared!' : 'The squad has fallen') : S.matchSettings.mode === 'tdm' ? `${L.name} takes the round` : mine ? t('You won the round') : t('{name} wins the round', { name: L.name }), L.color, 1.8);
+      banner(S.matchSettings.mode === 'waves' ? (mine ? 'Wave cleared!' : 'The squad has fallen') : teamPlay() ? `${L.name} takes the round` : mine ? t('You won the round') : t('{name} wins the round', { name: L.name }), L.color, 1.8);
       sound.play(mine ? 'roundWin' : 'roundLose');
       break;
     }
@@ -2631,7 +2782,21 @@ function handleEvent(e) {
     case 'carBoom': renderer.burst(e.x, e.y, e.z, '#ff7a1a', 60, 8); renderer.burst(e.x, e.y + 0.5, e.z, '#3a3a3a', 30, 4); sound.play('explode', vol(e.x, e.z)); renderer.addShake(0.4 * vol(e.x, e.z)); break;
     case 'owWall': toast(e.n === 0 ? 'The red wall is closing in! Touching it kills you.' : 'The red wall moves again (it kills on touch)'); break;
     case 'cards': { const r = S.roster.get(e.p); if (r) { r.cards = e.cards.slice(); if (e.s) r.stats = e.s; } renderChips(); scoreKeyCache = ''; statsKey = ''; if (e.p === me && S.matchSettings.mode === 'practice') renderPractice(); break; }
-    case 'picking': for (const x of e.stats || []) { const r = S.roster.get(x.id); if (r) r.stats = x.s; } statsKey = ''; break;
+    case 'picking': for (const x of e.stats || []) { const r = S.roster.get(x.id); if (r) r.stats = x.s; } statsKey = ''; S.pickers = new Set(e.losers || []); S.giftIn = null; S.giftCard = null; if (currentScreen === 'pick') renderGiftRow(); break;
+    // v1.2.26 tournament
+    case 'tArena': {
+      const a = tnArenaOf(me), w = e.w, mine = a === e.a;
+      if (mine) { const won = w != null && w === myKey(); banner(w == null ? t('Draw') : won ? t('You won your arena') : t('You lost your arena'), w == null ? '#cfd6e4' : won ? '#6aff9a' : '#ff6a6a', 1.6); }
+      else if (e.left > 0 && !(S.tn && S.tn.p.some(r => r[0] === me && r[3]))) toast(t('{n} arenas still fighting', { n: e.left }));
+      break;
+    }
+    case 'tKO': toast(e.p === me ? t("You're knocked out of the tournament") : t('{name} is knocked out', { name: rosterOf(e.p).name })); if (e.p === me) sound.play('death'); break;
+    case 'tMove': if (e.p === me) { banner(t('Arena won: go help your ally!'), '#7fd8ff', 1.6); S.resetYaw = true; } else if (tnArenaOf(me) === e.a) toast(t('{name} came to help', { name: rosterOf(e.p).name })); break;
+    case 'gift': if (e.to === me) { S.giftIn = { from: e.from, c: e.c }; sound.play('ui'); renderGiftRow(); } else if (e.from === me) { toast(t('Offer sent to {name}', { name: rosterOf(e.to).name })); S.giftCard = null; renderGiftRow(); } break;
+    case 'giftDone': if (e.to === me || e.from === me) { S.giftIn = null; const c = cardById.get(e.to === me ? e.c : e.back); toast(t('Traded: you got {card}', { card: c ? c.name : '?' })); sound.play('cardPick'); renderGiftRow(); } break;
+    case 'giftNo': if (e.to === me) { S.giftIn = null; renderGiftRow(); } else if (e.from === me) toast(t('{name} kept their cards', { name: rosterOf(e.to).name })); break;
+    case 'giftFail': if (e.from === me) { toast(e.busy ? t('{name} is answering another offer', { name: rosterOf(e.to).name }) : t('{name} already picked', { name: rosterOf(e.to).name })); S.giftCard = null; renderGiftRow(); } break;
+    case 'giftGone': if (e.to === me || e.from === me) { S.giftIn = null; toast(t('That trade is gone (a card was already picked)')); renderGiftRow(); } break;
     case 'respawn': break;   // v1.2.0: no toast (you can see it)
     // Core Defense (core.js)
     case 'coreWave':
@@ -2646,6 +2811,7 @@ function handleEvent(e) {
     case 'coreLand': renderer.burst(e.x, 0.3, e.z, '#cfd6e4', 8, 2); break;
     case 'corePick': case 'corePlace': if (e.p === me) { sound.play('ui'); if (e.caught) toast('Caught it!'); } break;
     case 'coreNothing': if (e.p === me) toast('Nothing to pick up here'); break;
+    case 'coreMoved': if (e.p === me) sound.play('ui'); toast(e.p === me ? 'Core moved: the raiders come for it here now' : `${rosterOf(e.p).name} moved the core`); break;
     case 'coreUpgrade': banner(t('Upgrade!'), '#ffd23a', 2); toast(e.p == null ? `${e.n > 1 ? e.n + ' upgrades' : 'The upgrade'} nobody reached still count${e.n > 1 ? '' : 's'}: everyone picks a card now.` : `${e.p === me ? 'You' : rosterOf(e.p).name} grabbed the upgrade: everyone picks a card after this wave.`); sound.play('powerUp'); renderer.burst(e.x, 1, e.z, '#ffd23a', 40, 6); break;
     case 'coreRespawnIn': if (e.p === me) toast(`Respawning in ${e.s} s`); break;
     case 'coreRetry': if (currentScreen === 'over') show('none'); banner(t('Wave {n}', { n: e.n }) + ' — ' + t('again'), '#ffd166', 2); break;
@@ -2678,6 +2844,9 @@ function handleEvent(e) {
       break;
     }
     case 'pit': renderer.burst(e.x, e.y, e.z, '#3a0a0a', 18, 5); sound.play('death', vol(e.x, e.z)); if (e.p === me) renderer.addShake(0.4); break;
+    case 'budBlock': if (e.p === S.localId) S.budNoteT = performance.now() + 1200; break;
+    case 'brawlItem': { const I = BITEM_INFO[e.k] || {}; renderer.burst(e.x, e.y, e.z, I.color || '#ffffff', 22, 5); renderer.ring(e.x, e.y - 0.4, e.z, 1.6, I.color || '#ffffff'); sound.play('powerUp', 0.8);
+      if (e.p === me) toast(`${I.icon || ''} ${t(I.name || '')}${e.k === 'heal' ? ' −35%' : ''}`); break; }
     case 'brawlFloat': renderer.burst(e.x, e.y + 0.8, e.z, '#ffffff', 14, 3); break;
     case 'brawlDrop': case 'brawlClimb': renderer.burst(e.x, e.y + 0.3, e.z, '#dfe8ff', 8, 2); if (e.p === me) sound.play('jump', 0.7); break;
     case 'brawlHang': if (e.p === me) sound.play('ui'); break;
@@ -2702,6 +2871,7 @@ function handleEvent(e) {
       const r = S.roster.get(e.p), c = cardById.get(e.card);
       if (e.p === me) { sound.play('cardPick'); if (!e.more) { S.offer = null; if (currentScreen === 'pick') { if ($('pickCards').classList.contains('done')) pickOut(); else show('none'); } } }
       else toast(`${r ? r.name : '?'} took ${c ? c.name : e.card}`);
+      if (!e.more && S.pickers && S.pickers.delete(e.p) && currentScreen === 'pick') renderGiftRow();   // (v1.2.26: no more trades with them)
       renderChips();
       break;
     }
@@ -2784,6 +2954,7 @@ function showPick(offer, rerolls, info = {}) {
   releaseMouse();
   if (document.pointerLockElement) document.exitPointerLock();
   show('pick');
+  renderGiftRow();
   renderPeek(true);
   if (wrap.firstChild) wrap.firstChild.focus({ preventScroll: true });
 }
@@ -2847,6 +3018,7 @@ function pickOut() {
 function choosePick(i) {
   if (!S || !S.offer || !S.offer[i]) return;
   const id = S.offer[i];
+  if (S.giftIn) { S.giftIn = null; sendGift('giftAccept', { card: id }); renderGiftRow(); return; }   // v1.2.26: answering an ally's offer: this card goes to them
   const wrap = $('pickCards'), el = wrap.children[i];
   if (el && !wrap.classList.contains('done')) { el.classList.add('chosen'); wrap.classList.add('done'); }
   if (S.role === 'peer') {
@@ -2869,7 +3041,7 @@ function showWinners(w) {
   const canvas = $('overShow'); if (!canvas) return;
   const heroes = [...S.roster.values()].filter(r => !r.transient && !r.ownerId && r.kind !== 'hazardTurret');
   const mode = S.matchSettings.mode;
-  let who = w === 'players' ? heroes : w && w[0] === 't' && (mode === 'tdm' || owSquads(S.matchSettings)) ? heroes.filter(r => 't' + r.team === w) : heroes.filter(r => r.id === w);
+  let who = w === 'players' ? heroes : w && w[0] === 't' && (teamPlay() || owSquads(S.matchSettings)) ? heroes.filter(r => 't' + r.team === w) : heroes.filter(r => r.id === w);
   who = who.slice(0, 5);
   canvas.classList.toggle('hidden', !who.length);
   if (!who.length) return;
@@ -2913,23 +3085,27 @@ function showOver(w, tally, wavesCleared) {
   const L = keyLabel(w), won = w === myKey();
   $('overTitle').textContent = S.matchSettings.mode === 'waves'
     ? (S.matchSettings.core && !won ? `The core is destroyed — ${wavesCleared ?? (S.view.scores || {}).players ?? 0} waves cleared` : won ? `Victory — ${S.matchSettings.roundsToWin} waves survived` : `Defeat — ${wavesCleared ?? (S.view.scores || {}).players ?? 0} waves cleared`)
-    : won ? 'Victory' : `${L.name} win${S.matchSettings.mode === 'tdm' || L.name === 'You' ? '' : 's'}`;
+    : won ? 'Victory' : `${L.name} win${teamPlay() || L.name === 'You' ? '' : 's'}`;
   $('overTitle').style.color = L.color;
   const sc = S.view.scores || {};
   $('overScores').innerHTML = Object.keys(sc).sort((a, b) => sc[b] - sc[a]).map(k => {
     const l = keyLabel(k); return `<div><span style="color:${l.color}">${esc(l.name)}</span><b>${sc[k]}</b></div>`;
   }).join('');
-  const t = (tally || []).slice().sort((a, b) => b.kills - a.kills || b.damage - a.damage || a.deaths - b.deaths);
+  // v1.2.21 (Devin): one table: wins sit in the damage/kills/deaths table (the separate wins list only shows when there is no tally)
+  const winsOf = x => sc[x.id] ?? sc[String(x.id)] ?? 0, teamWins = teamPlay() || waveMode();
+  const t = (tally || []).slice().sort((a, b) => (teamWins ? 0 : winsOf(b) - winsOf(a)) || b.kills - a.kills || b.damage - a.damage || a.deaths - b.deaths);
+  $('overScores').classList.toggle('hidden', t.length > 0 && !waveMode());
   const mostDmg = Math.max(0, ...t.map(x => x.damage)), mostK = Math.max(0, ...t.map(x => x.kills));
   const row = x => {
     const r = rosterOf(x.id);
     return `<tr><td style="color:${r.color}">${esc(x.id === S.localId ? 'You' : r.name)}</td>` +   // v1.1.5: colored name, like the wins list
+      (teamWins ? '' : `<td class="wins">${winsOf(x)}</td>`) +
       `<td${x.damage === mostDmg && mostDmg > 0 ? ' style="color:var(--accent)"' : ''}>${x.damage}</td>` +
       `<td${x.kills === mostK && mostK > 0 ? ' style="color:var(--accent)"' : ''}>${x.kills}</td><td>${x.deaths}</td></tr>`;
   };
   let body = t.map(row).join('');
   // v1.0.1: team deathmatch groups each team together under a labelled header (team wins and totals), winners first
-  if (S.matchSettings.mode === 'tdm' && t.length) {
+  if (teamPlay() && t.length) {
     const teams = new Map();
     for (const x of t) { const tm = rosterOf(x.id).team ?? 0; if (!teams.has(tm)) teams.set(tm, []); teams.get(tm).push(x); }
     body = [...teams.entries()].sort((a, b) => (sc['t' + b[0]] || 0) - (sc['t' + a[0]] || 0) || b[1].reduce((n, x) => n + x.kills, 0) - a[1].reduce((n, x) => n + x.kills, 0)).map(([tm, xs]) => {
@@ -2937,7 +3113,7 @@ function showOver(w, tally, wavesCleared) {
       return `<tr class="teamhead" style="--c:${l.color}"><td style="color:${l.color}">${esc(l.name)} <small>· ${sc['t' + tm] || 0} wins</small></td><td>${sum('damage')}</td><td>${sum('kills')}</td><td>${sum('deaths')}</td></tr>` + xs.map(row).join('');
     }).join('');
   }
-  $('overTally').innerHTML = t.length ? `<tr><th>Player</th><th>Damage</th><th>Kills</th><th>Deaths</th></tr>` + body : '';
+  $('overTally').innerHTML = t.length ? `<tr><th>Player</th>${teamWins ? '' : '<th>Wins</th>'}<th>Damage</th><th>Kills</th><th>Deaths</th></tr>` + body : '';
   const unit = S.matchSettings.mode === 'waves' ? 'wave' : 'round';
   for (const o of $('extendN').options) o.textContent = `+${o.value} ${unit}${o.value === '1' ? '' : 's'}`;
   $('extendBtn').textContent = S.matchSettings.mode === 'waves' ? tr('Keep playing (harder, new boss)') : tr('Keep playing');
@@ -3029,7 +3205,7 @@ function renderStatsWin(v) {
 let peekKey = '', peekId = null, peekPinned = false, peekCloseT = null, peekSwitchT = null;
 function peekWinsOf(r, sc) {
   const mode = S.matchSettings.mode;
-  const key = mode === 'waves' ? 'players' : mode === 'tdm' ? 't' + r.team : r.id;
+  const key = mode === 'waves' ? 'players' : teamPlay() ? 't' + r.team : r.id;
   return sc[key] || 0;
 }
 function peekHeroes() { return [...S.roster.values()].filter(r => !r.transient && !r.ownerId && r.kind !== 'hazardTurret'); }
@@ -3042,8 +3218,12 @@ function renderPeek(force) {
   peekKey = key;
   const per = Math.max(3, Math.floor((innerHeight - 40) / 52));
   const tile = peekTile;
-  $('peekL').innerHTML = heroes.slice(0, per).map(tile).join('');
-  $('peekR').innerHTML = heroes.slice(per, per * 2).map(tile).join('');
+  // v1.2.25: more players than fit: both columns scroll (compact tiles), you first, then by wins
+  const many = heroes.length > per * 2, cut = many ? Math.ceil(heroes.length / 2) : per;
+  if (many) heroes.sort((a, b) => (b.id === S.localId) - (a.id === S.localId) || peekWinsOf(b, sc) - peekWinsOf(a, sc));
+  for (const id of ['peekL', 'peekR']) $(id).classList.toggle('many', many);
+  $('peekL').innerHTML = heroes.slice(0, cut).map(tile).join('');
+  $('peekR').innerHTML = heroes.slice(cut, many ? heroes.length : per * 2).map(tile).join('');
   $('pick').classList.toggle('peeking', heroes.length > 0);
   $('pick').classList.toggle('peeking2', heroes.length > per);
   if (peekId) fillPeekWin(peekId);
@@ -3074,11 +3254,12 @@ function renderPausePeek() {
 }
 function fillPeekWin(id) {
   const r = S.roster.get(id); if (!r) return closePeek(true);
+  const keep = $('peekWin').dataset.pid === String(id) && $('peekWin').querySelector('.pkcard .card'); $('peekWin').dataset.pid = id;
   const sc = (S.view && S.view.scores) || {}, win = $('peekWin');
   const cards = (r.cards || []).map(cid => cardById.get(cid) || { id: cid, name: cid, rarity: 'common', modifiers: [], description: '' });
   const stats = r.stats ? `<table class="pkstats"><tr>${STAT_COLS.map(c => `<th>${c[1]}</th>`).join('')}</tr><tr>${STAT_COLS.map(c => `<td>${r.stats[c[0]] ?? '–'}</td>`).join('')}</tr></table>` : '';
   win.innerHTML = `<div class="pkhead" style="color:${r.color}" data-noi18n>${esc(id === S.localId ? t('You') : r.name)}<span>${esc(t('Wins'))}: <b>${peekWinsOf(r, sc)}</b></span>${peekPinned ? '<em>📌</em>' : ''}</div>` + stats +
-    `<div class="pkicons" data-noi18n>${cards.length ? '' : `<i>${esc(t('No cards yet'))}</i>`}</div><div class="pkcard"><p class="hint">${cards.length ? 'Hover a card to see it. Right-click for details.' : ''}</p></div>`;
+    `<div class="pkicons" data-noi18n>${cards.length ? '' : `<i>${esc(t('No cards yet'))}</i>`}</div><div class="pkcard"><p class="hint">${cards.length ? 'Hover a card to see it. Right-click a card for details.' + (peekPinned ? '' : ' Right-click here to keep this open.') : ''}</p></div>`;
   const icons = win.querySelector('.pkicons');
   cards.forEach(c => {
     const b = document.createElement('div'); b.className = 'peekicon'; b._card = c;
@@ -3088,6 +3269,7 @@ function fillPeekWin(id) {
     b.onmouseenter = () => { const slot = win.querySelector('.pkcard'); slot.innerHTML = ''; slot.appendChild(cardEl(c)); };
     icons.appendChild(b);
   });
+  if (keep) { const slot = win.querySelector('.pkcard'); slot.innerHTML = ''; slot.appendChild(keep); }
 }
 function openPeek(id, tileEl, pin) {
   clearTimeout(peekCloseT);
@@ -3100,6 +3282,14 @@ function openPeek(id, tileEl, pin) {
   win.style.left = (right ? Math.max(8, r.left - w - 8) : Math.min(innerWidth - w - 8, r.right + 8)) + 'px';
   win.style.top = Math.max(8, Math.min(innerHeight - h - 8, r.top - 8)) + 'px';
   document.querySelectorAll('.peektile').forEach(el => el.classList.toggle('open', el.dataset.peek === id));
+}
+// v1.2.21 (Devin): the window used to vanish while the mouse was still on it (the tiles behind it get rebuilt as scores
+// change, which fires mouseout); it now only closes when the mouse really is somewhere else.
+const peekMouse = { x: -1, y: -1 };
+function peekMaybeClose() {
+  const el = peekMouse.x >= 0 && document.elementFromPoint(peekMouse.x, peekMouse.y);
+  if (el && el.closest && el.closest('#peekWin, [data-peek]')) return;
+  closePeek();
 }
 function closePeek(force) {
   if (peekPinned && !force) return;
@@ -3119,7 +3309,9 @@ function bindPeek() {
       if (!open || peekId === tl.dataset.peek || peekPinned) { if (!peekPinned || peekId !== tl.dataset.peek) openPeek(tl.dataset.peek, tl, false); return; }
       peekSwitchT = setTimeout(() => { if (tl.matches(':hover')) openPeek(tl.dataset.peek, tl, false); }, 260);
     });
-    $(col).addEventListener('mouseout', e => { if (!peekPinned && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#peekWin, [data-peek]'))) peekCloseT = setTimeout(() => closePeek(), 650); });
+    $(col).addEventListener('mouseout', e => { if (!peekPinned && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#peekWin, [data-peek]'))) peekCloseT = setTimeout(peekMaybeClose, 650); });
+    // v1.2.21 (Devin): right-click a player to keep their window open until you click back into the game
+    $(col).addEventListener('contextmenu', e => { const tl = e.target.closest('[data-peek]'); if (!tl) return; e.preventDefault(); peekPinned = false; openPeek(tl.dataset.peek, tl, true); });
     $(col).addEventListener('click', e => {
       const tl = e.target.closest('[data-peek]'); if (!tl) return;
       if (peekPinned && peekId === tl.dataset.peek) { closePeek(true); return; }
@@ -3127,7 +3319,9 @@ function bindPeek() {
     });
   }
   $('peekWin').addEventListener('mouseenter', () => { clearTimeout(peekCloseT); clearTimeout(peekSwitchT); });
-  $('peekWin').addEventListener('mouseleave', e => { if (!peekPinned && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('[data-peek]'))) peekCloseT = setTimeout(() => closePeek(), 650); });
+  $('peekWin').addEventListener('mouseleave', e => { if (!peekPinned && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('[data-peek]'))) peekCloseT = setTimeout(peekMaybeClose, 650); });
+  $('peekWin').addEventListener('contextmenu', e => { if (!peekPinned && peekId) { peekPinned = true; fillPeekWin(peekId); } if (!e.target.closest('.peekicon')) e.preventDefault(); });
+  document.addEventListener('mousemove', e => { peekMouse.x = e.clientX; peekMouse.y = e.clientY; }, { passive: true });
   // Pinned: any click outside the window (and outside the player tiles) closes it.
   document.addEventListener('mousedown', e => {
     if (!peekPinned || e.button !== 0 || cardDetailOpen()) return;
@@ -3151,7 +3345,7 @@ function updateHover(v) {
   const owner = r.ownerId ? S.roster.get(r.ownerId) : r;
   if (!owner) { tip.classList.add('hidden'); return; }
   const sc = v.scores || {}, mode = S.matchSettings.mode;
-  const key = mode === 'waves' ? 'players' : mode === 'tdm' ? 't' + owner.team : owner.id;
+  const key = mode === 'waves' ? 'players' : teamPlay() ? 't' + owner.team : owner.id;
   const wins = sc[key];
   const cards = owner.cards || [];
   const k2 = hoverId + '|' + wins + '|' + cards.join(',');
@@ -3159,7 +3353,7 @@ function updateHover(v) {
     hoverKey = k2;
     const chips = cards.slice(0, 10).map(id => { const c = cardById.get(id) || { name: id, rarity: 'common' }; return `<span style="--r:${RARITY[rarityOf(c)].color}">${esc(c.name)}</span>`; }).join('');
     tip.innerHTML = `<div class="hn" style="color:${r.color}" data-noi18n>${esc(r.name)}</div>` +
-      (wins != null && mode !== 'practice' ? `<div class="hw">${esc(t('Wins'))}: <b>${wins}</b>${mode === 'tdm' ? ` <small>(${esc(ART.teamNames[owner.team] || '')})</small>` : ''}</div>` : '') +
+      (wins != null && mode !== 'practice' ? `<div class="hw">${esc(t('Wins'))}: <b>${wins}</b>${teamPlay() ? ` <small>(${esc(ART.teamNames[owner.team] || '')})</small>` : ''}</div>` : '') +
       `<div class="cl" data-noi18n>${chips || `<i>${esc(t('No cards yet'))}</i>`}${cards.length > 10 ? `<span>+${cards.length - 10}</span>` : ''}</div>`;
   }
   tip.classList.remove('hidden');
@@ -3259,19 +3453,22 @@ function renderChips() {
 }
 // Top-left: one row per player (free-for-all) or team, colored, with win pips. Hover shows cards.
 function renderScoreboard(sc) {
-  const mk = myKey(), goal = S.matchSettings.roundsToWin, tdm = S.matchSettings.mode === 'tdm';
+  const mk = myKey(), goal = S.matchSettings.roundsToWin, tdm = teamPlay();
   const cardsHtml = r => r.cards.length
     ? `<div class="cl">${r.cards.map(id => { const c = cardById.get(id) || { name: id, rarity: 'common' }; return `<span style="--r:${RARITY[rarityOf(c)].color}">${esc(c.name)}</span>`; }).join('')}</div>`
     : '<div class="none">No cards yet</div>';
   $('scoreboard').classList.toggle('many', Object.keys(sc).length > 10);
-  $('scoreboard').innerHTML = Object.keys(sc).sort((a, b) => sc[b] - sc[a]).map(k => {
+  // v1.2.25: big lobbies show the top 10 and you, plus a count of the rest (100 rows filled the screen)
+  let keys = Object.keys(sc).sort((a, b) => sc[b] - sc[a]), rest = 0;
+  if (keys.length > 16) { const top = keys.slice(0, 10); if (sc[mk] != null && !top.includes(mk)) top.push(mk); rest = keys.length - top.length; keys = top; }
+  $('scoreboard').innerHTML = keys.map(k => {
     const l = keyLabel(k);
     const heroes = [...S.roster.values()].filter(r => !r.transient);
     const members = k === 'players' ? heroes : tdm ? heroes.filter(r => 't' + r.team === k) : [S.roster.get(k)].filter(Boolean);
     const pop = members.map(r => `<div class="pm" data-peek="${esc(r.id)}"><div class="who" style="color:${r.color}">${esc(r.id === S.localId ? 'You' : r.name)}</div>${cardsHtml(r)}</div>`).join('');
     const pips = goal <= 10 ? Array.from({ length: goal }, (_, i) => `<span class="${i < sc[k] ? 'on' : ''}"></span>`).join('') : '';
     return `<div class="sc${k === mk ? ' me' : ''}" style="--c:${l.color}"><i></i><span>${esc(l.name)}</span><span class="wins">${pips}<b>${sc[k]}</b></span><div class="pop">${pop}</div></div>`;
-  }).join('');
+  }).join('') + (rest ? `<div class="sc scmore" style="--c:#8a93a8"><i></i><span>+${rest} more</span></div>` : '');
 }
 let hudHealN = null, hudBlockFrac = 0, curAmmoKey = '';
 // Small ammo pips and reload bar beside the cursor (or under the crosshair in first person).
@@ -3313,20 +3510,39 @@ function updateCursorAmmo(me) {
   if (settings.view === 'first') { el.style.left = 'calc(50% + 14px)'; el.style.top = 'calc(50% + 10px)'; }
   else { el.style.left = ((renderer.mouse.x + 1) / 2 * innerWidth + 16) + 'px'; el.style.top = ((1 - renderer.mouse.y) / 2 * innerHeight + 14) + 'px'; }
 }
-// Brawl: a row of fighter cards along the bottom (name, fighter, damage %, stocks).
-let brawlKey = '';
+// Brawl (v1.2.23 revamp): Smash-style fighter cards along the bottom (badge, name, fighter, big damage % that shakes
+// when it climbs, stock pips, power-up), yours with jump / dash chips, and the sudden death clock at the top.
+let brawlKey = '', brawlPct = new Map();
+const FIGHTER_ICON = { classic: '🥊', bolt: '⚡', mochi: '🫧', sentinel: '🛡', quack: '🦆', astro: '☄', cubert: '🧊', tiki: '🔥', shroom: '🍄', prism: '💎', gumdrop: '🍬', vanguard: '🏰', wisp: '🗡', strider: '💨', fishbowl: '🐟' };
 function updateBrawlHud() {
-  let el = $('brawlHud');
+  let el = $('brawlHud'), clock = $('brawlClock');
   const rows = S.matchSettings.brawl ? S.brawlRows : null;
-  if (!rows) { if (el) el.classList.add('hidden'); return; }
+  $('hud').classList.toggle('brawlmode', !!rows);
+  if (!rows) { if (el) el.classList.add('hidden'); if (clock) clock.classList.add('hidden'); return; }
   if (!el) { el = document.createElement('div'); el.id = 'brawlHud'; el.className = 'brawlhud'; $('hud').appendChild(el); }
+  if (!clock) { clock = document.createElement('div'); clock.id = 'brawlClock'; clock.className = 'brawlclock'; $('hud').appendChild(clock); }
   el.classList.remove('hidden');
-  const key = JSON.stringify(rows);
+  const st = S.brawlT;
+  clock.classList.toggle('hidden', st == null || S.view.phase !== 'play');
+  if (st != null) { const txt = st > 0 ? `${Math.floor(st / 60)}:${String(st % 60).padStart(2, '0')}` : '⚠ SUDDEN DEATH'; if (clock.textContent !== txt) clock.textContent = txt; clock.classList.toggle('hot', st <= 10); }
+  const key = JSON.stringify(rows) + (S.view.scores ? JSON.stringify(S.view.scores) : '');
   if (key === brawlKey) return;
   brawlKey = key;
   const pc = p => `hsl(${Math.max(0, 50 - p * 0.35)}, 100%, ${Math.max(45, 95 - p * 0.3)}%)`;
-  el.innerHTML = rows.map(([id, pct, st, f]) => { const r = rosterOf(id); return `<div class="bf${st ? '' : ' out'}" style="border-color:${r.color}">
-    <small>${esc(r.name || '')} · ${esc((FIGHTERS[f] || FIGHTERS.classic).name)}</small><b style="color:${pc(pct)}">${st ? pct + '%' : 'OUT'}</b><i>${'●'.repeat(st)}</i></div>`; }).join('');
+  const sc = S.view.scores || {}, maxSt = Math.max(1, S.matchSettings.stocks || BRAWL.stocks);
+  el.innerHTML = rows.map(([id, pct, stk, f, airJ, dash, item]) => {
+    const r = rosterOf(id), mine = id === S.localId, prev = brawlPct.get(id) ?? pct;
+    brawlPct.set(id, pct);
+    const hit = pct > prev ? (pct - prev >= 12 ? ' hit big' : ' hit') : '';
+    const it = item && BITEM_INFO[item] ? `<em class="bitem" style="--c:${BITEM_INFO[item].color}" title="${esc(BITEM_INFO[item].name)}">${BITEM_INFO[item].icon}</em>` : '';
+    const pips = Array.from({ length: maxSt }, (_, i) => `<u class="${i < stk ? 'on' : ''}" style="--c:${r.color}"></u>`).join('');
+    const wins = sc[id] || 0;
+    const chips = mine && stk ? `<span class="bchips"><span class="${airJ > 0 ? 'on' : ''}">⤒ ${t('Jump')}</span><span class="${dash ? 'on' : ''}">➹ ${t('Dash')}</span></span>` : '';
+    return `<div class="bf${stk ? '' : ' out'}${mine ? ' me' : ''}" style="--c:${r.color}">
+      <div class="bbadge">${FIGHTER_ICON[f] || '🥊'}</div>
+      <div class="bbody"><small>${esc(r.name || '')}${wins ? ` <span class="bwins">🏆${wins}</span>` : ''}</small><span class="bfname">${esc((FIGHTERS[f] || FIGHTERS.classic).name)}</span>
+      <b class="bpct${hit}" style="color:${pc(pct)}">${stk ? pct + '<sub>%</sub>' : 'OUT'}</b><span class="bpips">${pips}</span>${chips}</div>${it}</div>`;
+  }).join('');
 }
 // Core Defense: the respawn countdown while you're down.
 function updateCoreHud() {
@@ -3340,6 +3556,16 @@ function updateCoreHud() {
     rd.classList.remove('hidden');
     setHtml(rd, `${mine ? '✅ Ready' : '⏳ Building'} · ${n}/${humans.length} ready · <b>Enter</b> ${mine ? 'to unready' : 'to start the wave'}`);
   } else if (rd) rd.classList.add('hidden');
+  { // v1.2.23: lifting / carrying the core
+    let mv = $('coreMoveHud');
+    const cc = co && (co.cc || []).find(r => r[0] === S.localId), me = S.view.players.find(p => p.id === S.localId);
+    const cr = S.view.players.find(p => p.kind === 'core');
+    const near = !cc && co && me && me.alive && cr && Math.hypot(cr.pos.x - me.pos.x, cr.pos.z - me.pos.z) < 3.2 && !(co.cr || []).some(r => r[0] === S.localId);
+    const k = codeLabel((BINDS.use || [])[0] || '') || 'E';
+    const txt = cc ? (cc[1] < 1 ? `Lifting the core… ${Math.round(cc[1] * 100)}%` : `Carrying the core (slowed) · ${k} to set it down`) : near ? `Hold ${k} to move the core` : '';
+    if (txt && !mv) { mv = document.createElement('div'); mv.id = 'coreMoveHud'; mv.style.cssText = 'position:absolute;left:50%;bottom:150px;transform:translateX(-50%);font:600 14px system-ui;color:#bff0ff;background:#0008;padding:4px 10px;border-radius:8px;pointer-events:none'; $('hud').appendChild(mv); }
+    if (mv) { mv.classList.toggle('hidden', !txt); if (txt && mv.textContent !== txt) mv.textContent = txt; }
+  }
   let el = $('coreHud');
   const rs = S.matchSettings.core && S.view.core ? (S.view.core.rs || []).find(r => r[0] === S.localId) : null;
   if (!rs) { if (el) el.classList.add('hidden'); return; }
@@ -3358,11 +3584,121 @@ function updateWallWarn() {
   if (!el) { if (!txt) return; el = document.createElement('div'); el.id = 'owWallWarn'; el.className = 'owwallwarn'; $('hud').appendChild(el); }
   el.textContent = txt; el.classList.toggle('hidden', !txt); el.classList.toggle('hot', !!txt && txt.includes('DIE'));
 }
+// ---------------------------------------------------------------- v1.2.26 tournament (client side)
+// Every arena is the same map in the same place; the view only keeps what's in the arena you're in (or watching).
+function tnArenaOf(id, n = 0) {
+  const T = S && S.tn; if (!T || id == null) return null;
+  const row = T.p.find(r => r[0] === id); if (row) return row[1];
+  const r = S.roster.get(id);
+  return r && r.ownerId != null && r.ownerId !== id && n < 4 ? tnArenaOf(r.ownerId, n + 1) : null;
+}
+// the arena on screen: your own, or (knocked out, or your arena is over and you're down) the one you chose to watch
+function viewArena() {
+  const T = S.tn; if (!T) return null;
+  const mine = tnArenaOf(S.localId), me = S.view.players.find(p => p.id === S.localId);
+  const free = mine == null || mine < 0 || (T.d && T.d[mine] && !(me && me.alive));
+  if (!free) { S.tWatch = null; return mine; }
+  if (S.tWatch == null || S.tWatch >= T.a || (T.d && T.d[S.tWatch] && T.n > 0)) S.tWatch = T.d ? Math.max(0, T.d.findIndex(x => !x)) : 0;
+  return S.tWatch;
+}
+function inMyArena(id) { if (id == null) return true; const a = tnArenaOf(id); return a == null || a < 0 || a === viewArena(); }
+function tournWatchNext() {
+  const T = S.tn; if (!T || !T.d) return false;
+  const cur = viewArena(); if (cur === tnArenaOf(S.localId) && cur >= 0) { const me = S.view.players.find(p => p.id === S.localId); if (!T.d[cur] || (me && me.alive)) return false; }
+  for (let k = 1; k <= T.a; k++) { const i = (cur + k) % T.a; if (!T.d[i] || T.n === 0) { S.tWatch = i; return true; } }
+  return false;
+}
+let tvCache = null;
+function tournView(v) {
+  if (!S.tn || S.matchSettings.mode !== 'tourn') return v;
+  const A = viewArena(), ok = id => { const a = tnArenaOf(id); return a == null || a < 0 ? id == null : a === A; };
+  const okP = p => { const a = tnArenaOf(p.id); return a == null ? true : a === A; };
+  if (tvCache && tvCache.v === v && tvCache.n === v.players.length && tvCache.A === A && tvCache.b === v.bullets) return tvCache.out;
+  const out = { ...v, players: v.players.filter(okP), bullets: (v.bullets || []).filter(b => ok(b.o)), shields: (v.shields || []).filter(x => ok(x.o)), mines: (v.mines || []).filter(x => ok(x.o)), barricades: (v.barricades || []).filter(x => ok(x.o)) };
+  tvCache = { v, n: v.players.length, A, b: v.bullets, out };
+  return out;
+}
+// lives, arenas still fighting, what you're watching (top middle, under the shot bar)
+function updateTournHud() {
+  let el = $('tournHud');
+  const T = S.tn, on = !!T && S.inGame && currentScreen === 'none';
+  if (!el) { if (!on) return; el = document.createElement('div'); el.id = 'tournHud'; $('hud').appendChild(el); }
+  el.classList.toggle('hidden', !on); if (!on) return;
+  const row = T.p.find(r => r[0] === S.localId), A = viewArena(), mine = row ? row[1] : -1;
+  const hearts = row ? (row[3] ? t('Knocked out') : '❤'.repeat(row[2]) + '<span class="lost">' + '❤'.repeat(Math.max(0, T.L - row[2])) + '</span>') : '';
+  const alive = T.p.filter(r => !r[3]).length;
+  const watch = A !== mine && A != null ? ` · ${t('Watching arena {n}', { n: A + 1 })} (${codeLabel(BINDS.use[0])}: ${t('next')})` : '';
+  const html = `<b>${hearts}</b> · ${t('Arenas fighting {n}/{a}', { n: T.n, a: T.a })} · ${t('{n} left', { n: alive })}${watch}`;
+  if (el.innerHTML !== html) el.innerHTML = html;
+}
+// pick screen: offer a card to an ally who is also picking; answer an ally's offer by clicking the card you give back
+function giftAllies() {
+  if (!S.tn || !S.tn.T || !S.pickers) return [];
+  const me = rosterOf(S.localId);
+  return [...S.pickers].filter(id => id !== S.localId && (S.roster.get(id) || {}).team === me.team).map(id => S.roster.get(id)).filter(Boolean);
+}
+function sendGift(k, extra) {
+  if (S.role === 'peer') S.net.send({ t: 'toHost', msg: { k, ...extra } });
+  else if (k === 'giftOffer') giftOffer(S.game, S.localId, extra.to, extra.card);
+  else if (k === 'giftAccept') giftAccept(S.game, S.localId, extra.card);
+  else giftDecline(S.game, S.localId);
+}
+function renderGiftRow() {
+  // 🎁 on each card while an ally is picking too (the 'picking' event can land after the hand is dealt)
+  const can = giftAllies().length > 0 && !!S.offer && !S.giftIn;
+  [...$('pickCards').children].forEach((el, i) => {
+    let gb = el.querySelector('.giftBtn');
+    if (!can) { if (gb) gb.remove(); return; }
+    if (gb || !S.offer[i]) return;
+    gb = document.createElement('button'); gb.className = 'giftBtn'; gb.textContent = '🎁'; gb.title = t('Offer this card to an ally');
+    const id = S.offer[i]; gb.onclick = ev => { ev.stopPropagation(); S.giftCard = id; renderGiftRow(); };
+    el.appendChild(gb);
+  });
+  let row = $('giftRow');
+  if (!row) { row = document.createElement('div'); row.id = 'giftRow'; $('pickCards').insertAdjacentElement('afterend', row); }
+  const allies = giftAllies(), G = S.giftIn;
+  row.innerHTML = ''; row.classList.toggle('hidden', !(G || (allies.length && S.offer)));
+  $('pickCards').classList.toggle('giftAnswer', !!G);
+  if (G) {
+    const c = cardById.get(G.c);
+    row.innerHTML = `<div class="giftIn"><span>🎁 <b>${rosterOf(G.from).name}</b> ${t('offers you')}</span></div>`;
+    if (c) { const ce = cardEl(c); ce.classList.add('giftCard'); row.querySelector('.giftIn').appendChild(ce); }
+    const tip = document.createElement('span'); tip.className = 'giftTip'; tip.textContent = t('Click one of your cards to trade it for this one'); row.querySelector('.giftIn').appendChild(tip);
+    const no = document.createElement('button'); no.textContent = t('Decline'); no.onclick = () => { S.giftIn = null; sendGift('giftDecline', {}); renderGiftRow(); };
+    row.querySelector('.giftIn').appendChild(no);
+    return;
+  }
+  if (!allies.length || !S.offer) return;
+  if (S.giftCard) {
+    const c = cardById.get(S.giftCard);
+    row.innerHTML = `<span>${t('Offer {card} to', { card: '<b>' + (c ? c.name : '?') + '</b>' })}</span>`;
+    for (const a of allies) { const b = document.createElement('button'); b.textContent = a.name; b.style.borderColor = a.color; b.onclick = () => sendGift('giftOffer', { to: a.id, card: S.giftCard }); row.appendChild(b); }
+    const x = document.createElement('button'); x.textContent = t('Cancel'); x.onclick = () => { S.giftCard = null; renderGiftRow(); }; row.appendChild(x);
+  } else row.innerHTML = `<span class="hint">🎁 ${t('Allies picking: {names}. Use 🎁 on a card to offer it to one.', { names: allies.map(a => a.name).join(', ') })}</span>`;
+}
+// v1.2.25 shot budget bar (top middle) and the "can't shoot" notice
+function updateBudHud(me) {
+  const bar = $('budBar'), note = $('budNote');
+  const v = currentScreen === 'none' && S.inGame ? budgetView(S.view.bud, S.localId) : null;
+  bar.classList.toggle('hidden', !v);
+  const blocked = !!v && performance.now() < (S.budNoteT || 0) && !!(me && me.alive);
+  note.classList.toggle('hidden', !blocked);
+  if (!v) return;
+  const k = Math.min(1, v.total / Math.max(1, v.cap)), mk = v.share ? Math.min(1, v.mine / v.share) : 0;
+  bar.querySelector('.budFill').style.width = (k * 100).toFixed(1) + '%';
+  bar.querySelector('.budMine').style.width = (v.share ? mk * 100 : 0).toFixed(1) + '%';
+  bar.classList.toggle('hot', k >= 0.75); bar.classList.toggle('full', !!v.share && v.mine >= v.share); bar.classList.toggle('low', k < 0.4 && !v.share);
+  const t = v.share ? `Shots ${v.total}/${v.cap} · yours ${v.mine}/${v.share}` : `Shots ${v.total}/${v.cap}`;
+  const el = bar.querySelector('.budTxt'); if (el.textContent !== t) el.textContent = t;
+}
 function updateHud() {
   updateBrawlHud();
   updateCoreHud();
   const v = S.view, me = v.players.find(p => p.id === S.localId);
+  updateBudHud(me);
+  updateTournHud();
   updateWallWarn();
+  squidTip(!!(me && me.alive && ((me.status || 0) & 32)));
   // v1.0.1 safety net: a hand waiting for you is never left hidden behind the game view (that locked the pick phase)
   if (S.offer && v.phase === 'picking' && currentScreen === 'none' && !S.comboAsk && !S.breakAsk) show('pick');
   { // v28 open world: crouching shows that you're sneaking (enemies spot you from about a third as far, never through cover)
@@ -3560,7 +3896,7 @@ function bindSettings() {
     ['sName', 'name', 'value', v => cleanName(v)],
     ['sEffects', 'effects', 'value'],
     ['sFov', 'fov', 'value', Number, v => v + '°'], ['sSens', 'sensitivity', 'value', Number, v => v.toFixed(2) + '×'],
-    ['sMaster', 'master', 'value', Number, pct], ['sMusic', 'music', 'value', Number, pct], ['sSfx', 'sfx', 'value', Number, pct],
+    ['sMaster', 'master', 'value', Number, pct], ['sShakeMax', 'shakeMax', 'value', Number, pct], ['sMusic', 'music', 'value', Number, pct], ['sSfx', 'sfx', 'value', Number, pct],
     ['sShadows', 'shadows', 'checked'], ['sShake', 'screenShake', 'checked'], ['sFeel', 'feel', 'checked'], ['sKillCam', 'killCam', 'checked'], ['sProps', 'props', 'checked'], ['sSlop', 'slop', 'checked'], ['sPillow', 'pillow', 'checked'],
     ['sCB', 'colorBlind', 'value'], ['sRecommend', 'recommend', 'checked'],
     ['sCurAmmo', 'cursorAmmo', 'checked'], ['sHaze', 'shieldHaze', 'checked'],
@@ -3898,6 +4234,7 @@ function frameBody(now) {
   // frame rate limit (Settings > Graphics): skip animation frames that come too soon
   const cap = +settings.fpsCap || 0;
   if (cap && now - last < 1000 / cap - 1) return;
+  if (S && S.game && S.game.settings) S.game.hostFps = NR.frame.hz();   // (v1.2.25 shot budget)
   fpsTick(now - last); gfxTick(now - last); loadGuard(now - last, now); NR.frame.tick();
   const gap = now - last, j0 = performance.now();
   renderNetHud();
@@ -3930,7 +4267,7 @@ function frameBody(now) {
     kcRecord();
     if (S.kcWait && performance.now() >= S.kcWait.at) kcStart();
     if (S.killCam) kcFrame(dt);
-    else renderer.update(S.view, S.localId, dt * Math.max(0.12, ts));
+    else renderer.update(tournView(S.view), S.localId, dt * Math.max(0.12, ts));
     updateHud(); updateMusic();
   } else {
     renderer.updateFx(dt);
@@ -4035,5 +4372,5 @@ async function boot() {
   if (settings.firstRun && !autoJoin && !S) setTimeout(() => { if (!S) quietGfxCheck(); }, 1500);   // v1.1.9 (no intro)
 }
 // Development helper: inspect the running session from the browser console (blockshot.session).
-window.blockshot = { get session() { return S; }, get cards() { return CARDS; }, get renderer() { return renderer; }, settings };
+window.blockshot = { get session() { return S; }, get tview() { return S && S.view ? tournView(S.view) : null; }, get cards() { return CARDS; }, get renderer() { return renderer; }, settings };
 boot();

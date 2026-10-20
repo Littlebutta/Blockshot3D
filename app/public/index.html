@@ -11,6 +11,8 @@
 </head>
 <body>
 <div id="hud" class="hidden">
+  <div id="budBar" class="hidden" data-info="budget"><div class="budTrack"><div class="budFill"></div><div class="budMine"></div></div><span class="budTxt"></span></div>
+  <div id="budNote" class="hidden">Can't shoot: too many of your shots in the air</div>
   <div id="bossBar" class="hidden"><div class="bossHead"><span id="bossName">The Warden</span><span id="bossPhase"></span></div><div class="bossTrack"><div id="bossFill"></div></div></div>
   <div id="scoreboard"></div>
   <div id="killfeed"></div>
@@ -75,6 +77,7 @@
 <div id="roundSplash" class="hidden" aria-live="polite"><div class="rsBand"><div class="rsSmall"></div><div class="rsBig"></div><div class="rsPips"></div><div class="rsText"></div></div></div>
 <div id="rmodTag" class="hidden"></div>
 <div id="emoteWheel" class="hidden"></div>
+<div id="squidTip" class="hidden"></div>
 <div id="kcWipe" class="hidden"><div><span>REPLAY</span></div></div>
 <div id="killCam" class="hidden"><div class="kcBar"><b>● KILL CAM</b> <span class="kcName"></span></div></div>
 <div id="toast"></div>
@@ -95,7 +98,7 @@
   <button class="btn ghost small hidden" id="steamAddBtn" type="button" title="Adds Blockshot 3D to your Steam library, with its artwork">Add to Steam</button><div id="steamAddMsg" class="hidden"></div>
   <button class="btn ghost small" id="patchBtn" type="button">Patch list</button>
   <button class="btn ghost small" id="suggestBtn" type="button">Suggestions</button>
-  <div id="versionTag" class="versiontag">v1.2.20</div>
+  <div id="versionTag" class="versiontag">v1.2.26</div>
   <div id="updLine" class="updline hidden"></div>
   <div id="suggestWin" class="hidden"><div class="plCard panel"><div class="plHead"><h2>Suggestions</h2><button class="btn ghost small" id="suggestClose" type="button">Close</button></div>
     <p class="hint">Tell us what you'd like fixed or added. Pick what kind it is so it lands in the right pile. It goes straight to the developer.</p>
@@ -138,115 +141,79 @@
 </section>
 
 <section id="lobby" class="screen hidden">
-  <h2 id="lobbyTitle">Lobby</h2>
-  <p id="lobbyInfo"></p>
+  <div class="lobbyhead"><h2 id="lobbyTitle">Lobby</h2><p id="lobbyInfo"></p></div>
   <div class="lobbygrid">
-    <div class="panel lobbyside">
-      <div id="colorPick" class="colorpick"><h4>Your color</h4><div id="colorStrip" class="colorstrip"></div><p id="colorNote" class="hint"></p></div>
-      <div class="row left" id="botRow">
-        <select id="botDiff"><option value="easy">Easy bot</option><option value="normal" selected>Normal bot</option><option value="hard">Hard bot</option></select>
-        <button class="btn ghost small" id="addBot">Add bot</button>
-      </div>
-      <p class="hint">Host: click a bot's swatch to change its color. Picking a color a bot has swaps colors with that bot.</p>
-    </div>
-    <div class="panel">
+    <div class="panel lobbyplayers">
       <h3>Players <span id="playerCount"></span></h3>
+      <div class="row left" id="botRow">
+        <select id="botDiff" data-info="s_botDiff"><option value="easy">Easy bot</option><option value="normal" selected>Normal bot</option><option value="hard">Hard bot</option></select>
+        <button class="btn ghost small" id="addBot">Add bot</button>
+        <button class="btn ghost small" id="addBot10" title="Add 10 bots (lobbies hold up to 100 players)">+10</button>
+        <button class="btn ghost small" id="clearBots" title="Remove every bot">Clear</button>
+      </div>
       <div id="playerList"></div>
       <div id="colorPop" class="colorpop hidden"></div>
+      <details id="colorPick" class="colorpick" data-info="s_color"><summary>Your color</summary><div id="colorStrip" class="colorstrip"></div><p id="colorNote" class="hint"></p></details>
     </div>
     <div class="panel matchpanel">
-      <h3>Mode</h3>
-      <div id="modeBtns" class="modebtns">
-        <button type="button" data-mode="ffa"><b>Deathmatch</b><small>Free for all, or turn on teams (up to 8)</small></button>
-        <button type="button" data-mode="waves"><b>Co-op waves</b><small>Survive the raiders together</small></button>
-        <button type="button" data-mode="core"><b>Core defense</b><small>Build a fort and protect the core</small></button>
-        <button type="button" data-mode="open"><b>Open world</b><small>Drop from the bus: battle royale or extraction</small></button>
-        <button type="button" data-mode="brawl"><b>Brawl</b><small>Smash-style fighter: knock rivals off the stage</small></button>
-        <button type="button" data-mode="amon"><b>AMON</b><small>Autobattler: build a 5x5 army, survive 20 waves</small></button>
+      <div id="modeBtns" class="modetiles">
+        <button type="button" data-mode="ffa" data-info="m_ffa"><i>⚔️</i><b>Deathmatch</b></button>
+        <button type="button" data-mode="tourn" data-info="m_tourn"><i>🏆</i><b>Tournament</b></button>
+        <button type="button" data-mode="waves" data-info="m_waves"><i>🛡️</i><b>Co-op waves</b></button>
+        <button type="button" data-mode="core" data-info="m_core"><i>💠</i><b>Core defense</b></button>
+        <button type="button" data-mode="open" data-info="m_open"><i>🪂</i><b>Open world</b></button>
+        <button type="button" data-mode="brawl" data-info="m_brawl"><i>🥊</i><b>Brawl</b></button>
+        <button type="button" data-mode="amon" data-info="m_amon"><i>♟️</i><b>AMON</b></button>
       </div>
-      <div class="modecols">
-        <div class="modeleft">
-          <div class="modeopts">
-          <label class="field" data-modes="ffa tdm"><span>Teams</span>
-            <select id="setTeams"><option value="ffa">Off: free for all</option><option value="tdm">On: team deathmatch</option></select></label>
-          <label class="field" data-modes="ffa tdm waves core open brawl"><span id="roundsText">Rounds to win</span>
-            <select id="setRounds"><option>3</option><option selected>5</option><option>7</option><option>10</option></select></label>
-          <label class="field" data-modes="ffa tdm waves"><span>Round modifiers</span>
-            <select id="setRoundMods" title="A special rule for every round, shown on the round splash"><option value="off">Off</option><option value="random">Random every round</option><optgroup label="Always one" id="rmodList"></optgroup></select></label>
-          </div>
-          <details class="arena gensettings">
-            <summary>General settings</summary>
-            <div class="modeopts">
-            <label class="field" data-modes="open">Open world type
-              <select id="setOwType" title="Battle royale: last one (or last squad) standing while a red wall closes in. Extraction: the whole lobby is one squad and has to reach the extraction point"><option value="br">Battle royale</option><option value="extract">Co-op extraction</option></select></label>
-            <label class="field" data-modes="open">Roaming bots
-              <select id="setOwBots" title="World bots that roam the map and hunt players"><option value="off">None</option><option value="some">Some</option><option value="lots">Lots</option></select></label>
-            <label class="check" data-modes="open"><input type="checkbox" id="setOwSquads"> Battle royale squads (play in the lobby teams)</label>
-            <label class="field" data-modes="waves core open amon">Co-op difficulty
-              <select id="setWaveDiff" title="Sets the Game Master's wave budget, enemy toughness, how often Elites appear and how hard the final boss hits"><option value="easy">Easy</option><option value="normal">Normal</option><option value="hard">Hard</option><option value="nightmare">Nightmare</option></select></label>
-            <label class="field" data-modes="waves core">Scale to squad size
-              <select id="setCoopScale" title="How much tougher the waves and boss get for each extra player or bot on your side"><option value="off">Off (sized for one)</option><option value="standard">Standard</option><option value="strong">Strong</option></select></label>
-            <label class="field" data-modes="waves">Game Master spawning
-              <select id="setGmSpawn" title="Whether enemies arrive in groups or all at once. Auto lets the Game Master choose each wave, but critters and turrets always trickle in"><option value="auto">Game Master decides</option><option value="waves">In groups</option><option value="all">All at once</option></select></label>
-            <label class="field" data-modes="amon">AMON mode
-              <select id="setAmonVs" title="Versus: players fight each other's armies every round instead of the raider waves (teams fight together)"><option value="0">Co-op vs raider waves</option><option value="1">AMON Versus (players fight each other)</option></select></label>
-            <label class="field" data-modes="amon">Store timer
-              <select id="setAmonTimer" title="Seconds to shop before the battle starts anyway"><option value="0">Wait for Ready</option><option value="1">75 seconds</option></select></label>
-            <label class="check" data-modes="tdm waves open"><input type="checkbox" id="setFF"> Friendly fire (bullets can hurt teammates)</label>
-            <div class="row left" data-modes="tdm"><button class="btn ghost small" id="shuffleTeams" type="button">Shuffle teams</button></div>
-            <label class="check" data-modes="ffa tdm waves practice"><input type="checkbox" id="setSide"> 🎬 2D side view (flat camera, ROUNDS-style maps with drop-through platforms, swinging platforms and a damaging edge all around)</label>
-            <label class="field" data-modes="brawl">Stocks (lives per round)
-              <select id="setStocks"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option></select></label>
-            <label class="check" data-modes="brawl"><input type="checkbox" id="setBrawlFlat"> Flat, wide stages only</label>
-            <label class="check speedopt" data-modes="ffa tdm waves"><input type="checkbox" id="setSpeed"> ⚡ Speed mode: two card picks per pick phase</label>
-            <label class="field" data-modes="practice">Target dummies
-              <select id="setDummies"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>6</option></select></label>
-            <label class="field" data-modes="practice">Dummies
-              <select id="setDummyMode"><option value="idle">Stand still</option><option value="move">Walk around</option><option value="fight">Fight back</option></select></label>
-            <label class="field" data-modes="practice">Dummy health
-              <select id="setDummyHp"><option value="100">100</option><option value="250">250</option><option value="500">500</option><option value="1000">1000</option></select></label>
-            <label class="check" data-modes="practice"><input type="checkbox" id="setGod"> You can't die</label>
-            </div>
-          </details>
-          <details class="arena" data-modes="ffa tdm waves">
-            <summary>Cards</summary>
-            <div class="twocol">
-              <label class="field">Rerolls per match
-                <select id="setRerolls"><option value="0">Off</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option></select></label>
-              <label class="field">Card pick time
-                <select id="setPickTime"><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">60 seconds</option><option value="120">2 minutes</option><option value="0">No time limit</option></select></label>
-            </div>
-            <label class="check"><input type="checkbox" id="setCombos"> Combo cards (matching pairs merge into something new)</label>
-            <p class="hint">Cursed cards and weapon mods are always in the deck (both very rare).</p>
-          </details>
-          <details class="arena">
-            <summary>Arena</summary>
-            <div class="twocol">
-              <label class="field">Maps
-                <select id="setMaps"><option value="mixed">Mixed</option><option value="generated">Random generated</option><option value="classic">Classic layouts</option><option value="traps">Trap arenas only</option><option value="lava">Lava Lake only</option><option value="ice">Ice Sheets only</option></select></label>
-              <label class="field">Map themes
-                <select id="setThemes"><option value="all">All themes</option><option value="standard">Extra themes off</option><option value="experimental" title="Castle, western, candy, forest, tundra, neon, sakura, tropical, lunar, volcano">Extra themes only</option>
-                  <optgroup label="Only one"><option value="forest">Forest</option><option value="tundra">Tundra</option><option value="neon">Neon</option><option value="castle">Castle</option><option value="western">Western</option><option value="candy">Candy</option><option value="sakura">Sakura</option><option value="tropical">Tropical</option><option value="lunar">Lunar</option><option value="volcano">Volcano</option></optgroup></select></label>
-            </div>
-            <label class="check" data-maps="mixed"><input type="checkbox" id="setMapLava"> Lava Lake maps (floating platforms over a lava floor)</label>
-            <label class="check" data-maps="mixed"><input type="checkbox" id="setMapIce"> Ice Sheets maps (ice floes on freezing water; small floes sink, medium ones tip)</label>
-            <label class="check" data-modes="ffa tdm waves"><input type="checkbox" id="setCommander"> Commander map: you pick the cards, a bot fights for you (unlocks unit cards)</label>
-            <label class="check" data-modes="ffa tdm waves"><input type="checkbox" id="setHazards"> Map hazards (random rounds get a laser, saws or a rogue turret)</label>
-            <p class="hint">Arena size grows with the number of players. Generated maps come in rectangles, hexagons, octagons, triangles, trapezoids and pentagons.</p>
-          </details>
-        </div>
-        <div class="modedesc">
-          <p class="hint" data-modes="ffa">Free for all: everyone fights everyone. Lose a round and you pick an upgrade card; first to the target score wins.</p>
-          <p class="hint" data-modes="tdm">Teams on: up to 8 teams. Set each player's team in the list. The losing team picks cards.</p>
-          <p class="hint" data-modes="open">A huge map of themed zones. Space jumps out of the flying bus and opens your parachute. Colored items give a card of that rarity. E gets on or off a scooter, bike or car. Tab switches first / third person.</p>
-          <p class="hint" data-modes="waves">The final wave brings a boss. You get one free retry (loss token) per run, not on the boss wave. Beat the boss to keep going with harder waves. Co-op never uses Lava Lake.</p>
-          <p class="hint" data-modes="core">A flat battlefield with a core block in the middle. Enemies from every mode walk in from the edges and go for the core; aggressive ones (and any that get a player or turret in reach) come for you first. Blocking works as usual. Press E (use) to pick up and put down the blocks, cubes and turrets that parachute in; you can't shoot while carrying one. Each wave starts with 60 seconds to build. Every 3rd wave drops an upgrade: grab it and everyone picks a card after the wave. You respawn after a timer that grows with each death that wave. If the core falls, retry the wave or start over.</p>
-          <p class="hint" data-modes="amon">Autobattler. In the store, buy unit groups and tactic cards (same price for every offer) and arrange them on your 5x5 board: tactic cards boost the squares they reach, chess style. Upgrade the store for more offers and better tiers; its price drops every battle. Each player's board fights its own copy of the wave and survivors move on to other fields. Enemies left standing cost team health. Round 20: Amon. Bots in the lobby play their own boards.</p>
-          <p class="hint sidehint" data-modes="ffa tdm waves practice">2D: A / D move, W or Space jumps, the mouse aims anywhere. The arena edges hurt: block as you touch one to bounce off it. Falling into a pit is a knockout.</p>
-          <p class="hint" data-modes="brawl">Smash style on 3D floating stages. Hits raise your damage %, and the higher it is the farther you fly. Get knocked past the edge of the screen and you lose a stock. A / D move, W or Space jumps (jump again in the air), the mouse aims. No card picks: your Character cosmetic is your fighter, each with its own fixed build. Bots take the other fighters.</p>
-          <p class="hint" data-modes="practice">Add and remove any card during play from the practice panel (P).</p>
-        </div>
+      <p id="modeLine" class="modeline"></p>
+      <div id="setTabs" class="stabs">
+        <button type="button" data-tab="match" class="sel">Match</button>
+        <button type="button" data-tab="cards" data-modes="ffa tdm waves tourn">Cards</button>
+        <button type="button" data-tab="arena" data-modes="ffa tdm waves core open brawl tourn practice">Arena</button>
       </div>
+      <div class="spane" data-pane="match">
+        <label class="srow" data-modes="ffa tdm" data-info="s_teams"><span>Teams</span><select id="setTeams"><option value="ffa">Off</option><option value="tdm">On</option></select></label>
+        <label class="srow" data-modes="tourn" data-info="s_tTeams"><span>Teams</span><input type="checkbox" id="setTTeams"></label>
+        <label class="srow" data-modes="tourn" data-info="s_tLives"><span>Losses before you're out</span><select id="setTLives"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></label>
+        <label class="srow" data-modes="ffa tdm waves core open brawl" data-info="s_rounds"><span id="roundsText">Rounds to win</span><select id="setRounds"><option>3</option><option selected>5</option><option>7</option><option>10</option></select></label>
+        <label class="srow" data-modes="ffa tdm waves tourn" data-info="s_roundMods"><span>Round modifiers</span><select id="setRoundMods"><option value="off">Off</option><option value="random">Random</option><optgroup label="Always one" id="rmodList"></optgroup></select></label>
+        <label class="srow" data-modes="open" data-info="s_owType"><span>Type</span><select id="setOwType"><option value="br">Battle royale</option><option value="extract">Co-op extraction</option></select></label>
+        <label class="srow" data-modes="open" data-info="s_owBots"><span>Roaming bots</span><select id="setOwBots"><option value="off">None</option><option value="some">Some</option><option value="lots">Lots</option></select></label>
+        <label class="srow" data-modes="open" data-info="s_owSquads"><span>Squads</span><input type="checkbox" id="setOwSquads"></label>
+        <label class="srow" data-modes="waves core open amon" data-info="s_waveDiff"><span>Difficulty</span><select id="setWaveDiff"><option value="easy">Easy</option><option value="normal">Normal</option><option value="hard">Hard</option><option value="nightmare">Nightmare</option></select></label>
+        <label class="srow" data-modes="waves core" data-info="s_coopScale"><span>Scale to squad</span><select id="setCoopScale"><option value="off">Off</option><option value="standard">Standard</option><option value="strong">Strong</option></select></label>
+        <label class="srow" data-modes="waves" data-info="s_gmSpawn"><span>Enemy arrival</span><select id="setGmSpawn"><option value="auto">Game Master</option><option value="waves">In groups</option><option value="all">All at once</option></select></label>
+        <label class="srow" data-modes="amon" data-info="s_amonVs"><span>Opponents</span><select id="setAmonVs"><option value="0">Raider waves</option><option value="1">Each other (Versus)</option></select></label>
+        <label class="srow" data-modes="amon" data-info="s_amonCmd"><span>Commanders</span><input type="checkbox" id="setAmonCmd" checked></label>
+        <label class="srow" data-modes="amon" data-info="s_amonTimer"><span>Store timer</span><select id="setAmonTimer"><option value="0">Wait for Ready</option><option value="1">75 seconds</option></select></label>
+        <label class="srow" data-modes="tdm waves open" data-info="s_ff"><span>Friendly fire</span><input type="checkbox" id="setFF"></label>
+        <label class="srow" data-modes="ffa tdm waves practice" data-info="s_side"><span>🎬 2D side view</span><input type="checkbox" id="setSide"></label>
+        <label class="srow" data-modes="brawl" data-info="s_stocks"><span>Stocks</span><select id="setStocks"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option></select></label>
+        <label class="srow" data-modes="brawl" data-info="s_brawlFlat"><span>Flat stages only</span><input type="checkbox" id="setBrawlFlat"></label>
+        <label class="srow" data-modes="brawl" data-info="s_brawlItems"><span>Item boxes</span><input type="checkbox" id="setBrawlItems" checked></label>
+        <label class="srow" data-modes="practice" data-info="s_dummies"><span>Target dummies</span><select id="setDummies"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>6</option></select></label>
+        <label class="srow" data-modes="practice" data-info="s_dummyMode"><span>Dummies</span><select id="setDummyMode"><option value="idle">Stand still</option><option value="move">Walk around</option><option value="fight">Fight back</option></select></label>
+        <label class="srow" data-modes="practice" data-info="s_dummyHp"><span>Dummy health</span><select id="setDummyHp"><option value="100">100</option><option value="250">250</option><option value="500">500</option><option value="1000">1000</option></select></label>
+        <label class="srow" data-modes="practice" data-info="s_god"><span>You can't die</span><input type="checkbox" id="setGod"></label>
+        <div class="row left" data-modes="tdm"><button class="btn ghost small" id="shuffleTeams" type="button">Shuffle teams</button></div>
+      </div>
+      <div class="spane hidden" data-pane="cards">
+        <label class="srow" data-info="s_rerolls"><span>Rerolls</span><select id="setRerolls"><option value="0">Off</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option></select></label>
+        <label class="srow" data-info="s_pickTime"><span>Pick time</span><select id="setPickTime"><option value="15">15 s</option><option value="30">30 s</option><option value="60">60 s</option><option value="120">2 min</option><option value="0">No limit</option></select></label>
+        <label class="srow" data-info="s_combos"><span>Combo cards</span><input type="checkbox" id="setCombos"></label>
+        <label class="srow" data-modes="ffa tdm waves tourn" data-info="s_speed"><span>⚡ Speed mode</span><input type="checkbox" id="setSpeed"></label>
+      </div>
+      <div class="spane hidden" data-pane="arena">
+        <label class="srow" data-info="s_maps"><span>Maps</span><select id="setMaps"><option value="mixed">Mixed</option><option value="generated">Random generated</option><option value="classic">Classic layouts</option><option value="traps">Trap arenas</option><option value="star">Star</option><option value="shapes">Shaped (all shapes)</option><option value="pods">Pods</option><option value="hive">Hive</option><option value="bowtie">Bowtie</option><option value="lava">Lava Lake</option><option value="ice">Ice Sheets</option></select></label>
+        <label class="srow" data-info="s_themes"><span>Themes</span><select id="setThemes"><option value="all">All themes</option><option value="standard">Extra themes off</option><option value="experimental">Extra themes only</option>
+          <optgroup label="Only one"><option value="forest">Forest</option><option value="tundra">Tundra</option><option value="neon">Neon</option><option value="castle">Castle</option><option value="western">Western</option><option value="candy">Candy</option><option value="sakura">Sakura</option><option value="tropical">Tropical</option><option value="lunar">Lunar</option><option value="volcano">Volcano</option></optgroup></select></label>
+        <label class="srow" data-maps="mixed" data-info="s_mapLava"><span>Lava Lake maps</span><input type="checkbox" id="setMapLava"></label>
+        <label class="srow" data-maps="mixed" data-info="s_mapIce"><span>Ice Sheets maps</span><input type="checkbox" id="setMapIce"></label>
+        <label class="srow" data-modes="ffa tdm waves" data-info="s_commander"><span>Commander</span><input type="checkbox" id="setCommander"></label>
+        <label class="srow" data-modes="ffa tdm waves" data-info="s_hazards"><span>Map hazards</span><input type="checkbox" id="setHazards"></label>
+        <label class="srow" data-modes="ffa tdm waves core brawl practice open tourn" data-info="budget"><span>Shot budget</span><input type="checkbox" id="setBudget"></label>
+      </div>
+      <p class="hint rclick">Right-click any mode or setting to see what it does.</p>
     </div>
   </div>
   <p id="lobbyError" class="error"></p>
@@ -320,7 +287,7 @@
   <p>Earn cash by playing matches and spend it here. Locked items (🔒) can be tried on before you buy. Accessories keep their own colors, so they look the same on any team.</p>
   <div class="cosgrid">
     <canvas id="cosPreview" width="260" height="300"></canvas>
-    <div><div class="panel" id="cosFields"></div><div id="cosBuy" class="panel cosbuy hidden"></div></div>
+    <div><div class="panel" id="cosFields"></div><div id="cosBuy" class="panel cosbuy hidden"></div><div class="panel" id="cosEmotes"></div></div>
   </div>
   <p class="hint">Drag the preview to turn your character. Pick several locked items to try a whole set on, then buy them one by one or all at once.</p>
   <div class="row"><button class="btn ghost" id="cosSpin">Spin: off</button><button class="btn ghost" id="cosRandom">Randomize</button><button class="btn ghost" id="cosLoot">🎁 Open lootbox (0)</button><button class="btn" data-go="title">Done</button></div>
@@ -343,6 +310,7 @@
     <label class="field">Particle effects
       <select id="sEffects"><option value="high">High</option><option value="low">Low</option><option value="off">Off</option></select></label>
     <label class="check"><input type="checkbox" id="sShake"> Screen shake</label>
+    <label class="field">Max screen shake <span class="val" id="sShakeMaxV"></span><input type="range" id="sShakeMax" min="0.1" max="1" step="0.05"></label>
     <label class="check"><input type="checkbox" id="sFeel"> Hit-stop and slow motion on kills</label>
     <label class="check"><input type="checkbox" id="sKillCam"> Kill cam (replay the round-winning kill from the killer's eyes)</label>
     <label class="check"><input type="checkbox" id="sProps"> Grass and pebbles (applies next round)</label>
@@ -437,7 +405,7 @@
   <h1 id="overTitle">Victory</h1>
   <canvas id="overShow" class="overshow hidden" width="520" height="300"></canvas>
   <div id="overScores" class="finalscores"></div>
-  <table id="overTally" class="tally"></table>
+  <div id="overTallyWrap" class="tallywrap"><table id="overTally" class="tally"></table></div>
   <p id="overCash" class="overcash hidden"></p>
   <p id="overLoot" class="overcash hidden">🎁 +1 lootbox (open it in Shop &amp; Customize)</p>
   <div id="overHostRow">

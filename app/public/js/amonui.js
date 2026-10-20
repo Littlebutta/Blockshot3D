@@ -3,7 +3,7 @@
 // the Tab leaderboard and the network glue. The host also runs AmonGame (amon.js) through this.
 // =====================================================================
 import * as THREE from '/vendor/three/build/three.module.js';
-import { AMON, UNIT_BY_ID, corrupted, PATTERNS, patternCells, fxLines, TIER_COLORS, TIER_NAMES, buildAmonCards, rankCount, cardKind, FACTION_BY_ID, FX_INFO, cardValue } from './amondata.js';
+import { AMON, UNIT_BY_ID, corrupted, PATTERNS, patternCells, fxLines, TIER_COLORS, TIER_NAMES, buildAmonCards, rankCount, cardKind, FACTION_BY_ID, FX_INFO, cardValue, COMMANDERS, CMD_BY_ID } from './amondata.js';
 import { computeArmy, boardScore } from './amon.js';
 import { AckEncoder, AckDecoder } from './netcodec.js';
 import { cardDetails, unitTags, unitRole } from './amoninfo.js';
@@ -235,6 +235,22 @@ const CSS = `
 #amLb table{width:100%;border-collapse:collapse;font-size:16.9px}#amLb th{text-align:left;opacity:.6;font-weight:600;padding:3px 8px}#amLb td{padding:4px 8px;border-top:1px solid #ffffff14}
 #amHelp{position:absolute;right:10px;top:54px;font-size:14.3px;opacity:.6;text-align:right;line-height:1.5}
 .am-hidden{display:none!important}
+#amPlayers{position:absolute;right:10px;top:262px;width:236px;background:#0b0f18d8;border:1px solid #ffffff22;border-radius:10px;padding:5px;display:flex;flex-direction:column;gap:3px;max-height:calc(100vh - 300px);min-height:60px;overflow:auto}
+#amPlayers .pr{display:grid;grid-template-columns:24px 1fr auto;gap:2px 6px;align-items:center;padding:3px 6px;border-radius:7px;cursor:pointer;border-left:4px solid var(--c)}
+#amPlayers .pr:hover{background:#ffffff14}#amPlayers .pr.on{background:#ffffff22;outline:1px solid #ffffff55}#amPlayers .pr.out{opacity:.45}
+#amPlayers .ci{font-size:18px;text-align:center}#amPlayers .nm{font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#amPlayers .st{font-size:12.5px;opacity:.75;white-space:nowrap}#amPlayers .hb{grid-column:2/4;height:6px;border-radius:3px;background:#311;overflow:hidden}#amPlayers .hb i{display:block;height:100%;background:linear-gradient(90deg,#e04a4a,#ffb04a)}
+#amPlayers .hd{font-size:12px;opacity:.6;padding:0 4px 2px;letter-spacing:.05em}
+#amPeek{position:absolute;top:56px;left:50%;transform:translateX(-50%);background:#1e2840f0;border:1px solid #7fd0ff;border-radius:10px;padding:5px 14px;font-weight:700;pointer-events:auto;cursor:pointer}
+#amCmd{position:absolute;inset:60px 3vw 20px;background:#070a12f4;border:1px solid #ffffff33;border-radius:14px;padding:12px 16px;display:grid;grid-template-columns:1fr min(340px,32vw);grid-template-rows:auto 1fr;gap:10px 16px}
+#amCmd .ch{grid-column:1/3;display:flex;align-items:baseline;gap:16px}#amCmd h2{margin:0}#amCmdWho{opacity:.8;font-size:15px}
+#amCmdGrid{overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px;align-content:start}
+.am-cmd{position:relative;border-radius:9px;background:#151b2a;border:2px solid #ffffff1a;border-top:4px solid var(--c);padding:6px 8px;cursor:pointer;display:flex;gap:7px;align-items:center}
+.am-cmd:hover{background:#1e2840}.am-cmd.sel{border-color:var(--c);box-shadow:0 0 14px var(--c)}
+.am-cmd .ic{font-size:26px}.am-cmd b{display:block;font-size:14px;line-height:1.1}.am-cmd small{opacity:.65;font-size:12px}
+.am-cmd .tk{position:absolute;right:4px;top:2px;font-size:11px;opacity:.8}
+#amCmdInfo{overflow:auto;font-size:15px;line-height:1.4}#amCmdInfo h3{margin:0 0 2px;font-size:22px}#amCmdInfo h5{margin:10px 0 3px;color:#ffd166;font-size:14px;text-transform:uppercase;letter-spacing:.04em}
+#amCmdInfo .big{font-size:44px}#amCmdInfo ul{margin:0;padding-left:18px}#amCmdInfo .go{margin-top:12px;font-size:18px;padding:8px 22px}
 #amNext{position:absolute;left:10px;top:84px;width:250px;background:#0b0f18e0;border:1px solid #ffffff22;border-left:4px solid var(--fc,#ff6a3a);border-radius:10px;padding:7px 9px;font-size:15.6px}
 #amNext .fh{display:flex;gap:8px;align-items:center}#amNext .fi{width:46px;height:46px;border-radius:50%;box-shadow:0 0 10px var(--fc,#ff6a3a)}
 #amNext .fl{font-weight:700;font-size:16.9px}#amNext .ft{opacity:.7;font-size:14.3px}#amNext .fu{display:flex;flex-wrap:wrap;gap:3px 8px;margin-top:5px;font-size:14.3px;opacity:.9}
@@ -265,6 +281,8 @@ const HTML = `
   <div id="amRight" class="col am-p"><div id="amFront">▲ FRONT (toward the enemy) ▲</div><div id="amGrid"></div><div id="amPower"></div></div>
 </div>
 <div id="amCenter" class="am-p am-hidden"></div>
+<div id="amPlayers" class="am-p am-hidden"></div>
+<div id="amCmd" class="am-p am-hidden"><div class="ch"><h2>Choose your commander</h2><span id="amCmdWho"></span></div><div id="amCmdGrid"></div><div id="amCmdInfo"></div></div>
 <div id="amLb" class="am-hidden"></div>
 <div id="amTip" class="am-hidden"></div>
 <div id="amDetail" class="am-hidden"></div>
@@ -310,7 +328,7 @@ export class AmonClient {
     this.onDown = e => {
       if (e.button === 1) { this.turn = true; e.preventDefault(); }
       else if (e.button === 2) { if (!this.pilotU) this.drag = true; this.rDown = { x: e.clientX, y: e.clientY, t: performance.now() }; }
-      else if (e.button === 0 && this.preview && this.pub && this.pub.ph === 'shop') this.placeDown(e);
+      else if (e.button === 0 && this.preview && this.pub && this.pub.ph === 'shop' && !this.peek) this.placeDown(e);
       else if (e.button === 0 && !this.pilotU) this.pickUnit(e.clientX, e.clientY);
     };
     this.onUp = e => {
@@ -341,6 +359,57 @@ export class AmonClient {
     R.camera.far = this.saved.far; R.camera.updateProjectionMatrix();
   }
   me() { return this.pub ? this.pub.pl.find(p => p.id === this.localId) : null; }
+  // v1.2.24: whose board the store shows: yours, or the player you're watching (read-only)
+  shopOwner() { return (this.peek && this.pub && this.pub.pl.find(p => p.id === this.peek)) || this.me(); }
+  watch(pid) {
+    const P = this.pub; if (!P) return;
+    if (P.ph === 'battle' || P.ph === 'result') {
+      const f = P.fl.find(x => x[1].includes(pid)) || (P.vs && P.fl.find(x => P.vs[x[0]] && P.vs[x[0]].slice(0, 2).includes(pid)));
+      if (f) { this.manualView = true; this.viewF = f[0]; this.act({ t: 'view', f: f[0] }); }
+      return;
+    }
+    this.peek = pid === this.localId ? null : pid; this.sel = null; this.boardKey = ''; this.offKey = ''; this.benchKey = '';
+    const o = this.shopOwner(); if (o && P.ph === 'shop') { this.boardKey = JSON.stringify(o.bo) + o.lv + o.id; this.showPreview(o); }
+    this.renderShop(); this.sound.play('ui');
+  }
+  renderPlayers() {
+    const P = this.pub, el = this.$('amPlayers');
+    const on = P && P.pl.length > 1 && P.ph !== 'cmd' && P.ph !== 'choice';
+    el.classList.toggle('am-hidden', !on); if (!on) return;
+    const battle = P.ph === 'battle' || P.ph === 'result', watching = battle ? (P.fl.find(f => f[0] === this.viewF) || [0, []])[1] : [this.shopOwner() && this.shopOwner().id];
+    const rows = P.pl.slice().sort((a, b) => (P.vs ? a.out - b.out || b.vh - a.vh : 0) || b.sc - a.sc).map(p => {
+      const C = p.cm && CMD_BY_ID.get(p.cm), hp = P.vs ? `<span class="hb"><i style="width:${Math.max(0, Math.round(100 * p.vh / AMON.vsHealth))}%"></i></span>` : '';
+      const st = P.vs ? (p.out ? 'out' : `${p.vh} hp`) : `${p.sc} pts`;
+      return `<div class="pr${watching.includes(p.id) ? ' on' : ''}${p.out ? ' out' : ''}" data-pid="${esc(p.id)}" style="--c:${p.color}" title="${esc(C ? C.name + ' · ' + C.text : '')}"><span class="ci">${C ? C.icon : '•'}</span><span class="nm">${esc(p.name)}${p.id === this.localId ? ' (you)' : ''}</span><span class="st">${P.ph === 'shop' && !P.lim && !p.bot ? (p.rd ? '✓ ' : '… ') : ''}${st}</span>${hp}</div>`;
+    }).join('');
+    const html = `<div class="hd">${battle ? 'CLICK TO WATCH THEIR FIELD' : 'CLICK TO SEE THEIR BOARD'}</div>` + rows;
+    if (html !== this.plKey) { this.plKey = html; el.innerHTML = html; }
+    // the "watching" banner (store)
+    let pk = this.$('amPeek');
+    const o = P.ph === 'shop' && this.peek && this.shopOwner();
+    if (o && !pk) { pk = document.createElement('div'); pk.id = 'amPeek'; this.el.appendChild(pk); pk.onclick = () => this.watch(this.localId); }
+    if (pk) { pk.classList.toggle('am-hidden', !o); if (o) { const t = `👁 Watching ${o.name}'s board${this.me() && !this.me().out ? ' · click to go back to yours' : ''}`; if (pk.textContent !== t) pk.textContent = t; } }
+  }
+  renderCmd(force) {
+    const P = this.pub, el = this.$('amCmd'), on = P && P.ph === 'cmd';
+    el.classList.toggle('am-hidden', !on); if (!on) return;
+    const me = this.me(), mine = me && me.cm, ready = (P.crd || []).includes(this.localId);
+    const sel = this.cmdSel || mine || COMMANDERS[0].id;
+    const takenBy = new Map(); for (const p of P.pl) if (p.cm) (takenBy.get(p.cm) || takenBy.set(p.cm, []).get(p.cm)).push(p);
+    const grid = COMMANDERS.map(C => `<div class="am-cmd${C.id === mine ? ' sel' : ''}" data-cmd="${C.id}" style="--c:${C.color}"><span class="ic">${C.icon}</span><span><b>${esc(C.name)}</b><small>${esc(C.title)}</small></span>${takenBy.has(C.id) ? `<span class="tk">${takenBy.get(C.id).map(p => `<span style="color:${p.color}">●</span>`).join('')}</span>` : ''}</div>`).join('');
+    if (grid !== this.cmdGridKey || force) { this.cmdGridKey = grid; this.$('amCmdGrid').innerHTML = grid; }
+    const C = CMD_BY_ID.get(sel), fac = C.fac && FACTION_BY_ID.get(C.fac);
+    const fx = Object.entries(C.fx).filter(([k]) => k !== 'gold' && k !== 'random' && k !== 'shieldPct' && k !== 'regenPct' && k !== 'stealth' && FX_INFO[k]);
+    const extra = [C.fx.gold ? `+${C.fx.gold} gold every round` : '', C.fx.shieldPct ? `Barrier worth ${Math.round(C.fx.shieldPct * 100)}% of health at the start` : '', C.fx.regenPct ? `Regenerate ${C.fx.regenPct * 100}% of health a second` : '', C.fx.stealth ? `Invisible for the first ${C.fx.stealth} s` : '', C.fx.random ? 'A random faction bonus every battle' : ''].filter(Boolean);
+    const info = `<div style="display:flex;gap:10px;align-items:center"><span class="big">${C.icon}</span><div><h3 style="color:${C.color}">${esc(C.name)}</h3><div style="opacity:.7">${esc(C.title)}${fac ? ' · enemy faction leader' : ' · new commander'}</div></div></div>`
+      + `<h5>Power</h5><div>${esc(C.text)}</div>`
+      + `<h5>All your units</h5><ul>${[...fxLines(Object.fromEntries(fx)).map(l => l.text), ...extra].map(t => `<li>${esc(t)}</li>`).join('')}</ul>`
+      + `<h5>Commander units</h5><div style="opacity:.85">Only you get these in your store:</div><ul>${C.units.map(id => { const u = unitDef('c-' + id); return `<li>${esc(u.name)} <span style="opacity:.6">(tier ${TIER_NAMES[u.tier]}, ×${u.count})</span></li>`; }).join('')}</ul>`
+      + `<button class="am-btn go${ready ? ' on' : ''}" data-cmdgo="1" ${mine ? '' : 'disabled'}>${ready ? 'Ready ✓' : mine === sel ? 'Lead them (Ready)' : 'Pick one first'}</button>`;
+    if (info !== this.cmdInfoKey || force) { this.cmdInfoKey = info; this.$('amCmdInfo').innerHTML = info; }
+    const humans = P.pl.filter(p => !p.bot && p.on), who = humans.map(p => `<b style="color:${p.color};opacity:${(P.crd || []).includes(p.id) ? 1 : 0.5}">${esc(p.name)} ${(P.crd || []).includes(p.id) ? '✓' : p.cm ? (CMD_BY_ID.get(p.cm) || {}).icon || '…' : '…'}</b>`).join(' · ');
+    const wk = `No time limit · ${who}`; if (this.$('amCmdWho').innerHTML !== wk) this.$('amCmdWho').innerHTML = wk;
+  }
   act(a) { if (this.isHost) this.game.action(this.localId, a); else this.send(a); }
 
   // ---------------------------------------------------------------- frame
@@ -452,9 +521,9 @@ export class AmonClient {
     const prev = this.pub; this.pub = s;
     for (const e of evs) this.event(e);
     if (s.ph !== this.prevPhase) this.phaseChanged(prev ? prev.ph : '', s.ph);
-    const me = this.me();
+    const me = this.shopOwner();
     if (me && s.ph === 'shop') {
-      const key = JSON.stringify(me.bo) + me.lv;
+      const key = JSON.stringify(me.bo) + me.lv + me.id;
       if (key !== this.boardKey || !this.preview) { this.boardKey = key; this.showPreview(me); }
     }
     this.renderShop();
@@ -482,6 +551,7 @@ export class AmonClient {
     if (this.pilotU && to !== 'battle') this.pilotU = 0;
     if (to !== 'shop') { this.placing = null; this.placeSel = []; if (this.placeRings) for (const m of this.placeRings) m.visible = false; }
     if (to === 'battle' || to === 'shop') this.seenK = null;
+    if (to === 'battle') this.peek = (this.me() && this.me().out) ? this.peek : null;
     if (to === 'battle') { this.manualView = false; this.cam.goal = this.homeView('battle'); this.sound.play('fight'); this.clearUnits(); this.preview = false; this.fieldKey = ''; }
     if (to === 'shop') { this.cam.goal = this.homeView('shop'); this.clearUnits(); this.preview = false; this.boardKey = ''; this.field = null; this.storms = []; this.shells = []; this.syncStorms(); }
   }
@@ -548,6 +618,12 @@ export class AmonClient {
       case 'dash': R.burst(e.x, 0.6, e.z, '#ffd166', 18, 5); this.sound.play('jump', 0.4); break;
       case 'heavy': R.burst(e.x, y, e.z, '#ffd166', 26, 6); R.ring(e.x, 0.2, e.z, 1.6, '#ffd166'); this.sound.play('hit', 0.5); break;
       case 'block': R.burst(e.x, 1.2, e.z, '#cfe4ff', 10, 3); this.cSfx('bounce', 0.3, 0.04); break;
+      case 'cmdHeal': R.ring(e.x, 0.2, e.z, 12, '#7fff9a'); R.burst(e.x, 1, e.z, '#7fff9a', 40, 6); this.sound.play('choir', 0.4); break;
+      case 'cmdRally': R.ring(e.x, 0.2, e.z, 12, '#ff8a3a'); R.burst(e.x, 1, e.z, '#ffb04a', 40, 6); this.sound.play('powerUp', 0.5); break;
+      case 'cmdShield': R.ring(e.x, 0.2, e.z, 12, '#7fd0ff'); R.burst(e.x, 1, e.z, '#bfe9ff', 40, 6); this.sound.play('shield', 0.5); break;
+      case 'cmdFreeze': R.ring(e.x, 0.2, e.z, 30, '#bfe9ff'); this.sound.play('hiss', 0.5); break;
+      case 'cmdStealth': R.ring(e.x, 0.2, e.z, 12, '#9a7ad8'); this.sound.play('whoosh', 0.5); break;
+      case 'cmdCast': { const C = CMD_BY_ID.get(e.c); if (C && e.side === this.mySide()) this.toast(`${C.icon} ${C.name}: ${{ strike: 'strike!', storm: 'storm!', heal: 'heal!', rally: 'rally!', shield: 'shield wall!', freeze: 'freeze!', summon: 'reinforcements!', convert: 'turncoats!', snipe: 'marked for death!', quake: 'quake!', raise: 'rise!', stealth: 'vanish!' }[e.p] || ''}`); break; }
       case 'done': if (this.pub && this.pub.ph === 'battle') this.toast(e.w === 0 ? 'This field is clear' : e.w === 1 ? 'This field fell' : 'Stalemate on this field'); break;
     }
   }
@@ -962,7 +1038,7 @@ export class AmonClient {
     grid.innerHTML = Array.from({ length: CELLS }, (_, i) => `<div class="am-cell" data-cell="${i}"></div>`).join('');
     this.el.addEventListener('click', e => {
       const o = e.target.closest('[data-offer]'), b = e.target.closest('[data-bench]'), c = e.target.closest('[data-cell]');
-      if (!this.pub || this.pub.ph !== 'shop') return;
+      if (!this.pub || this.pub.ph !== 'shop' || this.peek) return;
       if (o) { if (this.canAfford()) { this.act({ t: 'buy', i: +o.dataset.offer }); this.sound.play('cardPick'); } return; }
       if (b) return this.clickSlot('bench', +b.dataset.bench, !!b.dataset.full);
       if (c) return this.clickSlot('board', +c.dataset.cell, !!c.dataset.full);
@@ -973,6 +1049,7 @@ export class AmonClient {
     this.el.addEventListener('dragstart', e => {
       const o = e.target.closest('[data-offer]'), b = e.target.closest('[data-bench][data-full]'), c = e.target.closest('[data-cell][data-full]');
       if (!o && !b && !c) return;
+      if (this.peek) { e.preventDefault(); return; }
       const me = this.me();
       this.dragSrc = o ? { w: 'offer', i: +o.dataset.offer, id: me && me.of[+o.dataset.offer] } : b ? { w: 'bench', i: +b.dataset.bench, id: me && me.be[+b.dataset.bench] && me.be[+b.dataset.bench][0] } : { w: 'board', i: +c.dataset.cell, id: me && me.bo[+c.dataset.cell] && me.bo[+c.dataset.cell][0] };
       e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'x');
@@ -1010,7 +1087,7 @@ export class AmonClient {
     // hover: details + where the card's effect reaches
     this.el.addEventListener('mouseover', e => {
       const o = e.target.closest('[data-offer]'), b = e.target.closest('[data-bench]'), c = e.target.closest('[data-cell]');
-      const me = this.me(); if (!me) return;
+      const me = this.shopOwner(); if (!me) return;
       if (this.dragSrc) { this.hideTip(); return; }
       if (o && me.of[+o.dataset.offer]) this.hover = { w: 'offer', i: +o.dataset.offer, id: me.of[+o.dataset.offer] };
       else if (b && me.be[+b.dataset.bench]) this.hover = { w: 'bench', i: +b.dataset.bench, id: me.be[+b.dataset.bench][0], rank: me.be[+b.dataset.bench][1], bonus: me.be[+b.dataset.bench][3] || 0 };
@@ -1024,7 +1101,7 @@ export class AmonClient {
     this.el.addEventListener('contextmenu', e => {
       if (!e.target.closest('#amShop')) return;
       e.preventDefault();
-      const o = e.target.closest('[data-offer]'), b = e.target.closest('[data-bench]'), c = e.target.closest('[data-cell]'), me = this.me(); if (!me) return;
+      const o = e.target.closest('[data-offer]'), b = e.target.closest('[data-bench]'), c = e.target.closest('[data-cell]'), me = this.shopOwner(); if (!me) return;
       let h = null;
       if (o && me.of[+o.dataset.offer]) h = { w: 'offer', i: +o.dataset.offer, id: me.of[+o.dataset.offer] };
       else if (b && me.be[+b.dataset.bench]) h = { w: 'bench', i: +b.dataset.bench, id: me.be[+b.dataset.bench][0], rank: me.be[+b.dataset.bench][1], bonus: me.be[+b.dataset.bench][3] || 0 };
@@ -1035,6 +1112,16 @@ export class AmonClient {
     // Escape closes the details window first (captured, so it doesn't also open the pause menu)
     addEventListener('keydown', this.onDetailKey = e => { if (e.code === 'Escape' && this.detailOpen) { this.hideDetail(); e.preventDefault(); e.stopImmediatePropagation(); } }, true);
     addEventListener('mousedown', this.onDetailOut = e => { const d = this.$('amDetail'); if (d && !d.classList.contains('am-hidden') && !e.target.closest('#amDetail')) this.hideDetail(); }, true);
+    // v1.2.24 commanders: click one to pick it (and see what it does), then Ready
+    this.$('amCmd').addEventListener('click', e => {
+      const t = e.target.closest('[data-cmd]'); if (t) { this.cmdSel = t.dataset.cmd; this.act({ t: 'cmd', c: t.dataset.cmd }); this.sound.play('cardPick'); this.renderCmd(true); return; }
+      if (e.target.closest('[data-cmdgo]')) { const me = this.me(); this.act({ t: 'cmdReady', on: !(this.pub.crd || []).includes(this.localId) }); this.sound.play('ui'); }
+    });
+    // v1.2.24 players panel: click someone to watch their field (battle) or their board (store); click yourself to come back
+    this.$('amPlayers').addEventListener('click', e => {
+      const r = e.target.closest('[data-pid]'); if (!r || !this.pub) return;
+      this.watch(r.dataset.pid);
+    });
     // field chips + end-of-run choices
     this.$('amFields').addEventListener('click', e => { const ch = e.target.closest('[data-f]'); if (ch) { this.manualView = true; this.viewF = +ch.dataset.f; this.act({ t: 'view', f: this.viewF }); } });
     this.$('amCenter').addEventListener('click', e => {
@@ -1085,7 +1172,9 @@ export class AmonClient {
       <span class="tr" style="color:${col}">${TIER_NAMES[c.tier]}</span>${rank}<div class="nm">${esc(c.name)}</div><div class="kd">${kind}</div>${opts.price ? `<span class="pr">${opts.price}g</span>` : ''}</div>`;
   }
   renderShop() {
-    const me = this.me(), P = this.pub; if (!P || !me) return;
+    const me = this.shopOwner(), P = this.pub; if (!P || !me) return;
+    const peek = me.id !== this.localId;
+    this.$('amBar').classList.toggle('am-hidden', peek); this.$('amOffers').classList.toggle('am-hidden', peek);
     const shop = P.ph === 'shop', show = shop || this.showBoard;
     this.$('amShop').classList.toggle('am-hidden', !show);
     this.$('amLeft').classList.toggle('am-hidden', !shop);
@@ -1139,7 +1228,7 @@ export class AmonClient {
       return;
     }
     if (!h || !this.army) return;
-    const me = this.me(), id = h.id || (h.w === 'board' ? me.bo[h.i] && me.bo[h.i][0] : me.be[h.i] && me.be[h.i][0]);
+    const me = this.shopOwner(), id = h.id || (h.w === 'board' ? me.bo[h.i] && me.bo[h.i][0] : me.be[h.i] && me.be[h.i][0]);
     const c = id && this.ac.byId.get(id);
     if (h.w === 'board') {
       for (const j of this.army.from[h.i]) cells[j].classList.add('hlsrc');   // who buffs this card
@@ -1194,68 +1283,72 @@ export class AmonClient {
     const html = `<button class="x" title="Close">✕</button><div class="dh">${art ? `<div class="art" style="background-image:url('${esc(art)}');border-color:${c.variant === 'holy' ? '#ffe08a' : c.variant === 'cursed' ? '#e0464b' : TIER_COLORS[c.tier]}"></div>` : ''}<div><h3 style="color:${TIER_COLORS[c.tier]}">${esc(D.title)}${h.rank > 1 ? ` <span style="font-size:15px;opacity:.7">Lv ${h.rank}</span>` : ''}</h3><div class="sub">${esc(D.sub)}</div></div></div>`
       + (D.about ? `<div>${esc(D.about)}</div>` : '') + stats
       + (fx ? `<h5>Right now</h5><ul>${fx}</ul>` : '')
-      + D.sections.map(([t, L]) => `<h5>${esc(t)}</h5><ul>${L.map(l => `<li>${esc(l)}</li>`).join('')}</ul>`).join('')
+      + [...D.sections, ...this.detailExtras(h, c)].map(([t, L]) => `<h5>${esc(t)}</h5><ul>${L.map(l => `<li>${esc(l)}</li>`).join('')}</ul>`).join('')
       + (D.tips.length ? `<h5>Tips</h5><ul class="tips">${D.tips.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : '')
       + `<div style="opacity:.5;font-size:13px;margin-top:10px">Right-click any card for this window · click outside or Esc to close</div>`;
     const el = this.$('amDetail'); el.innerHTML = html; el.classList.remove('am-hidden'); this.detailOpen = true; this.sound.play('ui');
   }
+  // v1.2.24 card text audit: the hover tip is short (what it is, its numbers, its points); everything else is in the right-click details
   showTip(h) {
     if (this.dragSrc) return;
     const c = this.ac.byId.get(h.id); if (!c) return;
-    const lines = [`<h4 style="color:${TIER_COLORS[c.tier]}">${esc(c.name)} <span class="m">· tier ${TIER_NAMES[c.tier]}${h.rank > 1 ? ' · Lv ' + h.rank : ''} · ${cardKind(c)}</span></h4>`];
-    if (c.kind === 'unit') { const u0 = unitDef(c.unit), tg = unitTags(u0); lines.push(`<div style="color:#9fd0ff">${esc(unitRole(u0))}${tg.length ? ' · ' + esc(tg.join(', ')) : ''}${u0.air ? ' · Flying' : ''}</div>`); if (u0.ab && u0.ab.heal) lines.push(`<div class="g">Heals ${u0.ab.heal.mech ? 'Mech units only' : 'Bio units (not Mech)'}</div>`); }
-    if (c.desc) lines.push(`<div class="m">${esc(c.desc)}</div>`);
+    const lines = [`<h4 style="color:${TIER_COLORS[c.tier]}">${esc(c.name)} <span class="m">· ${TIER_NAMES[c.tier]}${h.rank > 1 ? ' · Lv ' + h.rank : ''}</span></h4>`];
+    const f1 = v => Math.round(v * 10) / 10;
     if (c.kind === 'unit') {
-      const u = unitDef(c.unit), g = h.w === 'board' && this.army && this.army.groups.find(q => q.cell === h.i);
-      const st = g ? g.st : null, rk = AMON.rankMul(h.rank || 1);
-      const n = g ? g.n : rankCount(c.count, h.rank || 1) + (h.bonus || 0);
-      if (h.bonus) lines.push(`<div class="g">+${h.bonus} permanent unit${h.bonus === 1 ? '' : 's'} (recruited or squadmates; stays when moved)</div>`);
-      const f1 = v => Math.round(v * 10) / 10;
-      const row = (label, base, fin) => `<tr><td class="m">${label}</td><td>${fin != null && Math.abs(fin - base) > 0.05 ? `<span class="${fin > base ? 'g' : 'b'}">${f1(fin)}</span> <span class="m">(${f1(base)})</span>` : f1(base)}</td></tr>`;
-      lines.push(`<div>${n}× ${esc(u.name)}${u.air ? ' · flying' : ''} · value ${f1(u.v)} each</div><table>`
-        + row('Health', u.hp * rk, st && st.hp) + row('Damage', (u.atk || 0) * rk, st && st.atk) + row('Attacks/s', u.rate || 0, st && st.rate)
-        + row('Range', u.range, st && st.range) + row('Speed', u.speed, st && st.speed) + row('Armor', u.armor || 0, st && st.armor)
-        + (u.splash || (st && st.splash) ? row('Splash', u.splash || 0, st && st.splash) : '') + '</table>');
-      const hits = [u.hitsGround !== false ? 'ground' : '', u.hitsAir ? 'air' : ''].filter(Boolean).join(' + ');
-      lines.push(`<div class="m">Hits ${hits || 'nothing directly'}${u.bonus ? ' · bonus vs ' + Object.entries(u.bonus).map(([k, v]) => `${k} ×${v}`).join(', ') : ''}</div>`);
-      if (st && (st.regen || st.lifesteal || st.chain || st.slow || st.burn || st.hex)) lines.push(`<div class="g">${[st.regen ? `+${f1(st.regen)}/s regen` : '', st.lifesteal ? `${Math.round(st.lifesteal * 100)}% lifesteal` : '', st.chain ? `+${st.chain} bounces` : '', st.slow ? `slow ${Math.round(st.slow * 100)}%` : '', st.burn ? `burn ${f1(st.burn)}/s` : '', st.hex ? `hex +${Math.round(st.hex * 100)}%` : ''].filter(Boolean).join(' · ')}</div>`);
-      const xs = st ? [['encore', st.encore, 'pct'], ['block', st.block, 'pct'], ['resist', st.resist, 'pct'], ['thorns', st.thorns, 'pct'], ['bomb', st.bomb, 'pct'], ['shield', st.shield, 'n'], ['drain', st.drain, 'n'], ['pen', st.pen, 'n'], ['knock', st.knock, 'n'], ['mines', st.mines, 'n'], ['turret', st.turret, 'n'], ['drone', st.drone, 'n'], ['meteor', st.meteor, 'n']].filter(q => q[1]) : [];
-      if (xs.length) lines.push(`<div class="g">${xs.map(([k, v, t]) => `${FX_INFO[k][0]} ${t === 'pct' ? Math.round(v * 100) + '%' : f1(v)}`).join(' · ')}</div>`);
-      if (g) {
-        const bl = (g.buffs || []).filter(b => Math.abs(b.add) >= 0.005).map(b => `${(FX_INFO[b.key] || [b.key])[0]} ${b.add > 0 ? '+' : '−'}${Math.abs(b.add).toFixed(2)}`);
-        lines.push(`<div style="margin-top:3px"><b style="color:#ffd166">${Math.round(g.pts)} pts</b> <span class="m">= ${f1(g.basePts)} base × ${g.mul.toFixed(2)} bonus multiplier</span></div>` + (bl.length ? `<div class="m">${esc(bl.join(' · '))}${this.army.from[h.i].length ? ` · ${this.army.from[h.i].length} card${this.army.from[h.i].length === 1 ? '' : 's'} reaching it +${(0.03 * this.army.from[h.i].length).toFixed(2)}` : ''}</div>` : ''));
-      } else lines.push(`<div><b style="color:#ffd166">${Math.round(cardValue(c, h.rank || 1))} pts</b> <span class="m">before board bonuses</span></div>`);
-      if (g && g.echo) lines.push('<div class="g">Echo: units return once at half health</div>');
-      if (g && g.promote) lines.push('<div class="g">Ranks up after each won battle</div>');
+      const u = unitDef(c.unit), tg = unitTags(u), g = h.w === 'board' && this.army && this.army.groups.find(q => q.cell === h.i);
+      const st = g ? g.st : null, rk = AMON.rankMul(h.rank || 1), n = g ? g.n : rankCount(c.count, h.rank || 1) + (h.bonus || 0);
+      const v = (base, fin) => fin != null && Math.abs(fin - base) > 0.05 ? `<span class="${fin > base ? 'g' : 'b'}">${f1(fin)}</span>` : f1(base);
+      lines.push(`<div style="color:#9fd0ff">${n}× ${esc(unitRole(u))}${tg.length ? ' · ' + esc(tg.join(', ')) : ''}${u.air ? ' · Flying' : ''}</div>`);
+      lines.push(`<div>❤ ${v(u.hp * rk, st && st.hp)} · ⚔ ${v((u.atk || 0) * rk, st && st.atk)} · ${v(u.rate || 0, st && st.rate)}/s · ➶ ${v(u.range, st && st.range)} m</div>`);
+      if (c.desc) lines.push(`<div class="m">${esc(c.desc)}</div>`);
+      lines.push(`<div><b style="color:#ffd166">${Math.round(g ? g.pts : cardValue(c, h.rank || 1))} pts</b>${g && this.army.from[h.i].length ? ` <span class="g">· boosted by ${this.army.from[h.i].length}</span>` : ''}</div>`);
+    } else {
+      if (c.fx && c.pattern) {
+        const k = AMON.rankMul(h.rank || 1) * (h.w === 'board' && this.army ? 1 + this.army.amp[h.i] : 1);
+        lines.push(`<div><b>${PATTERNS[c.pattern].icon} ${esc(PATTERNS[c.pattern].name)}</b></div>`);
+        for (const l of fxLines(Object.fromEntries(Object.entries(c.fx).map(([key, v]) => [key, ['count', 'chain', 'echo', 'promote', 'cleanse', 'mines', 'turret', 'drone', 'meteor'].includes(key) ? v : v * k])))) lines.push(`<div class="${l.good ? 'g' : 'b'}">${esc(l.text)}</div>`);
+      } else if (c.desc) lines.push(`<div class="m">${esc(c.desc)}</div>`);
+      lines.push(`<div><b style="color:#ffd166">${Math.round(cardValue(c, h.rank || 1))} pts</b></div>`);
     }
-    if (c.kind !== 'unit') lines.push(`<div><b style="color:#ffd166">${Math.round(cardValue(c, h.rank || 1))} pts</b></div>`);
-    if (c.fx && c.pattern) {
-      lines.push(`<div style="margin-top:4px"><b>${PATTERNS[c.pattern].icon} ${esc(PATTERNS[c.pattern].name)}</b></div>`);
-      const k = AMON.rankMul(h.rank || 1) * (h.w === 'board' && this.army ? 1 + this.army.amp[h.i] : 1);
-      for (const l of fxLines(Object.fromEntries(Object.entries(c.fx).map(([key, v]) => [key, ['count', 'chain', 'echo', 'promote', 'cleanse', 'mines', 'turret', 'drone', 'meteor'].includes(key) ? v : v * k])))) lines.push(`<div class="${l.good ? 'g' : 'b'}">${esc(l.text)}</div>`);
-      if (h.w === 'board' && this.army && this.army.amp[h.i]) lines.push(`<div class="g">Amplified +${Math.round(this.army.amp[h.i] * 100)}%</div>`);
-    }
-    if (h.w === 'board' && this.army && this.army.from[h.i].length) {
-      const me = this.me();
-      lines.push(`<div class="m" style="margin-top:4px">Boosted by: ${this.army.from[h.i].map(j => esc((this.ac.byId.get(me.bo[j][0]) || {}).name)).join(', ')}</div>`);
-    }
-    if (c.kind === 'unit') lines.push(`<div class="m">Squadmates: side by side with another unit card that shares a tag (${(unitDef(c.unit).tags || []).join(', ') || 'none'}), both gain a permanent unit each round, once per neighbor (up to +3).</div>`);
-    if (h.w === 'offer') lines.push(`<div class="m">Click to buy for ${AMON.cardPrice}g, or drag it onto the bench or a square. Drop it on a copy to combine them into a higher level.</div>`);
-    else lines.push(`<div class="m">Drag to move or swap; drop on a copy of itself to combine (levels add up). Drag to the money bag (or Delete) to sell for ${AMON.sellValue(1)}g per level.</div>`);
-    lines.push('<div style="color:#ffd166;opacity:.85">Right-click for full details and tips</div>');
+    lines.push('<div style="color:#ffd166;opacity:.8;font-size:13px">Right-click: full details</div>');
     const t = this.$('amTip'); t.innerHTML = lines.join(''); t.classList.remove('am-hidden');
+  }
+  // What used to crowd the hover tip, for the details window
+  detailExtras(h, c) {
+    const out = [], f1 = v => Math.round(v * 10) / 10;
+    if (c.kind === 'unit') {
+      const u = unitDef(c.unit), g = h.w === 'board' && this.army && this.army.groups.find(q => q.cell === h.i), st = g ? g.st : null;
+      const hits = [u.hitsGround !== false ? 'ground' : '', u.hitsAir ? 'air' : ''].filter(Boolean).join(' + ');
+      out.push(['Combat', [`Hits ${hits || 'nothing directly'}${u.bonus ? ' · bonus vs ' + Object.entries(u.bonus).map(([k, v]) => `${k} ×${v}`).join(', ') : ''}`, `Value ${f1(u.v)} per unit`, ...(u.splash || (st && st.splash) ? [`Splash ${f1(st ? st.splash : u.splash)} m`] : [])]]);
+      if (st) {
+        const xs = [st.regen ? `+${f1(st.regen)}/s regen` : '', st.lifesteal ? `${Math.round(st.lifesteal * 100)}% lifesteal` : '', st.chain ? `+${st.chain} bounces` : '', st.slow ? `slow ${Math.round(st.slow * 100)}%` : '', st.burn ? `burn ${f1(st.burn)}/s` : '', st.hex ? `hex +${Math.round(st.hex * 100)}%` : '',
+          ...[['encore', st.encore, 'pct'], ['block', st.block, 'pct'], ['resist', st.resist, 'pct'], ['thorns', st.thorns, 'pct'], ['bomb', st.bomb, 'pct'], ['shield', st.shield, 'n'], ['drain', st.drain, 'n'], ['pen', st.pen, 'n'], ['knock', st.knock, 'n'], ['mines', st.mines, 'n'], ['turret', st.turret, 'n'], ['drone', st.drone, 'n'], ['meteor', st.meteor, 'n']].filter(q => q[1]).map(([k, v, t]) => `${FX_INFO[k][0]} ${t === 'pct' ? Math.round(v * 100) + '%' : f1(v)}`)].filter(Boolean);
+        if (xs.length) out.push(['From your board', xs]);
+        const bl = (g.buffs || []).filter(b => Math.abs(b.add) >= 0.005).map(b => `${(FX_INFO[b.key] || [b.key])[0]} ${b.add > 0 ? '+' : '−'}${Math.abs(b.add).toFixed(2)}`);
+        const me = this.shopOwner();
+        out.push(['Points', [`${Math.round(g.pts)} pts = ${f1(g.basePts)} base × ${g.mul.toFixed(2)} bonus multiplier`, ...(bl.length ? [bl.join(' · ')] : []), ...(this.army.from[h.i].length ? [`Boosted by: ${this.army.from[h.i].map(j => (this.ac.byId.get(me.bo[j][0]) || {}).name).join(', ')}`] : []), ...(g.echo ? ['Echo: units return once at half health'] : []), ...(g.promote ? ['Ranks up after each won battle'] : [])]]);
+      }
+      if (h.bonus) out.push(['Permanent units', [`+${h.bonus} (recruited or squadmates; stays when moved)`]]);
+      out.push(['Squadmates', [`Side by side with another unit card that shares a tag (${(u.tags || []).join(', ') || 'none'}), both gain a permanent unit each round, once per neighbor (up to +3).`]]);
+    } else if (h.w === 'board' && this.army && this.army.amp[h.i]) out.push(['Amplified', [`+${Math.round(this.army.amp[h.i] * 100)}% from cards reaching it`]]);
+    out.push(['How to use it', [h.w === 'offer' ? `Click to buy for ${AMON.cardPrice}g, or drag it onto the bench or a square. Drop it on a copy to combine them into a higher level.` : `Drag to move or swap; drop on a copy of itself to combine (levels add up). Drag to the money bag (or Delete) to sell for ${AMON.sellValue(1)}g per level.`]]);
+    return out;
   }
 
   // ---------------------------------------------------------------- HUD
   updateHud() {
     const P = this.pub; if (!P) return;
     const me = this.me();
-    const phaseName = { shop: 'Store', battle: 'Battle', result: 'Battle over', choice: 'Run over' }[P.ph] || P.ph;
+    this.renderCmd(); this.renderPlayers();
+    // v1.2.24: knocked out of Versus: the store shows someone still in (click the players panel to switch)
+    if (P.vs && me && me.out && P.ph === 'shop' && !this.peek) { const o = P.pl.find(p => !p.out && p.id !== me.id); if (o) this.watch(o.id); }
+    const phaseName = { shop: 'Store', battle: 'Battle', result: 'Battle over', choice: 'Run over', cmd: 'Commanders' }[P.ph] || P.ph;
     let timer = '';
     if (P.ph === 'shop' && P.lim) timer = ` · ${Math.max(0, Math.ceil(P.lim - P.pt))}s`;
     if (P.ph === 'battle') timer = ` · ${Math.max(0, Math.ceil(P.bt - P.pt))}s`;
     const roundTxt = P.pvp && P.pvp.vs ? `Versus · round ${P.rd}` : P.pvp ? `PvP ${Math.min(P.pvp.round + 1, P.pvp.rounds)}/${P.pvp.rounds}` : `Round ${P.rd}/${P.fr}${P.ext ? ` <span class="lbl">(+${P.ext})</span>` : ''}`;
-    const top = `<span><span class="lbl">AMON</span><b>${roundTxt}</b></span>`
+    const myC = me && me.cm && CMD_BY_ID.get(me.cm);
+    const top = `<span><span class="lbl">AMON</span><b>${roundTxt}</b></span>` + (myC ? `<span title="${esc(myC.text)}" style="color:${myC.color}">${myC.icon} <b style="font-size:16px">${esc(myC.name)}</b></span>` : '')
       + (P.pvp && P.pvp.vs && me ? `<span><span class="lbl">${me.out ? 'Knocked out' : 'Health'}</span><span id="amHp"><i style="width:${Math.round(100 * me.vh / AMON.vsHealth)}%"></i></span> <b>${me.vh}</b></span>` : '')
       + (P.pvp ? '' : `<span><span class="lbl">Team</span><span id="amHp"><i style="width:${Math.round(100 * P.hp / P.mhp)}%"></i></span> <b>${P.hp}</b></span>`)
       + `<span><span class="lbl">${phaseName}</span><b>${timer.replace(' · ', '')}</b></span>`

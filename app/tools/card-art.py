@@ -268,6 +268,8 @@ def art(cid, d):
         d.poly(pts, fill=mix(a, w, 0.3)); d.poly([pts[0], pts[1], (350, 250)], fill=w); d.poly([pts[3], pts[4], (350, 250)], fill=mix(a, DARK, 0.3))
     elif cid == 'thruster':
         d.bullet(380, 250, 220, 45, w); d.poly([(268, 215), (268, 285), (170, 250)], fill=a); d.poly([(268, 230), (268, 270), (205, 250)], fill='#fff3c4')
+    elif cid == 'behemoth':
+        d.figure(300, 260, 2.1, a); d.figure(520, 330, 0.7, w); d.heart(560, 140, 1.0, RED); d.plus(470, 120, 0.7, '#7ddc4a')
     elif cid == 'titan-frame':
         d.rect(250, 120, 450, 390, fill=a, r=20); d.rect(280, 170, 420, 200, fill=DARK, r=6); d.rect(200, 200, 250, 330, fill=w, r=14); d.rect(450, 200, 500, 330, fill=w, r=14)
     elif cid == 'tommy-gun':
@@ -721,6 +723,8 @@ def rework(cid, d):
         d.line(pts + [pts[0]], '#c45bff', 5, caps=False)
         for x, y in ((290, 318), (410, 340), (350, 352), (250, 340), (450, 322)):
             d.rect(x - 7, y - 26, x + 7, y, fill='#efe6d2', r=3); d.ellipse(x, y - 34, 5, 9, fill='#ffb347')
+    elif cid == 'shield-spaceking' and BIGBRO_ART:
+        d.figure(380, 250, 2.4, '#7fb4ff'); d.figure(170, 360, 0.6, w); d.circle(170, 210, 46, outline=a, width=7); d.circle(170, 210, 20, fill=a)
     elif cid == 'shield-spaceking':
         gold, armor, trim = '#ffd23a', '#2f5fae', '#cfd6ea'
         for k in range(7):
@@ -1040,6 +1044,8 @@ def tcg_art(cid, d):
     else: return False
     return True
 
+
+BIGBRO_ART = True
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]; force = '--force' in sys.argv

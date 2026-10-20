@@ -1,9 +1,9 @@
 {
   "id": "bees",
   "name": "Bees",
-  "rarity": "legendary",
+  "rarity": "mod",
   "icon": "🐝",
-  "description": "Your gun fires 4 bees that chase the first enemy they see, weaving around obstacles. Much slower fire rate and much weaker bullets. You can only own one, and not with Squid.",
+  "description": "Weapon mod: your gun fires 4 bees that chase the first enemy they see, weaving around obstacles. Much slower fire rate and weaker bullets.",
   "image": "art.png",
   "modifiers": [
     {
@@ -28,5 +28,5 @@
     }
   ],
   "details": "Each bee locks onto the first enemy it sees and keeps after it until that target dies, then looks for another. Bees fly slowly (8.5 m/s, a bit slower than you run), leave the gun spread out and weave on their way in, look well ahead and keep going round walls instead of bumping into them, and don't drop. They can be blocked: a blocked bee turns on its shooter. Lives 6 s.",
-  "uniqueGroup": "swarm"
+  "weaponMod": "bees"
 }

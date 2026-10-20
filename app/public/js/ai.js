@@ -34,17 +34,24 @@ export function navNodes(g) {
     const nx = Math.max(1, Math.round((b.w - 0.7) / 0.5)), nz = Math.max(1, Math.round((b.d - 0.7) / 0.5));
     for (let i = 0; i <= nx; i++) for (let j = 0; j <= nz; j++) {
       const x = n.x0 + 0.35 + (b.w - 0.7) * (nx ? i / nx : 0.5), z = n.z0 + 0.35 + (b.d - 0.7) * (nz ? j / nz : 0.5);
-      if (!L.solids.some(q => !q.wall && q.max.y > n.top + 0.05 && q.min.y < n.top + 1.6 && x + 0.4 > q.min.x && x - 0.4 < q.max.x && z + 0.4 > q.min.z && z - 0.4 < q.max.z)) n.spots.push({ x, z });
+      if (!solidsNear(L.solids, x - 0.4, z - 0.4, x + 0.4, z + 0.4).some(q => !q.wall && q.max.y > n.top + 0.05 && q.min.y < n.top + 1.6 && x + 0.4 > q.min.x && x - 0.4 < q.max.x && z + 0.4 > q.min.z && z - 0.4 < q.max.z)) n.spots.push({ x, z });
     }
     if (n.spots.length) nodes.push(n);
   }
   for (const o of g.dyn) if (o.kind === 'piston' || o.kind === 'slide' || o.kind === 'float') nodes.push({ obj: o, kind: o.kind, hMax: o.def && o.def.hMax });
   nodes.forEach((n, i) => { n.i = i; });
+  nodes.moving = nodes.some(n => n.obj);
   g._nav = { v: g.levelVersion, level: L, nodes };
   for (const n of nodes) rectOf(n);
   return nodes;
 }
-const rectGap = (a, b) => Math.hypot(Math.max(0, a.x0 - b.x1, b.x0 - a.x1), Math.max(0, a.z0 - b.z1, b.z0 - a.z1));
+const rectGap = (a, b) => {
+  let gx = a.x0 - b.x1, gz = a.z0 - b.z1;
+  const hx = b.x0 - a.x1, hz = b.z0 - a.z1;
+  if (hx > gx) gx = hx; if (hz > gz) gz = hz;
+  if (gx < 0) gx = 0; if (gz < 0) gz = 0;
+  return Math.sqrt(gx * gx + gz * gz);
+};
 const pointGap = (x, z, n) => Math.hypot(Math.max(0, n.x0 - x, x - n.x1), Math.max(0, n.z0 - z, z - n.z1));
 const inside = (x, z, n, m = 0) => x > n.x0 + m && x < n.x1 - m && z > n.z0 + m && z < n.z1 - m;
 // Can a player with this jump/speed get from node a onto node b?
@@ -60,6 +67,13 @@ function canReach(a, b, jump, spd) {
   return gap <= spd * t * 0.8 - 0.4;
 }
 export function currentNode(p, nodes) {
+  const C = p._cn;   // v1.2.25: same spot, same answer (asked several times per bot per step, and for targets)
+  if (C && C.nodes === nodes && C.x === p.pos.x && C.y === p.pos.y && C.z === p.pos.z && C.g === p.onGround && !nodes.moving) return C.res;
+  const res = currentNode0(p, nodes);
+  p._cn = { nodes, x: p.pos.x, y: p.pos.y, z: p.pos.z, g: p.onGround, res };
+  return res;
+}
+function currentNode0(p, nodes) {
   let best = null;
   if (p.onGround || p.flying === false) {
     for (const n of nodes) {
@@ -71,11 +85,42 @@ export function currentNode(p, nodes) {
   return best;
 }
 // Breadth-first search over reachable nodes from `start`. Returns parent links.
+// v1.2.25: the fixed nodes' links are worked out once per jump/speed (they were re-tested pairwise on every search);
+// moving platforms are still tested live. Same order as testing every node, so the same paths come out.
+function navLinks(nodes, jump, spd) {
+  const C = nodes.links || (nodes.links = new Map()), key = Math.round(jump * 10) * 1000 + Math.round(spd * 10);
+  let L = C.get(key);
+  if (L) return L;
+  // longest possible hop (from the highest node down to the floor), to skip far pairs without the full test
+  let hi = 0; for (const n of nodes) if (!n.obj && n.top > hi) hi = n.top;
+  const far = jump > 0 ? spd * (jump + Math.sqrt(jump * jump + 2 * G * (hi + 1))) / G : 0.06;
+  // the fixed nodes bucketed on a grid so each node only looks at the ones within a hop
+  const cs = Math.max(4, far / 3), cells = new Map(), always = [];
+  let stamp = (nodes.lstamp || 0) + 1e6; nodes.lstamp = stamp;
+  for (const n of nodes) {
+    if (n.obj || n.floor) { always.push(n); continue; }
+    for (let i = Math.floor(n.x0 / cs); i <= Math.floor(n.x1 / cs); i++) for (let j = Math.floor(n.z0 / cs); j <= Math.floor(n.z1 / cs); j++) { const k = i * 4096 + j; let c = cells.get(k); if (!c) cells.set(k, c = []); c.push(n); }
+  }
+  L = nodes.map(a => {
+    if (a.obj) return null;
+    let cand;
+    if (a.floor) cand = nodes;
+    else {
+      const fa = jump > 0 ? spd * (jump + Math.sqrt(jump * jump + 2 * G * (a.top + 0.5))) / G * 0.8 : 0.06;   // (furthest hop from this height)
+      const st = ++stamp; cand = always.slice();
+      for (let i = Math.floor((a.x0 - fa) / cs); i <= Math.floor((a.x1 + fa) / cs); i++) for (let j = Math.floor((a.z0 - fa) / cs); j <= Math.floor((a.z1 + fa) / cs); j++) { const c = cells.get(i * 4096 + j); if (c) for (const n of c) if (n._ls !== st) { n._ls = st; cand.push(n); } }
+      cand.sort((x, y) => x.i - y.i);
+    }
+    return cand.filter(b => b !== a && (b.obj || canReach(a, b, jump, spd)));   // (moving ones kept as candidates)
+  });
+  C.set(key, L);
+  return L;
+}
 function navBFS(start, nodes, jump, spd) {
-  const par = new Map([[start, null]]), q = [start];
-  while (q.length) {
-    const a = q.shift();
-    for (const b of nodes) if (!par.has(b) && b !== a && canReach(a, b, jump, spd)) { par.set(b, a); q.push(b); }
+  const par = new Map([[start, null]]), q = [start], links = navLinks(nodes, jump, spd);
+  for (let qi = 0; qi < q.length; qi++) {
+    const a = q[qi], list = links[a.i] || nodes;
+    for (const b of list) if (!par.has(b) && b !== a && ((!a.obj && !b.obj) || canReach(a, b, jump, spd))) { par.set(b, a); q.push(b); }
   }
   return par;
 }
@@ -84,28 +129,46 @@ function pathTo(par, goal) { const out = []; for (let n = goal; n; n = par.get(n
 function planNav(g, p, A, t, D, force) {
   const nodes = navNodes(g), cur = currentNode(p, nodes);
   if (!cur) return false;
-  const s = p.stats, spd = s.moveSpeed * D.speed;
-  const par = navBFS(cur, nodes, s.jump, spd);
+  const s = p.stats, spd = Math.floor(s.moveSpeed * D.speed * 2) / 2, jmp = Math.floor(s.jump * 4) / 4;   // (v1.2.25: rounded down so bots share searches)
+  // v1.2.25: bots with the same jump/speed standing on the same node share one search (refreshed every 0.5 s for moving platforms)
+  const NC = g._nav, key = cur.i * 1e6 + Math.round(jmp * 10) * 1000 + Math.round(spd * 10);
+  if (!NC.bfs || NC.bfsT > g.time || g.time - NC.bfsT > 0.5) { NC.bfs = new Map(); NC.bfsT = g.time; }
+  let par = NC.bfs.get(key);
+  if (!par) NC.bfs.set(key, par = navBFS(cur, nodes, jmp, spd));
   const hw = NAV_HEIGHT_W[p.difficulty] ?? 0.75, want = A.want || 9;
   const tc = t ? chestOf(t) : null;
-  const score = n => {
+  // v1.2.25: the cheap part of the score first; sight lines and crowding (which only add up to +3 / subtract) are only
+  // worked out for nodes that could still win, best first. Same pick as scoring every node fully.
+  const base = n => {
     if (n.floor) return -2;
     const w = n.x1 - n.x0, d = n.z1 - n.z0;
     if (w < 0.9 || d < 0.9) return -Infinity;
     const cx = (n.x0 + n.x1) / 2, cz = (n.z0 + n.z1) / 2, h = n.hMax ? (n.top + n.hMax) / 2 : n.top;
     let sc = h * hw * 2 - 0.08 * Math.hypot(cx - p.pos.x, cz - p.pos.z);
-    if (tc) {
-      const dt = Math.hypot(cx - tc.x, cz - tc.z);
-      sc -= 0.12 * Math.abs(dt - want);
-      const eye = { x: cx, y: n.top + RULES.chest * (p.size || 1), z: cz };
-      if (!segBlocked(g.level.solids, eye, tc)) sc += 3;
-    }
-    for (const q of g.players) if (q !== p && q.alive && !q.flying && inside(q.pos.x, q.pos.z, n, -0.2) && Math.abs(q.pos.y - n.top) < 0.4) sc -= g.isEnemy(p, q) ? 1.5 : 2.5;
+    if (tc) sc -= 0.12 * Math.abs(Math.hypot(cx - tc.x, cz - tc.z) - want);
     if (n === cur) sc += force ? -1 : 1.2;   // a little stickiness so bots don't dither
     return sc;
   };
-  let best = null, bs = -Infinity;
-  for (const n of par.keys()) { if (A.bad && A.bad.has(n) && A.bad.get(n) > g.time) continue; const sc = score(n); if (sc > bs) { bs = sc; best = n; } }
+  const extra = n => {
+    if (n.floor) return 0;
+    let sc = 0;
+    if (tc) {
+      const eye = { x: (n.x0 + n.x1) / 2, y: n.top + RULES.chest * (p.size || 1), z: (n.z0 + n.z1) / 2 };
+      if (!segBlocked(g.level.solids, eye, tc)) sc += 3;
+    }
+    for (const q of g.players) if (q !== p && q.alive && !q.flying && inside(q.pos.x, q.pos.z, n, -0.2) && Math.abs(q.pos.y - n.top) < 0.4) sc -= g.isEnemy(p, q) ? 1.5 : 2.5;
+    return sc;
+  };
+  const cands = [];
+  let o = 0;
+  for (const n of par.keys()) { o++; if (A.bad && A.bad.has(n) && A.bad.get(n) > g.time) continue; const b0 = base(n); if (b0 === -Infinity) continue; cands.push({ n, o, b0, ub: n.floor ? b0 : b0 + (tc ? 3 : 0) }); }
+  cands.sort((a, b) => b.ub - a.ub || a.o - b.o);
+  let best = null, bs = -Infinity, bo = 0;
+  for (const c of cands) {
+    if (c.ub < bs) break;
+    const sc = c.b0 + extra(c.n);
+    if (sc > bs || (sc === bs && c.o < bo)) { bs = sc; best = c.n; bo = c.o; }
+  }
   if (!best || best === cur) { A.path = null; A.goal = best === cur ? cur : null; return false; }
   A.path = pathTo(par, best); A.pi = 1; A.goal = best; A.navAge = 0; A.lastToSpot = null; A.navStuck = 0;
   return true;
@@ -253,7 +316,7 @@ export function botThink(g, p, dt) {
       A.replan = (A.replan || 0) - dt;
       if (mine && theirs && mine !== theirs && (!A.path || A.goal !== theirs) && A.replan <= 0) {
         A.replan = 0.5;
-        const par = navBFS(mine, nodes, p.stats.jump, p.stats.moveSpeed);
+        const par = navBFS(mine, nodes, Math.floor(p.stats.jump * 4) / 4, Math.floor(p.stats.moveSpeed * 2) / 2);
         if (par.has(theirs)) { A.path = pathTo(par, theirs); A.pi = 1; A.goal = theirs; A.navAge = 0; }
       }
       if (mine === theirs) A.path = null;

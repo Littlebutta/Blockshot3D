@@ -61,20 +61,29 @@ const REACH = {
 };
 export const reachText = p => REACH[p] || (PATTERNS[p] ? PATTERNS[p].name.toLowerCase() : 'nearby cards');
 
-// A short AMON description for a tactic built from a shooter card (replaces the shooter's text, which talks about guns and bullets)
+// A short AMON description for a tactic built from a shooter card (replaces the shooter's text, which talks about guns and bullets).
+// v1.2.23 card text audit: short labels and a short reach name; the full wording lives in the right-click details.
+const SHORT = { hp: 'health', atk: 'damage', rate: 'attack speed', speed: 'move speed', range: 'range', splash: 'splash', armor: 'armor', regen: 'regen', lifesteal: 'lifesteal',
+  count: 'units', chain: 'bounces', slow: 'slow on hit', burn: 'burn', poison: 'poison', hex: 'hex (they take more damage)', gold: 'gold a round', interest: 'interest',
+  amp: 'to the effects of cards it reaches', growth: 'growth a round', promote: 'ranks up after each win', echo: 'units come back once', recruit: 'permanent unit a round',
+  recruitPct: 'more units a round', encore: 'double attack chance', block: 'block chance', shield: 'barrier per unit', thorns: 'thorns', drain: 'drain', pen: 'armor piercing',
+  mines: 'mines', knock: 'knockback', resist: 'damage taken', turret: 'sentry turrets', drone: 'wasp drones', bomb: 'sticky bombs', meteor: 'meteor every 5th attack', cleanse: 'removes downsides' };
+const REACH_SHORT = { self: 'This card', adj: 'Neighbors', diag: 'Corners', ring: 'All 8 around', front: 'Card in front', back: 'Card behind', row: 'Row', col: 'Column',
+  knight: 'Knight moves', bishop: 'Diagonals', rook: 'Row + column', queen: 'All 8 lines' };
 export function tacticDesc(fx, pattern) {
   const parts = [], down = [];
   for (const [k, v] of Object.entries(fx || {})) {
     if (!v) continue;
-    const [label, kind] = FX_INFO[k] || [k, 'flat'];
+    const [, kind] = FX_INFO[k] || [k, 'flat'];
     const a = Math.abs(v);
     const num = kind === 'pct' || kind === 'neg' ? Math.round(a * 100) + '% ' : kind === 'ps' ? (Math.round(a * 10) / 10) + '/s ' : kind === 'm' ? (Math.round(a * 10) / 10) + ' m ' : kind === 'flag' ? '' : (Math.round(a * 10) / 10) + ' ';
-    const short = label.split(/[:(]/)[0].trim().toLowerCase();
-    const txt = kind === 'flag' ? short : `${v < 0 !== (kind === 'neg') ? '−' : '+'}${num}${short}`;
-    ((v < 0) !== (kind === 'neg') ? down : parts).push(txt);
+    const short = SHORT[k] || (FX_INFO[k] ? FX_INFO[k][0] : k).split(/[:(]/)[0].trim().toLowerCase();
+    const bad = (v < 0) !== (kind === 'neg');
+    const txt = kind === 'flag' ? short : `${bad ? '−' : '+'}${num}${short}`;
+    (bad ? down : parts).push(txt);
   }
   if (fx && (fx.gold || fx.interest) && Object.keys(fx).every(k => k === 'gold' || k === 'interest')) return `Economy: ${parts.join(', ')}.`;
-  return `Gives ${reachText(pattern)}: ${parts.join(', ') || 'nothing'}${down.length ? `. Downside: ${down.join(', ')}` : ''}.`;
+  return `${REACH_SHORT[pattern] || cap(reachText(pattern))}: ${parts.join(', ') || 'nothing'}.${down.length ? ` Downside: ${down.join(', ')}.` : ''}`;
 }
 
 // Plain-language lines for a unit's abilities

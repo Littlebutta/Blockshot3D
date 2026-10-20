@@ -1,13 +1,22 @@
 {
   "name": "blockshot3d",
-  "version": "1.2.20",
+  "version": "1.2.26",
   "description": "Blockshot 3D - round-based arena duels with upgrade cards. Solo with bots or networked multiplayer.",
   "type": "module",
   "main": "electron/boot.cjs",
+  "scripts": {
+    "start": "node server.js",
+    "app": "electron .",
+    "build:win": "electron-packager . Blockshot3D --platform=win32 --arch=x64 --out=dist --overwrite --no-asar --ignore=^/dist --app-version=1.2.20 --icon=electron/icons/icon.ico && node tools/trim-build.cjs dist/Blockshot3D-win32-x64"
+  },
   "dependencies": {
     "koffi": "2.14.1",
     "steamworks.js": "^0.4.0",
     "three": "0.128.0",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^33.4.11"
   }
 }

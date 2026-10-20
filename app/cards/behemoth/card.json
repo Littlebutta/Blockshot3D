@@ -1,0 +1,21 @@
+{
+  "id": "behemoth",
+  "name": "Behemoth",
+  "rarity": "legendary",
+  "icon": "🦣",
+  "description": "A huge pile of health and strong regeneration. You grow bigger to match.",
+  "image": "art.png",
+  "modifiers": [
+    {
+      "stat": "health",
+      "op": "add",
+      "value": 175
+    },
+    {
+      "stat": "regen",
+      "op": "add",
+      "value": 14
+    }
+  ],
+  "details": "+175 max health and +14 health a second. Your size grows with max health like any health card (bigger body, slightly slower, easier to hit), so this one makes you a giant."
+}

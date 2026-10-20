@@ -61,7 +61,7 @@ pre{background:rgba(0,0,0,.35);padding:12px;border-radius:6px;overflow:auto;font
 #legend .sw i{width:18px;height:4px;border-radius:2px}
 #legend .note{max-width:200px}
 #crosshair{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.5)}
-#spectate,#waiting,#lockHint{position:absolute;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);
+#spectate,#waiting,#lockHint{position:absolute;left:50%;top:calc(20px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);
   padding:7px 14px;border-radius:6px;font-size:15px;white-space:nowrap}
 #lockHint{top:58%}
 #hurt{position:fixed;inset:0;pointer-events:none;box-shadow:inset 0 0 120px rgba(255,60,60,.55);opacity:0;transition:opacity .25s}
@@ -348,7 +348,7 @@ details.arena[open] summary{margin-bottom:8px}
 @media (prefers-reduced-motion: reduce){ .bar.regen{animation:none;box-shadow:0 0 0 2px rgba(95,227,120,.8)} }
 
 /* co-op boss health bar */
-#bossBar { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); width: min(560px, 60vw); pointer-events: none; z-index: 5; }
+#bossBar { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); width: min(560px, 60vw); pointer-events: none; z-index: 5; }
 #bossBar .bossHead { display: flex; justify-content: space-between; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #ffd2b0; text-shadow: 0 2px 4px #000; font-size: 15px; margin-bottom: 4px; }
 #bossBar .bossTrack { height: 14px; background: rgba(0,0,0,.6); border: 2px solid rgba(255,190,140,.55); border-radius: 4px; overflow: hidden; }
 #bossFill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff3d2e, #ff9a3a); transition: width .15s; }
@@ -498,12 +498,32 @@ button.bindkey:hover{border-color:var(--fg)}
 .pkcard .card{width:200px;margin-top:4px}
 .pkcard .hint{margin:4px 0;color:var(--muted)}
 /* Brawl mode: fighter cards along the bottom (damage % and stocks) */
-.brawlhud{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);display:flex;gap:8px;pointer-events:none;z-index:5;flex-wrap:wrap;justify-content:center;max-width:96vw}
-.brawlhud .bf{background:rgba(8,10,16,.72);border:2px solid #fff;border-radius:10px;padding:4px 12px 5px;min-width:96px;text-align:center;display:flex;flex-direction:column;line-height:1.05}
-.brawlhud .bf small{font-size:11px;opacity:.85;white-space:nowrap}
-.brawlhud .bf b{font-size:26px;font-weight:800;text-shadow:0 2px 0 #000}
-.brawlhud .bf i{font-style:normal;font-size:12px;letter-spacing:2px;color:#fff}
-.brawlhud .bf.out{opacity:.4}
+.brawlhud{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:flex;gap:10px;pointer-events:none;z-index:5;flex-wrap:wrap-reverse;justify-content:center;max-width:max(320px,calc(100vw - 600px));align-items:flex-end}
+.brawlhud .bf{position:relative;display:flex;align-items:center;gap:8px;background:linear-gradient(160deg,rgba(14,16,26,.88),rgba(6,8,14,.8));border-radius:12px;padding:6px 14px 6px 8px;min-width:150px;box-shadow:inset 4px 0 0 var(--c),0 4px 14px #0007;transform:skewX(-6deg)}
+.brawlhud .bf>*{transform:skewX(6deg)}
+.brawlhud .bf.me{outline:2px solid var(--c);outline-offset:1px;min-width:170px;padding-bottom:8px}
+.brawlhud .bbadge{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:22px;background:radial-gradient(circle at 35% 30%,#fff3,transparent 60%),var(--c);box-shadow:0 0 0 2px #0008,0 2px 6px #000a;flex:none}
+.brawlhud .bbody{display:flex;flex-direction:column;line-height:1.05;min-width:0}
+.brawlhud .bbody small{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;color:#fff}
+.brawlhud .bfname{font-size:10px;opacity:.7;white-space:nowrap}
+.brawlhud .bwins{color:#ffd84a;font-weight:700}
+.brawlhud .bpct{font-size:34px;font-weight:900;font-style:italic;text-shadow:0 3px 0 #000,0 0 10px #0008;letter-spacing:-1px}
+.brawlhud .bpct sub{font-size:16px;vertical-align:baseline;margin-left:1px}
+.brawlhud .bpct.hit{animation:bpctHit .28s}
+.brawlhud .bpct.hit.big{animation:bpctHit .45s;animation-iteration-count:2}
+@keyframes bpctHit{0%{transform:translate(0,0) scale(1.25)}25%{transform:translate(-3px,1px) scale(1.15)}50%{transform:translate(3px,-1px)}75%{transform:translate(-2px,0)}100%{transform:none}}
+.brawlhud .bpips{display:flex;gap:3px;margin-top:2px}
+.brawlhud .bpips u{width:10px;height:10px;border-radius:50%;border:1.5px solid #fff8;background:transparent;text-decoration:none}
+.brawlhud .bpips u.on{background:var(--c);border-color:#fff}
+.brawlhud .bchips{display:flex;gap:4px;margin-top:4px;font-size:10px}
+.brawlhud .bchips span{padding:1px 6px;border-radius:6px;background:#fff1;color:#fff6}
+.brawlhud .bchips span.on{background:#ffffff26;color:#fff}
+.brawlhud .bitem{position:absolute;right:-8px;top:-10px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:15px;background:var(--c);color:#000;box-shadow:0 0 10px var(--c);animation:bitemPulse 1s infinite alternate}
+@keyframes bitemPulse{to{box-shadow:0 0 18px var(--c)}}
+.brawlhud .bf.out{opacity:.38;filter:grayscale(.7)}
+.brawlclock{position:absolute;left:50%;top:20px;transform:translateX(-50%);font:900 24px system-ui;color:#fff;text-shadow:0 2px 0 #000;background:#0008;padding:2px 14px;border-radius:10px;pointer-events:none;letter-spacing:1px}
+.brawlclock.hot{color:#ff6b5d;animation:bpctHit .5s infinite}
+#hud.brawlmode #me .hpline{display:none}
 .cdstats .cdval{font-style:normal;margin-right:4px} .cdstats li.up .cdval{color:var(--good)} .cdstats li.down .cdval{color:var(--bad)}
 /* Controls list beside the settings form (moved off the title screen) */
 #settings .keysside{position:absolute;left:24px;top:50%;transform:translateY(-50%);width:300px;max-height:80vh;overflow:auto;text-align:left}
@@ -775,7 +795,7 @@ body[data-screen=pause] #legend{animation:none;opacity:1;visibility:visible}
 @media (min-width:900px){
   #over:not(.hidden){display:grid;grid-template-columns:minmax(0,520px) minmax(0,560px);column-gap:36px;justify-content:center;align-content:center;
     grid-template-areas:"title title" "show scores" "show tally" "show cash" "show loot" "show host" "show note" "show leave"}
-  #overTitle{grid-area:title} #overShow{grid-area:show;align-self:center;justify-self:center} #overScores{grid-area:scores} #overTally{grid-area:tally;width:100%}
+  #overTitle{grid-area:title} #overShow{grid-area:show;align-self:center;justify-self:center} #overScores{grid-area:scores} #overTallyWrap{grid-area:tally;width:100%} #overTally{width:100%}
   #overCash{grid-area:cash} #overLoot{grid-area:loot} #overHostRow{grid-area:host} #overPeerNote{grid-area:note} #over>.row:last-of-type{grid-area:leave}
   #over #overShow.hidden+#overScores{grid-column:1/-1}
 }
@@ -834,7 +854,7 @@ body:not([data-screen=title]) .updline{display:none}
 /* v1.2.15 round modifiers */
 .rsText{font-weight:600;font-size:18px;margin-top:6px;opacity:.85}
 .rsText:empty{display:none}
-#rmodTag{position:fixed;top:56px;left:50%;transform:translateX(-50%);padding:3px 12px;border-radius:999px;background:rgba(196,139,255,.22);border:1px solid rgba(196,139,255,.6);color:#e6d3ff;font-weight:700;font-size:13px;letter-spacing:.04em;pointer-events:auto;z-index:5}
+#rmodTag{position:fixed;top:56px;left:50%;transform:translateX(-50%);padding:4px 14px;max-width:min(560px,90vw);text-align:center;cursor:help;border-radius:999px;background:rgba(196,139,255,.22);border:1px solid rgba(196,139,255,.6);color:#e6d3ff;font-weight:700;font-size:13px;letter-spacing:.04em;pointer-events:auto;z-index:5}
 body:not([data-screen="none"]) #rmodTag{display:none}
 /* v1.2.15 kill cam */
 #killCam{position:fixed;inset:0;pointer-events:none;z-index:8;box-shadow:inset 0 0 0 4px rgba(255,70,70,.55),inset 0 0 120px rgba(0,0,0,.55)}
@@ -920,3 +940,102 @@ body:not([data-screen=title]) #suggestBtn{display:none}
 #steamAddBtn{position:fixed;left:16px;top:calc(12px + env(safe-area-inset-top,0px));z-index:5;padding:6px 12px;font-size:13px}
 #steamAddMsg{text-align:left;position:fixed;left:16px;top:calc(48px + env(safe-area-inset-top,0px));z-index:5;max-width:min(360px,calc(100vw - 32px));font-size:12.5px;line-height:1.35;padding:7px 10px;border-radius:8px;background:rgba(8,10,18,.72);color:var(--fg)}
 body:not([data-screen=title]) #steamAddBtn,body:not([data-screen=title]) #steamAddMsg{display:none}
+
+/* v1.2.21 round modifier: readable splash text, tag opens on hover (also while dead) and right after the splash */
+#roundSplash.modSplash .rsText{font-size:24px;font-weight:700;opacity:1;max-width:min(900px,86vw);margin:12px auto 0;padding:8px 18px;border-radius:10px;background:rgba(10,12,20,.82);color:#fff;line-height:1.35;text-shadow:none}
+#rmodTag span{display:none;font-weight:600;font-size:15px;letter-spacing:0;color:#fff;margin-top:4px;line-height:1.35}
+#rmodTag:hover span,#rmodTag.open span{display:block}
+#rmodTag:hover,#rmodTag.open{background:rgba(16,12,30,.92);border-radius:12px;z-index:30}
+
+/* v1.2.21 emote wheel shop */
+#cosEmotes{margin-top:10px}
+#cosEmotes h3{margin:0 0 6px}
+.emSlots{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
+.emSlot,.emItem{display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 2px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:inherit;cursor:pointer;font:inherit}
+.emSlot b,.emItem b{font-size:22px;line-height:28px}
+.emSlot span,.emItem span{font-size:10px;font-weight:700;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.emSlot.sel{border-color:var(--accent,#ffd23a);background:rgba(255,210,58,.14)}
+.emGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:4px;max-height:220px;overflow:auto;margin-top:6px}
+.emItem.locked b{filter:grayscale(.8);opacity:.6}
+.emItem.on{border-color:rgba(255,210,58,.55)}
+.emItem i{font-style:normal;font-size:10px;color:#ffd23a}
+.emItem[data-short]{opacity:.55}
+#killfeed .emoteRow .em{font-size:18px;vertical-align:-2px}
+
+/* v1.2.21 card detail: stats that boost this card */
+.cdboost{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:4px 0 10px;padding:7px 9px;border-radius:10px;background:rgba(80,220,140,.1);border:1px solid rgba(80,220,140,.45)}
+.cdboost span{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#7ef0ad;margin-right:4px}
+.cdboost b{padding:2px 9px;border-radius:999px;background:rgba(80,220,140,.22);color:#d9ffe8;font-size:13px}
+
+/* v1.2.21 match over: the table scrolls inside its box so the buttons stay on screen */
+.tallywrap{max-height:42vh;overflow:auto;margin:6px 0 14px;border-radius:8px}
+.tallywrap .tally{margin:0}
+.tallywrap .tally th{position:sticky;top:0;background:rgba(14,18,30,.96)}
+.tally td.wins{color:var(--accent);font-weight:800}
+#overScores{max-height:30vh;overflow:auto}
+
+/* v1.2.22 squid latched on you */
+#squidTip{position:fixed;left:50%;top:62%;transform:translateX(-50%);padding:8px 16px;border-radius:12px;background:rgba(70,20,90,.88);border:2px solid #c46bff;color:#fff;font-weight:700;font-size:17px;z-index:8;pointer-events:none;animation:sqPulse .35s ease-in-out infinite alternate}
+#squidTip b{color:#ffd23a}
+@keyframes sqPulse{from{transform:translateX(-50%) scale(1)}to{transform:translateX(-50%) scale(1.06)}}
+/* v1.2.25 shot budget bar (top middle) + right-click info popups */
+#budBar{position:absolute;top:3px;left:50%;transform:translateX(-50%);width:min(240px,46vw);height:13px;z-index:6;pointer-events:auto;cursor:help;opacity:.9;transition:opacity .3s}
+#budBar.low{opacity:.45}
+#budBar .budTrack{position:absolute;inset:0;border-radius:7px;background:rgba(8,10,18,.7);border:1px solid rgba(255,255,255,.18);overflow:hidden}
+#budBar .budFill{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#3fd47a,#9be05a);transition:width .25s}
+#budBar.hot .budFill{background:linear-gradient(90deg,#f0b23c,#ff7a3c)}
+#budBar .budMine{position:absolute;left:0;bottom:0;height:3px;background:#fff;box-shadow:0 0 6px #fff;transition:width .2s}
+#budBar.full .budMine{background:#ff4a4a;box-shadow:0 0 8px #ff4a4a}
+#budBar .budTxt{position:absolute;inset:0;text-align:center;font:700 9px/13px system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000;letter-spacing:.03em;white-space:nowrap}
+#budNote{position:absolute;left:50%;top:calc(50% + 34px);transform:translateX(-50%);padding:4px 12px;border-radius:8px;background:rgba(90,10,10,.8);border:1px solid #ff4a4a;color:#ffd6d6;font-weight:800;font-size:13px;pointer-events:none;z-index:7;white-space:nowrap}
+.infopop{position:fixed;z-index:10000;max-width:min(380px,92vw);background:rgba(14,18,30,.97);border:1px solid rgba(255,255,255,.2);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.5);color:#e6ebf5;font:13px/1.45 system-ui,sans-serif}
+.infopop .ipHead{display:flex;justify-content:space-between;gap:12px;padding:8px 12px;font-weight:800;border-bottom:1px solid rgba(255,255,255,.1)}
+.infopop .ipX{cursor:pointer;opacity:.7}
+.infopop .ipBody{padding:8px 12px 10px}
+.infopop .ipBody p{margin:0 0 6px}
+.peekcol.many{max-height:calc(100vh - 40px);overflow-y:auto;gap:3px;scrollbar-width:thin;pointer-events:auto}
+.peekcol.many .peektile{padding-top:2px;padding-bottom:2px}
+.peekcol.many .peektile .pn{font-size:11px}
+/* v1.2.26 lobby redesign: mode tiles, one-line mode summary, settings in tabs as compact rows (right-click for details) */
+#lobby .lobbyhead{text-align:center;margin-bottom:6px}
+#lobby .lobbyhead h2{margin:0 0 2px}
+#lobby .lobbyhead p{margin:0;font-size:13px;color:var(--muted)}
+#lobby .lobbygrid{grid-template-columns:minmax(260px,1fr) minmax(0,1.5fr);width:min(1180px,100%)}
+@media (max-width:860px){ #lobby .lobbygrid{grid-template-columns:minmax(0,1fr)} }
+#lobby .lobbyplayers #botRow{gap:6px;margin:0 0 6px}
+#lobby .lobbyplayers #playerList{max-height:min(52vh,560px);overflow:auto;padding-right:4px}
+#lobby .colorpick{margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
+#lobby .colorpick summary{cursor:pointer;color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.06em}
+#lobby .colorpick .colorstrip{grid-template-columns:repeat(10,24px);gap:6px;margin-top:8px}
+#lobby .colorpick .colorstrip button{width:24px;height:24px}
+.modetiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:6px}
+.modetiles button{font:inherit;background:rgba(255,255,255,.04);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px 6px 8px;cursor:pointer;display:grid;justify-items:center;gap:4px;transition:transform .1s,background .15s}
+.modetiles button i{font-style:normal;font-size:24px;line-height:1}
+.modetiles button b{font-size:12px;font-weight:700;white-space:nowrap}
+.modetiles button:hover:not(:disabled){transform:translateY(-1px);background:rgba(255,255,255,.08)}
+.modetiles button.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:rgba(255,207,58,.1)}
+.modetiles button:disabled{cursor:default}
+.modetiles button:disabled:not(.sel){opacity:.5}
+.modeline{margin:10px 2px 8px;font-size:14px;color:var(--fg);min-height:1.2em}
+.stabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.stabs button{font:inherit;font-size:13px;font-weight:600;background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:6px 14px;cursor:pointer;margin-bottom:-1px}
+.stabs button.sel{color:var(--fg);border-bottom-color:var(--accent)}
+.spane{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:2px 16px}
+.spane.hidden{display:none}
+.srow{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:5px 2px;border-bottom:1px solid rgba(255,255,255,.06);font-size:14px;color:var(--fg);cursor:default}
+.srow>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#lobby .srow select{width:150px;padding-top:5px;padding-bottom:5px;font-size:13px}
+.srow input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;justify-self:end}
+.srow:hover{background:rgba(255,255,255,.03)}
+#lobby .rclick{margin:10px 0 0;font-size:12px;opacity:.75}
+/* v1.2.26 tournament HUD and card trades */
+#tournHud{position:absolute;top:20px;left:50%;transform:translateX(-50%);z-index:6;background:rgba(8,10,18,.72);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:3px 12px;font:600 13px system-ui,sans-serif;color:#fff;white-space:nowrap;pointer-events:none}
+#tournHud b{color:#ff5a6a;letter-spacing:1px}
+#tournHud .lost{opacity:.25}
+#giftRow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin:10px auto 0;max-width:900px}
+#giftRow button{font:inherit;font-size:13px;background:rgba(255,255,255,.06);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px 12px;cursor:pointer}
+#giftRow .giftIn{display:flex;gap:12px;align-items:center;background:rgba(127,216,255,.1);border:1px solid #7fd8ff;border-radius:10px;padding:8px 12px}
+#giftRow .giftCard{zoom:.5;pointer-events:none}
+#giftRow .giftTip{font-size:13px;color:var(--muted);max-width:180px}
+.card .giftBtn{position:absolute;bottom:6px;right:6px;z-index:3;background:rgba(10,12,20,.8);border:1px solid #7fd8ff;border-radius:6px;font-size:15px;padding:1px 6px;cursor:pointer}
+#pickCards.giftAnswer .card{outline:2px dashed #7fd8ff;outline-offset:2px}

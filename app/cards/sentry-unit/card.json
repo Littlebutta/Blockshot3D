@@ -3,16 +3,13 @@
   "name": "Sentry Unit",
   "rarity": "uncommon",
   "icon": "🗼",
-  "description": "Commander mode: a stationary twin-gun copy of you deploys each round.",
+  "description": "A stationary twin-gun copy of you deploys next to you each round.",
   "modifiers": [
     {
       "stat": "summonTurret",
       "op": "add",
       "value": 1
     }
-  ],
-  "modes": [
-    "commander"
   ],
   "image": "art.png"
 }

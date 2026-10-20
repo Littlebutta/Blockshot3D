@@ -5,7 +5,7 @@
 // when a field is decided, whatever survives walks onto another field, until only one side is left.
 // Enemies still standing at the end cost the team health by their value. Round 20: Amon.
 // =====================================================================
-import { AMON, TIER_ODDS, UNITS, ENEMIES, BOSSES, UNIT_BY_ID, corrupted, unitValue, patternCells, squareBonus, rankCount, cardValue, preferredRow, buildAmonCards, SQUAD_TAGS, SQUAD_MAX, FACTIONS, FACTION_BY_ID, factionUnits, BUFF_WEIGHT , FACTION_TRAITS, COUNTER_WHY, COUNTER_POOLS } from './amondata.js';
+import { AMON, TIER_ODDS, UNITS, ENEMIES, BOSSES, UNIT_BY_ID, corrupted, unitValue, patternCells, squareBonus, rankCount, cardValue, preferredRow, buildAmonCards, SQUAD_TAGS, SQUAD_MAX, FACTIONS, FACTION_BY_ID, factionUnits, BUFF_WEIGHT , FACTION_TRAITS, COUNTER_WHY, COUNTER_POOLS, COMMANDERS, CMD_BY_ID, CMD_POWERS, TIER_TARGET } from './amondata.js';
 
 const N = AMON.boardSize, CELLS = N * N;
 // v1.2.6: Math.hypot(x, y) step for step as V8 computes it (same bits), but inlined: the builtin boxed its arguments and
@@ -147,7 +147,43 @@ export class AmonGame {
     }
     this.pool = this.cards.list.filter(c => !c.noShop);
     for (const p of this.players) p.gold = AMON.startGold;
-    this.openShop(true);
+    // v1.2.24 (Devin): everyone picks a commander first, with no time limit (lobby option, on by default)
+    if (this.settings.amonCmd !== false) { this.phase = 'cmd'; this.dirty = true; }
+    else this.openShop(true);
+  }
+  // ---------------------------------------------------------------- commanders (v1.2.24)
+  pickCommander(p, id) {
+    if (this.phase !== 'cmd' || !CMD_BY_ID.has(id)) return false;
+    p.cmd = id; p.ready = false; this.dirty = true;
+    this.emit({ t: 'cmdPick', p: p.id, c: id });
+    return true;
+  }
+  botCommander(p) {
+    const taken = new Set(this.players.map(q => q.cmd).filter(Boolean)), free = COMMANDERS.filter(c => !taken.has(c.id));
+    const list = free.length ? free : COMMANDERS;
+    p.cmd = list[Math.floor(this.rng() * list.length)].id;
+  }
+  cmdOf(p) { return p && p.cmd ? CMD_BY_ID.get(p.cmd) : null; }
+  // A commander's own unit cards turn up in its owner's store (about one offer in five), never above the store's tier odds.
+  cmdOffer(p, tier) {
+    const C = this.cmdOf(p); if (!C) return null;
+    const list = C.cards.filter(id => { const c = this.cards.byId.get(id); return c && c.tier <= tier; });
+    return list.length ? list[Math.floor(this.rng() * list.length)] : null;
+  }
+  // The passive bonus as stat changes on a group's (or a raider's) stats, the same keys faction traits use.
+  static applyFx(st, def, T) {
+    if (!T) return st;
+    if (T.hp) st.hp *= 1 + T.hp; if (T.atk) st.atk *= 1 + T.atk;
+    if (T.armor) st.armor += T.armor; if (T.speed) st.speed *= 1 + T.speed; if (T.rate) st.rate *= 1 + T.rate; if (T.lifesteal) st.lifesteal = Math.min(1, st.lifesteal + T.lifesteal);
+    if (T.range && def.range > 3) st.range += T.range; if (T.splash && def.atk) st.splash += T.splash; if (T.burn) st.burn += T.burn; if (T.slow) st.slow = Math.max(st.slow, T.slow);
+    if (T.shieldPct) st.shield = (st.shield || 0) + st.hp * T.shieldPct; if (T.block) st.block = Math.min(0.5, (st.block || 0) + T.block); if (T.hex) st.hex += T.hex; if (T.poison) st.poison += T.poison;
+    if (T.regenPct) st.regen += st.hp * T.regenPct; if (T.chain && def.range > 3) st.chain += T.chain;
+    return st;
+  }
+  cmdFxOf(p) {
+    const C = this.cmdOf(p); if (!C) return null;
+    if (!C.fx.random) return C.fx;
+    return { ...C.fx, ...(p.cmdRoll || {}) };
   }
   newPlayer(r) {
     return { id: r.id, name: r.name, color: r.color, isBot: !!r.isBot, difficulty: r.difficulty || 'normal', connected: true,
@@ -164,6 +200,7 @@ export class AmonGame {
     p = this.newPlayer(r);
     let g = AMON.startGold; for (let k = 2; k <= this.round; k++) g += AMON.income(Math.min(AMON.tierCapLevel, 1 + Math.floor(k / 3)));
     p.gold = Math.round(g * 0.7); p.level = Math.min(AMON.tierCapLevel, 1 + Math.floor(this.round / 3)); p.upCost = AMON.upgradeBase(p.level);
+    if (this.phase !== 'cmd') this.botCommander(p);   // (v1.2.24: too late to choose: a random commander)
     this.players.push(p); this.rollOffers(p); this.dirty = true;
     return p;
   }
@@ -180,7 +217,11 @@ export class AmonGame {
   }
   rollOffers(p) {
     p.offers = [];
-    for (let i = 0; i < this.offerCount(p); i++) p.offers.push(this.rollCard(p.level));
+    for (let i = 0; i < this.offerCount(p); i++) p.offers.push(this.rollOffer(p));
+  }
+  rollOffer(p) {
+    if (p.cmd && this.rng() < 0.2) { const c = this.cmdOffer(p, this.rollTier(p.level)); if (c) return c; }
+    return this.rollCard(p.level);
   }
   rollCard(level) {
     const tier = this.rollTier(level), list = this.pool.filter(c => c.tier === tier);
@@ -200,14 +241,14 @@ export class AmonGame {
     for (const p of this.players) {
       const army = computeArmy(p.board, this.cards.byId, p.level);
       if (!first) {
-        p.gold += AMON.income(p.level) + army.gold + Math.min(3 + Math.max(0, army.interest - 1), army.interest ? Math.floor(p.gold / 10) : 0);
+        p.gold += AMON.income(p.level) + army.gold + ((this.cmdOf(p) || { fx: {} }).fx.gold || 0) + Math.min(3 + Math.max(0, army.interest - 1), army.interest ? Math.floor(p.gold / 10) : 0);
         // Veteran Drill and friends: permanent growth for the cards they reach
         army.growth.forEach((g, i) => { if (g && p.board[i]) p.board[i].grow = (p.board[i].grow || 0) + g; });
         this.gainUnits(p, army);
       }
       p.ready = !!p.out; p.wonLast = false;   // (knocked-out Versus players just watch)
       // a locked store keeps its cards for this round (empty slots stay empty, new slots from upgrades fill in)
-      if (p.locked && !first) { p.locked = false; const n = this.offerCount(p); while (p.offers.length < n) p.offers.push(this.rollCard(p.level)); }
+      if (p.locked && !first) { p.locked = false; const n = this.offerCount(p); while (p.offers.length < n) p.offers.push(this.rollOffer(p)); }
       else { p.locked = false; this.rollOffers(p); }
       p.score = boardScore(computeArmy(p.board, this.cards.byId, p.level), p.level);
     }
@@ -314,7 +355,7 @@ export class AmonGame {
     p.gold -= p.upCost; p.level++; p.upCost = AMON.upgradeBase(p.level);
     this.emit({ t: 'storeUp', p: p.id, level: p.level });
     const n = this.offerCount(p);
-    while (p.offers.length < n) p.offers.push(this.rollCard(p.level));
+    while (p.offers.length < n) p.offers.push(this.rollOffer(p));
     return true;
   }
   action(id, a) {
@@ -325,6 +366,8 @@ export class AmonGame {
     if (a.t === 'pilot') { this.pilot(p, a.on ? a.u | 0 : 0); return; }
     if (a.t === 'pin') { const u = this.piloted(p); if (u) setPilotInput(u.pilot, a); return; }
     if (a.t === 'speed') { if (this.phase === 'battle') this.voteSpeed(p); return; }
+    if (a.t === 'cmd') { this.pickCommander(p, String(a.c || '')); return; }
+    if (a.t === 'cmdReady') { if (this.phase === 'cmd' && p.cmd) { p.ready = !!a.on; this.dirty = true; } return; }
     if (this.phase !== 'shop') return;
     let ok = false;
     switch (a.t) {
@@ -529,6 +572,8 @@ export class AmonGame {
     this.phase = 'battle'; this.phaseT = 0; this.fields = []; this.battleSeed = (this.rng() * 1e9) | 0;
     this.speed = 1; for (const p of this.players) p.speedVote = false;   // v1.2.13: every battle starts at normal speed
     for (const p of this.players) { p.upCost = Math.max(0, p.upCost - AMON.upgradeDrop); p.ready = false; }
+    const traits = Object.values(FACTION_TRAITS);
+    for (const p of this.players) { const C = this.cmdOf(p); p.cmdRoll = C && C.fx.random ? traits[Math.floor(this.rng() * traits.length)].fx : null; }
     const theme = THEMES[(this.round + this.seed) % THEMES.length];
     if (this.pvp && this.pvp.vs) {
       const plan = this.vsPlan || (this.vsPlan = this.planVs());
@@ -592,8 +637,10 @@ export class AmonGame {
   // board square -> spot on the field (side 1 is mirrored on the far side)
   cellPos(side, r, c) { const x = -30 - r * 6.5, z = (c - 2) * 14; return side === 0 ? { x, z } : { x: -x, z: -z }; }
   deployArmy(f, p, side) {
-    const army = computeArmy(p.board, this.cards.byId, p.level);
+    const army = computeArmy(p.board, this.cards.byId, p.level), C = this.cmdOf(p), T = this.cmdFxOf(p);
+    if (C) (f.cmds || (f.cmds = [])).push({ side, owner: p.id, c: C.id, t: C.power.first, n: 0 });
     for (const g of army.groups) {
+      if (T) g.st = AmonGame.applyFx({ ...g.st }, UNIT_BY_ID.get(g.unit), T);
       const inst = p.board[g.cell], at = inst && inst.at ? (side === 0 ? { x: inst.at.x, z: inst.at.z } : { x: -inst.at.x, z: -inst.at.z }) : this.cellPos(side, g.r, g.c);
       const def = UNIT_BY_ID.get(g.unit);
       const cols = Math.ceil(Math.sqrt(g.n)), sp = Math.max(1.1, def.size * 1.6);
@@ -602,6 +649,7 @@ export class AmonGame {
         const ox = ((k / cols) | 0) - (cols - 1) / 2, oz = (k % cols) - (cols - 1) / 2;
         const u = this.spawn(f, def, side, at.x + ox * sp * (side ? 1 : -1) * 0.8, at.z + oz * sp, p.id, g.st);
         u.card = g.uid; u.echo = g.echo; lead = lead || u;
+        if (T && T.stealth) u.stealthT = Math.max(u.stealthT, T.stealth);
       }
       // card effects from the shooter: sentry turrets and wasp drones deploy with the group, mines go down in front of it
       const fwd = side === 0 ? 1 : -1;
@@ -642,7 +690,7 @@ export class AmonGame {
       barrier: st.shield || 0,
       // v1.2.6: every field set later is declared here with a value that reads the same as "not set", so all units share
       // one shape (fast property access in stepUnit / separate / retarget, and no new number boxed on every store)
-      ward: 0, rally: 0, lx: NaN, lz: NaN, stuckT: 0, sx: null, sz: null, slideT: 0, slideDir: 0, wander: 0, free: false, fg: null, slot: null,
+      ward: 0, rally: 0, cmdRally: 0, cmdRallyT: 0, lx: NaN, lz: NaN, stuckT: 0, sx: null, sz: null, slideT: 0, slideDir: 0, wander: 0, free: false, fg: null, slot: null,
       pilot: null, pilotN: 0, blocker: false, dashT: 0, dashCd: 0, dashX: 0, dashZ: 0, boss: false, name: null, card: null, echo: false, echoed: false,
       burns: null, burnSrc: null, psT: 0, psLeft: 0, psLvl: 0, psSrc: null };
     f.units.push(u);
@@ -687,6 +735,11 @@ export class AmonGame {
   step(dt) {
     if (this.phase === 'battle') dt *= this.speed || 1;   // v1.2.13 (Devin): players can vote the battle up to 4x speed
     this.time += dt; this.phaseT += dt;
+    if (this.phase === 'cmd') {
+      for (const p of this.players) if ((p.isBot || !p.connected) && !p.cmd) { this.botCommander(p); this.dirty = true; }
+      if (this.players.every(p => p.cmd && (p.ready || p.isBot || !p.connected))) { for (const p of this.players) p.ready = false; this.emit({ t: 'cmdDone' }); this.openShop(true); }
+      return;
+    }
     if (this.phase === 'shop') {
       for (const p of this.players) if ((p.isBot || !p.connected) && !p.ready && this.phaseT > 0.6 + (this.players.indexOf(p) % 5) * 0.25) { this.botShop(p); this.dirty = true; }
       const limit = this.settings.amonTimer ? AMON.shopTime : 0;
@@ -840,7 +893,7 @@ export class AmonGame {
   // ---------------------------------------------------------------- network rows
   publicState() {
     return {
-      ph: this.phase, pt: Math.round(this.phaseT * 10) / 10, rd: this.round, fr: this.finalRound, ext: this.extensions, hp: this.health, mhp: this.maxHealth,
+      ph: this.phase, pt: Math.round(this.phaseT * 10) / 10, crd: this.phase === 'cmd' ? this.players.filter(p => p.ready).map(p => p.id) : null, rd: this.round, fr: this.finalRound, ext: this.extensions, hp: this.health, mhp: this.maxHealth,
       lim: this.phase === 'shop' && this.settings.amonTimer ? AMON.shopTime : 0, bt: AMON.battleTime,
       sp: [this.speed || 1, this.players.filter(q => q.speedVote && !q.isBot && q.connected).length, this.speedNeed(), ...this.players.filter(q => q.speedVote).map(q => q.id)],
       pvp: this.pvp ? { round: this.pvp.round, rounds: this.pvp.rounds, byes: this.pvp.byes || [], vs: !!this.pvp.vs } : null,
@@ -852,7 +905,7 @@ export class AmonGame {
       pl: this.players.map(p => ({ id: p.id, name: p.name, color: p.color, bot: p.isBot, on: p.connected, gold: p.gold, lv: p.level, up: p.upCost, rd: p.ready,
         of: p.offers, lk: p.locked ? 1 : 0, be: p.bench.map(x => [x.id, x.rank, Math.round((x.grow || 0) * 100), x.bonus || 0]), bo: p.board.map(x => x ? [x.id, x.rank, Math.round((x.grow || 0) * 100), x.bonus || 0, x.at ? [x.at.x, x.at.z] : 0] : 0),
         k: p.kills, d: Math.round(p.dealt), sc: p.score, pv: [p.pvpPts, p.pvpW, p.pvpL], v: p.view,
-        tm: p.team, vh: p.vsHp, out: p.out ? 1 : 0, seen: this.pvp && this.pvp.vs ? p.seen : undefined })),
+        tm: p.team, vh: p.vsHp, out: p.out ? 1 : 0, cm: p.cmd || 0, seen: this.pvp && this.pvp.vs ? p.seen : undefined })),
     };
   }
   fieldState(fid, sinceSeq = 0) {
@@ -969,6 +1022,7 @@ function curMin(u) { return u.sieged ? u.def.ab.siege.minRange : (u.def.minRange
 
 export function stepField(g, f, dt) {
   f.t += dt;
+  if (f.cmds) for (const c of f.cmds) if (f.t >= c.t) { const C = CMD_BY_ID.get(c.c); c.t = f.t + C.power.every; c.n++; cmdPower(g, f, c, C.power.k === 'random' ? { ...C.power, k: CMD_POWERS[Math.floor(Math.random() * CMD_POWERS.length)] } : C.power, C); }
   buildGrid(f);
   if (f.fgs) for (const fm of f.fgs) if (!fm.broken) {
     const ft = f.t - fm.t0; if (ft > fm.fan) fm.ax += fm.speed * dt; if (ft > fm.fan + 30) fm.broken = true;
@@ -984,7 +1038,7 @@ export function stepField(g, f, dt) {
   // field-wide auras (ward, rally) refresh twice a second
   if ((f.auraT = (f.auraT || 0) - dt) <= 0) {
     f.auraT = 0.5;
-    for (const u of units) { u.ward = 0; u.rally = 0; }
+    for (const u of units) { u.ward = 0; u.rally = u.cmdRallyT > f.t ? u.cmdRally : 0; }
     for (const u of units) {
       if (u.dead) continue;
       if (u.st.drain) {   // Drain Life: hurts every enemy close by and heals from it
@@ -1468,4 +1522,76 @@ function abilities(g, f, u, dt, ab) {
     }
     f.evs.push({ k: 'summon', x: u.x, z: u.z, s: ++f.evSeq });
   }
+}
+
+// ---------------------------------------------------------------- v1.2.24 commander powers
+// Cast for one side of a field (c = { side, owner }); P = the power. Strength grows a little every round.
+const CMD_RAND = { strike: { n: 3, r: 3, dmg: 55 }, storm: { n: 2, r: 5, dps: 24, dur: 4 }, heal: { pct: 0.15 }, rally: { atk: 0.35, dur: 5 }, shield: { pct: 0.2 },
+  freeze: { slow: 0.5, dur: 3, stun: 0.6 }, summon: { unit: 'crawlers', n: 6 }, convert: { n: 1, maxV: 40 }, snipe: { n: 2, dmg: 110 }, quake: { r: 7, dmg: 50, stun: 1.2 } };
+function clusterAt(f, side, r, skip) {   // the enemy with the most enemies of ours around it
+  let best = null, bn = 0;
+  for (const c of f.units) {
+    if (c.dead || c.side === side || c.stealthT > 0 || (skip && skip.has(c))) continue;
+    let n = 0; near(f, c.x, c.z, r, o => { if (o.side !== side && !o.dead) n++; });
+    if (n > bn) { bn = n; best = c; }
+  }
+  return best;
+}
+function cmdPower(g, f, c, P, C) {
+  if (P.k !== C.power.k) P = { ...CMD_RAND[P.k], ...P };
+  const side = c.side, sc = 1 + 0.12 * Math.max(0, (g.round || 1) - 1);
+  const mine = f.units.filter(u => !u.dead && u.side === side), foes = f.units.filter(u => !u.dead && u.side !== side);
+  if (!mine.length) return;
+  let cx = 0, cz = 0; for (const u of mine) { cx += u.x; cz += u.z; } cx /= mine.length; cz /= mine.length;
+  const ev = (k, x, z, extra = {}) => f.evs.push({ k, x, z, side, c: C.id, ...extra, s: ++f.evSeq });
+  switch (P.k) {
+    case 'strike': {
+      const hit = new Set();
+      for (let i = 0; i < P.n; i++) { const t = clusterAt(f, side, P.r, hit); if (!t) break; hit.add(t); ev('impact', t.x, t.z, { r: P.r }); blast(g, f, t.x, t.z, P.r, P.dmg * sc, null, side, false); }
+      break;
+    }
+    case 'storm': {
+      const hit = new Set();
+      for (let i = 0; i < P.n; i++) { const t = clusterAt(f, side, P.r, hit); if (!t) break; hit.add(t); f.storms.push({ x: t.x, z: t.z, r: P.r, dps: P.dps * sc, t: P.dur, side, src: null }); ev('storm', t.x, t.z, { r: P.r }); }
+      break;
+    }
+    case 'heal': for (const u of mine) u.hp = Math.min(u.max, u.hp + u.max * P.pct); ev('cmdHeal', cx, cz); break;
+    case 'rally': for (const u of mine) { u.cmdRally = P.atk; u.cmdRallyT = f.t + P.dur; u.rally = Math.max(u.rally, P.atk); } ev('cmdRally', cx, cz); break;
+    case 'shield': for (const u of mine) { u.barrier = Math.max(u.barrier, u.max * P.pct); if (P.heal) u.hp = Math.min(u.max, u.hp + u.max * P.heal); } ev('cmdShield', cx, cz); break;
+    case 'freeze': for (const u of foes) { if (u.boss) continue; u.slowT = Math.max(u.slowT, P.dur); u.slowAmt = Math.max(u.slowAmt, P.slow); if (P.stun) u.stunT = Math.max(u.stunT, P.stun); } ev('cmdFreeze', cx, cz); break;
+    case 'stealth': for (const u of mine) u.stealthT = Math.max(u.stealthT, P.dur); ev('cmdStealth', cx, cz); break;
+    case 'summon': {
+      const d = UNIT_BY_ID.get(P.unit); if (!d) break;
+      const fx = side === 0 ? -1 : 1, x0 = clamp(cx + fx * 3, -66, 66);
+      for (let i = 0; i < P.n; i++) { const u = g.spawn(f, d, side, x0 + (Math.random() - 0.5) * 4, clamp(cz + (i - (P.n - 1) / 2) * 1.6, -44, 44), c.owner, enemyStats(d, sc, sc)); u.vScale = 0.5; }
+      ev('summon', x0, cz);
+      break;
+    }
+    case 'convert': {
+      const list = foes.filter(u => !u.boss && u.def.v <= P.maxV * sc).sort((a, b) => b.def.v - a.def.v).slice(0, P.n);
+      for (const u of list) { u.side = side; u.owner = c.owner; u.tgt = null; u.retT = 0; ev('convert', cx, cz, { x2: u.x, z2: u.z }); }
+      break;
+    }
+    case 'snipe': {
+      const list = foes.filter(u => u.stealthT <= 0).sort((a, b) => b.hp - a.hp).slice(0, P.n);
+      for (const u of list) { ev('yamato', cx, cz, { x2: u.x, z2: u.z, air: u.air ? 1 : 0 }); hurt(g, f, u, P.dmg * sc, null, { raw: true }); }
+      break;
+    }
+    case 'quake': {
+      const t = clusterAt(f, side, P.r); if (!t) break;
+      near(f, t.x, t.z, P.r, o => { if (o.side !== side && !o.air && !o.dead) { hurt(g, f, o, P.dmg * sc, null, {}); o.stunT = Math.max(o.stunT, P.stun); } });
+      ev('quake', t.x, t.z, { r: P.r });
+      break;
+    }
+    case 'raise': {
+      let n = 0;
+      for (let i = f.corpses.length - 1; i >= 0 && n < P.n; i--) {
+        const k = f.corpses[i]; f.corpses.splice(i, 1); n++;
+        const u = g.spawn(f, UNIT_BY_ID.get('skeleton'), side, k.x, k.z, c.owner, enemyStats(UNIT_BY_ID.get('skeleton'), sc, sc)); u.vScale = 0.5;
+        ev('raise', k.x, k.z);
+      }
+      break;
+    }
+  }
+  f.evs.push({ k: 'cmdCast', side, c: C.id, p: P.k, s: ++f.evSeq });
 }

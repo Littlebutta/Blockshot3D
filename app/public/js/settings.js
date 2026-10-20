@@ -29,6 +29,8 @@ export const DEFAULT_SETTINGS = {
   netPredict: true,     // v30: move your own character instantly when you join someone's game (client-side prediction)
   hiModels: true,       // v28: extra model detail (squid bullet tentacles)       // v28: FPS counter in the top-right corner
   screenShake: true,
+  shakeMax: 0.5,        // v1.2.21: the most the camera may shake (0.1-1 of the old uncapped peak), however much is going on
+  emoteSlots: null,     // v1.2.21: the 8 emotes on the wheel (main.js EMOTES keys); null = the defaults
   killCam: true,        // v1.2.15: replay the round-winning kill from the killer's eyes
   feel: true,           // v1.2.0: hit-stop on kills and slow motion on the round-winning kill
   props: true,          // grass and pebbles
@@ -67,6 +69,8 @@ export function loadSettings() {
   if (!s.clientId) { s.clientId = newClientId(); saveSettings(s); }
   // v1.2.6: saved-settings revision (absent = before 1.2.6). 1: the Medium preset dropped bloom, so a saved Medium follows.
   if (!(s.rev >= 1)) { if (s.gfxPreset === 'medium') s.bloom = 'off'; s.rev = 1; saveSettings(s); }
+  // 2 (v1.2.21, Devin): middle mouse no longer opens the emote wheel unless the player binds it again
+  if (!(s.rev >= 2)) { if (s.binds && Array.isArray(s.binds.emote) && s.binds.emote[1] === 'Mouse1') s.binds = { ...s.binds, emote: [s.binds.emote[0] || 'KeyQ', ''] }; s.rev = 2; saveSettings(s); }
   return s;
 }
 export function saveSettings(s) {
@@ -90,7 +94,7 @@ export function parseSettingsFile(text) {
 export const DEFAULT_BINDS = {
   up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
   jump: ['Space', ''], shoot: ['Mouse0', ''], block: ['Mouse2', 'ShiftLeft'], reload: ['KeyR', ''],
-  view: ['Tab', ''], use: ['KeyE', ''], crouch: ['KeyC', ''], cursor: ['AltLeft', 'AltRight'], practice: ['KeyP', ''], netstats: ['KeyN', 'F2'], netlog: ['F3', ''], dash: ['KeyF', ''], emote: ['KeyQ', 'Mouse1'],
+  view: ['Tab', ''], use: ['KeyE', ''], crouch: ['KeyC', ''], cursor: ['AltLeft', 'AltRight'], practice: ['KeyP', ''], netstats: ['KeyN', 'F2'], netlog: ['F3', ''], dash: ['KeyF', ''], emote: ['KeyQ', ''],
 };
 export const BIND_LABELS = {
   up: 'Move forward', down: 'Move back', left: 'Move left', right: 'Move right', jump: 'Jump', shoot: 'Shoot (hold)',

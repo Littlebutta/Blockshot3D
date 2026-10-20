@@ -1,18 +1,15 @@
 {
   "id": "twin-protocol",
   "name": "Twin Protocol",
-  "rarity": "rare",
+  "rarity": "legendary",
   "icon": "👯",
-  "description": "Commander mode: an AI copy of your character, with all your cards, fights beside you every round.",
+  "description": "An AI copy of you, with all your cards, fights beside you every round.",
   "modifiers": [
     {
       "stat": "summonTwin",
       "op": "add",
       "value": 1
     }
-  ],
-  "modes": [
-    "commander"
   ],
   "image": "art.png"
 }

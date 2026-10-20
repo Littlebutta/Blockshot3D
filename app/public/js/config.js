@@ -10,7 +10,7 @@ export const RULES = {
   playerHeight: 1.5,
   chest: 1.0,           // height bullets are fired from (clears 0.8 m cover)
   eye: 1.35,            // first-person camera height
-  maxPlayers: 20,
+  maxPlayers: 100,   // v1.2.25 (Devin): 100-player lobbies (the entity budget keeps them playable)
   skyfallHeight: 14,    // where Sky Strike bullets spawn
   pickSeconds: 30,
   countdown: 3,         // seconds of 3-2-1 before each round      // default time limit for picking a card (lobby can change it)
@@ -321,6 +321,8 @@ export const DEFAULT_LOBBY_SETTINGS = {
   owBots: 'some',         // open world roaming bots: 'off' | 'some' | 'lots'
   amonTimer: false,       // AMON: store closes after 75 s (false = waits for everyone to press Ready)
   amonVs: false,          // AMON Versus (v28): players fight each other's armies every round (teams fight together)
+  tTeams: false,          // v1.2.26 tournament: play in the lobby teams (winners help allies, allies trade cards)
+  tLives: 4,              // v1.2.26 tournament: losses before you're knocked out (1-10)
   gmSpawn: 'auto',        // co-op: 'auto' (Game Master picks per wave; critters/turrets always trickle in) | 'waves' | 'all'
   // practice range
   dummyCount: 3,         // target dummies
