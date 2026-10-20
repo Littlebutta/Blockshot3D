@@ -1,6 +1,26 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.27', date: 'Oct 20', notes: {
+    Added: [
+      'RTS mode (experimental; new mode tile in the lobby): real-time strategy for 2 to 8 players and bots, in the spirit of StarCraft, C&C Generals and Battle for Middle-earth. Build a base, mine, train an army and destroy every enemy building.',
+      'First faction, The Steelborne: Riggers (workers that build on site and repair), Troopers, Lancers, Medics, cliff-jumping Vaulters, flamethrower Striders, Siege Crawlers with siege mode, Hornet jets, Spotter drones and Gunships. Buildings: Command Hub, Supply Depot, Refinery, Reclaimer, Barracks, Sentry Tower, Archive, Factory and Airfield.',
+      'Resources: crystal fields that run dry and flux vents (build a Refinery on one), like StarCraft. Plus endless slow income like Generals: capture derricks on the map with infantry, or build Reclaimers.',
+      'Research with cards: an Archive pulls 3 cards from the shooter\'s card pool; fit the one you take to any unit type and every unit of that type gets it, now and later. Keep cards in your hand for later.',
+      'Randomly generated highland maps, much bigger than the arenas (208 m across for 2 players up to 344 m for 8; Small and Large in the lobby). Three cliff levels joined by ramps, hills, trees and rocks, open fields for battles, expansions, derricks and watchtowers.',
+      'StarCraft vision: fog of war, explored ground stays dim, buildings are remembered where you last saw them, and you can\'t see up a cliff until something of yours is up there (air units see everything). Watchtowers show the area around them while you stand next to them. The Recon Flare lights up any spot.',
+      'RTS controls and HUD: box select, double-click or Ctrl-click for all of a type, Shift to queue orders, control groups, attack-move, patrol, hold, a 3x5 command card with hotkeys and tooltips, a minimap you can click and right-click, idle worker and army buttons, alerts with Space to jump to them, rally points, production queues and an end screen with stats.',
+      'Fullscreen (F11) keeps the mouse inside the window with a drawn cursor, so pushing against a screen edge always pans the camera. Settings has a switch for it.',
+      'Unit budget: big armies are capped when the game gets slow, holding the players with the most units first (right-click the unit bar for details). Lobby switch to turn it off.',
+      'Bots (easy, normal, hard) play the RTS: they expand, research, capture derricks and attack in waves. A player who leaves is replaced by a bot until they rejoin.',
+    ],
+    Changed: [
+      'Shot budget has no fixed cap any more (it started at 700). Nothing is limited while the host and every player run at 30 fps or better; a cap only appears when someone drops under 30, and goes away again after a few smooth seconds. The RTS unit budget aims for 30 fps too. A window in the background no longer counts as a slow player.',
+      'Right-click Shot budget in the lobby for an estimate of how many shots and entities a match with the players in the lobby puts in play.',
+      'Lobby: the left-hand panel with your color and the bot buttons is back, next to the player list and the new mode tiles. People are listed above bots, so friends joining are easy to spot.',
+      'Mode tiles use simple line icons instead of emoji.',
+    ],
+  } },
   { v: '1.2.26', date: 'Oct 20', notes: {
     Added: [
       'Tournament mode: deathmatch rules, but every round each player fights their own 1v1 in a separate arena (an odd player out makes one arena a 3-way). You only see and hear your own arena. Everyone has a set number of losses (default 4, 1 to 10 in the lobby); lose your arena and you lose one, at zero you\'re knocked out. Losers pick a card after each round. Last one standing wins.',

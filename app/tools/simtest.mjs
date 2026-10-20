@@ -1990,9 +1990,16 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
   check('shot budget: a turret counts as its owner', BG.budgetOwner(g, t) === h);
   const off = new Game({ roster: roster(4), settings: { mode: 'ffa', pickTime: 2, startPick: false, budget: false }, cards }); off.start(); off.step(1 / 60);
   check('shot budget: the lobby setting turns it off', !off.bud && off.snapshot().bud === null);
-  const B2 = { cap: 700, total: 0, share: Infinity, counts: new Map(), acc: 0, n: 0, t: 0 }; const g3 = { settings: {}, bud: B2, bullets: [], players: g.players, hostFps: 8, player: id => g.player(id) };
-  BG.budgetTick(g3, 0.6, 30);
-  check('shot budget: a slow frame rate lowers the cap', B2.cap < 700 && B2.cap >= BG.BUDGET.capMin, B2.cap);
+  const B2 = { cap: Infinity, total: 200, share: Infinity, counts: new Map(), acc: 0, n: 0, t: 0, goodT: 0 }; const g3 = { settings: {}, bud: B2, bullets: Array.from({ length: 200 }, () => ({ alive: true, ownerRef: null })), players: g.players.slice(0, 4), hostFps: 60, player: id => g.player(id) };
+  check('shot budget: no cap at the start (v1.2.27: no fixed 700)', g.snapshot().bud[1] === 0 || g.bud.cap !== Infinity);
+  BG.budgetTick(g3, 0.6, 5);
+  check('shot budget: 30+ fps keeps it uncapped', B2.cap === Infinity);
+  g3.hostFps = 25; BG.budgetTick(g3, 0.6, 5);
+  check('shot budget: under 30 fps a cap appears below the current shot count', B2.cap < 200 && B2.cap >= BG.BUDGET.capMin, B2.cap);
+  g3.hostFps = 60; g3.bullets.length = 20; for (let k = 0; k < 20; k++) BG.budgetTick(g3, 0.6, 5);
+  check('shot budget: smooth again for a few seconds drops the cap', B2.cap === Infinity, B2.cap);
+  const E = BG.budgetEstimate(10, 'ffa');
+  check('shot budget: lobby estimate grows with players', E.late > E.early && BG.budgetEstimate(20, 'ffa').late > E.late && BG.budgetEstimate(10, 'waves').ents > E.ents);
 }
 { // v1.2.26: teleport safety net, unit wins and the units-only draw, tournament mode, new map shapes
   const T = await J('tourn.js'), LG = await J('levelgen.js');
@@ -2040,6 +2047,48 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
     const rows = T.tournRows(tg); check(`${name}: the snapshot carries lives and arenas`, rows && rows.p.length === 6 && rows.L === 2);
   }
   for (const k of ['pods', 'hive', 'bowtie']) { const L = LG.generateLevel(12, k, 11, 'standard', 12); check(`map shape ${k}: built and spawns are open ground`, L.shape === k && LG.spawnPoints(L, Array(12).fill(1)).flat().every(p => L.insideFn(p.x, p.z, 1))); }
+}
+{   // v1.2.27 RTS mode (rts.js, rtsmap.js, rtsdata.js, rtsai.js)
+  const R = await J('rts.js'), RM = await J('rtsmap.js'), RD = await J('rtsdata.js');
+  for (const n of [2, 4, 8]) {
+    const M = RM.generateRtsMap(n, 900 + n, 'normal'), M2 = RM.generateRtsMap(n, 900 + n, 'normal');
+    check(`rts map ${n}p: the same seed builds the same map on every PC`, R.mapChecksum(M) === R.mapChecksum(M2));
+    const lv = new Set(M.lv); const reach = RM.flood(M.walk, M.h, M.N, RM.cellOf(M, M.starts[0].x, M.starts[0].z));
+    check(`rts map ${n}p: three cliff levels with ramps, every base reachable on foot`, lv.has(0) && lv.has(1) && lv.has(2) && M.ramps.length >= n && M.starts.every(st => reach[RM.cellOf(M, st.x, st.z)]) && M.bases.every(b => reach[RM.cellOf(M, b.x, b.z)]), `${[...lv]} ramps ${M.ramps.length}`);
+    check(`rts map ${n}p: much bigger than the arena maps, mains on high ground, crystal + flux at every base, derricks`, M.size >= 200 && M.starts.every(st => st.lv === 2) && M.bases.every(b => M.res.some(r => r.base === b.id && r.k === 'c') && M.res.some(r => r.base === b.id && r.k === 'f')) && M.derricks.length >= n, M.size);
+  }
+  { const a = RM.generateRtsMap(2, 1, 'normal'), b = RM.generateRtsMap(2, 2, 'normal'); check('rts map: another seed gives another map', R.mapChecksum(a) !== R.mapChecksum(b)); }
+  { // StarCraft vision: no seeing up a cliff from below; air sees everything
+    const M = RM.generateRtsMap(2, 77, 'normal'); let lowK = -1, highK = -1;
+    for (let k = 0; k < M.N * M.N && lowK < 0; k++) { if (M.lv[k] !== 1 || !M.walk[k] || M.ramp[k]) continue; const x = RM.cellX(M, k), z = RM.cellZ(M, k); for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2]]) { const j = RM.cellOf(M, x + dx * 2, z + dz * 2); if (j >= 0 && M.lv[j] === 2) { lowK = k; highK = j; break; } } }
+    const vis = new Uint8Array(M.N * M.N), x = RM.cellX(M, lowK), z = RM.cellZ(M, lowK);
+    RM.stampVision(M, vis, x, z, 10, 1, false); const g = vis[highK];
+    vis.fill(0); RM.stampVision(M, vis, x, z, 10, 9, true);
+    check('rts vision: ground units can\'t see up a cliff, air units can', lowK >= 0 && g !== 2 && vis[highK] === 2 && vis[lowK] === 2, `${lowK} ${g}`);
+  }
+  const rc = RD.researchCards(cards);
+  check('rts research: shooter cards turn into unit upgrades (any card, any unit)', rc.length >= 60 && rc.every(c => Object.keys(c.up).length), rc.length);
+  { // a 2 bot game: economy, infinite income, army, research, someone wins
+    const g = new R.RtsGame({ roster: roster(2).map((r, i) => ({ ...r, team: i, isBot: true, difficulty: 'hard' })), settings: { mode: 'rts' }, cards, seed: 5 });
+    let bad = 0, maxT = 0; const t1 = Date.now();
+    for (let i = 0; i < 20 * 60 * 18 && g.phase === 'play'; i++) { const a = performance.now(); g.tick(0.05); maxT = Math.max(maxT, performance.now() - a); g.takeEvents(); if (i % 200 === 0) for (const u of g.units) if (!Number.isFinite(u.x) || !Number.isFinite(u.z)) bad++; }
+    const st = g.players.map(p => p.stats);
+    check('rts bots: mine, build an army and research cards', st.every(s => s.mined > 1000 && s.built > 10) && st.some(s => s.cards > 0), JSON.stringify(st));
+    check('rts bots: units never end up at NaN', bad === 0, bad);
+    check('rts bots: a 2 player game ends with a winner', g.phase === 'over' && g.winner != null, `${g.phase} ${Math.round(g.time)}s ${Date.now() - t1}ms max tick ${maxT.toFixed(1)}`);
+  }
+  { // orders: your own units only; derricks give crystal forever; the unit budget holds the biggest army first
+    const g = new R.RtsGame({ roster: roster(2, { human: true }).map((r, i) => ({ ...r, team: i, isBot: i > 0 })), settings: { mode: 'rts' }, cards, seed: 9 });
+    const theirs = g.units.find(u => u.owner === 'p1'); const o0 = theirs.order && theirs.order.k;
+    g.action('p0', { t: 'cmd', ids: [theirs.id], o: { k: 'move', x: 0, z: 0 } });
+    check('rts orders: you can\'t order someone else\'s units', (theirs.order && theirs.order.k) === o0);
+    const p = g.player('p0'), d = g.derricks[0]; d.owner = 'p0'; const c0 = p.crystal; for (let i = 0; i < 200; i++) g.tick(0.05);
+    check('rts derricks: a held derrick makes crystal on its own', p.trickle >= RD.RTS.derrickRate && p.crystal > c0, p.trickle);
+    g.bud.cap = 20; const held = g.held(g.player('p0')) || g.held(g.player('p1'));
+    check('rts unit budget: near the cap, training is held', held === true);
+    g.setConnected('p0', false); check('rts: a player who leaves is replaced by a bot', p.isBot && g.bots.has('p0'));
+    check('rts: they get their base back on return', g.rebind('p0', 'p0b') && !g.player('p0b').isBot && g.units.some(u => u.owner === 'p0b'));
+  }
 }
 console.log(`baseline: ${passes} passed, ${fails} failed, ${(Date.now() - t0) / 1000}s`);
 if (fails) process.exitCode = 1;

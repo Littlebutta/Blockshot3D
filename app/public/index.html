@@ -143,27 +143,34 @@
 <section id="lobby" class="screen hidden">
   <div class="lobbyhead"><h2 id="lobbyTitle">Lobby</h2><p id="lobbyInfo"></p></div>
   <div class="lobbygrid">
+    <div class="panel lobbyside">
+      <div id="colorPick" class="colorpick" data-info="s_color"><h4>Your color</h4><div id="colorStrip" class="colorstrip"></div><p id="colorNote" class="hint"></p></div>
+      <div id="botRow">
+        <h4>Bots</h4>
+        <select id="botDiff" data-info="s_botDiff"><option value="easy">Easy bot</option><option value="normal" selected>Normal bot</option><option value="hard">Hard bot</option></select>
+        <div class="row left">
+          <button class="btn ghost small" id="addBot">Add bot</button>
+          <button class="btn ghost small" id="addBot10" title="Add 10 bots (lobbies hold up to 100 players)">+10</button>
+          <button class="btn ghost small" id="clearBots" title="Remove every bot">Clear bots</button>
+        </div>
+      </div>
+      <p class="hint" id="botColorHint">Host: click a bot's swatch to change its color. Picking a color a bot has swaps colors with that bot.</p>
+    </div>
     <div class="panel lobbyplayers">
       <h3>Players <span id="playerCount"></span></h3>
-      <div class="row left" id="botRow">
-        <select id="botDiff" data-info="s_botDiff"><option value="easy">Easy bot</option><option value="normal" selected>Normal bot</option><option value="hard">Hard bot</option></select>
-        <button class="btn ghost small" id="addBot">Add bot</button>
-        <button class="btn ghost small" id="addBot10" title="Add 10 bots (lobbies hold up to 100 players)">+10</button>
-        <button class="btn ghost small" id="clearBots" title="Remove every bot">Clear</button>
-      </div>
       <div id="playerList"></div>
       <div id="colorPop" class="colorpop hidden"></div>
-      <details id="colorPick" class="colorpick" data-info="s_color"><summary>Your color</summary><div id="colorStrip" class="colorstrip"></div><p id="colorNote" class="hint"></p></details>
     </div>
     <div class="panel matchpanel">
       <div id="modeBtns" class="modetiles">
-        <button type="button" data-mode="ffa" data-info="m_ffa"><i>⚔️</i><b>Deathmatch</b></button>
-        <button type="button" data-mode="tourn" data-info="m_tourn"><i>🏆</i><b>Tournament</b></button>
-        <button type="button" data-mode="waves" data-info="m_waves"><i>🛡️</i><b>Co-op waves</b></button>
-        <button type="button" data-mode="core" data-info="m_core"><i>💠</i><b>Core defense</b></button>
-        <button type="button" data-mode="open" data-info="m_open"><i>🪂</i><b>Open world</b></button>
-        <button type="button" data-mode="brawl" data-info="m_brawl"><i>🥊</i><b>Brawl</b></button>
-        <button type="button" data-mode="amon" data-info="m_amon"><i>♟️</i><b>AMON</b></button>
+        <button type="button" data-mode="ffa" data-info="m_ffa"><i class="mi mi-ffa"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/><rect x="11" y="11" width="2" height="2" class="f"/></svg></i><b>Deathmatch</b></button>
+        <button type="button" data-mode="tourn" data-info="m_tourn"><i class="mi mi-tourn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h5v6H3M3 14h5v6H3M8 7h4v10H8M12 12h5"/><rect x="17" y="9" width="4" height="6"/></svg></i><b>Tournament</b></button>
+        <button type="button" data-mode="waves" data-info="m_waves"><i class="mi mi-waves"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg></i><b>Co-op waves</b></button>
+        <button type="button" data-mode="core" data-info="m_core"><i class="mi mi-core"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg></i><b>Core defense</b></button>
+        <button type="button" data-mode="open" data-info="m_open"><i class="mi mi-open"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 7 0 0 1 18 0z"/><path d="M3 11l9 8 9-8M9 11l3 8 3-8"/><rect x="10" y="19" width="4" height="3" class="f"/></svg></i><b>Open world</b></button>
+        <button type="button" data-mode="brawl" data-info="m_brawl"><i class="mi mi-brawl"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.2 6.2L20 6l-2.8 5.6L22 14l-5.6 1.2L17 21l-5-3.6L7 21l.6-5.8L2 14l4.8-2.4L4 6l5.8 2.2z"/></svg></i><b>Brawl</b></button>
+        <button type="button" data-mode="amon" data-info="m_amon"><i class="mi mi-amon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="5" height="5"/><rect x="9.5" y="3" width="5" height="5"/><rect x="16" y="3" width="5" height="5"/><rect x="3" y="9.5" width="5" height="5"/><rect x="9.5" y="9.5" width="5" height="5" class="f"/><rect x="16" y="9.5" width="5" height="5"/><rect x="3" y="16" width="5" height="5"/><rect x="9.5" y="16" width="5" height="5"/><rect x="16" y="16" width="5" height="5"/></svg></i><b>AMON</b></button>
+        <button type="button" data-mode="rts" data-info="m_rts"><i class="mi mi-rts"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21h20M4 21v-8h6v8M10 21V9h10v12"/><path d="M15 9V3l4 1.5L15 6"/><rect x="13" y="13" width="4" height="4"/></svg></i><b>RTS</b><em class="exp">Experimental</em></button>
       </div>
       <p id="modeLine" class="modeline"></p>
       <div id="setTabs" class="stabs">
@@ -183,6 +190,9 @@
         <label class="srow" data-modes="waves core open amon" data-info="s_waveDiff"><span>Difficulty</span><select id="setWaveDiff"><option value="easy">Easy</option><option value="normal">Normal</option><option value="hard">Hard</option><option value="nightmare">Nightmare</option></select></label>
         <label class="srow" data-modes="waves core" data-info="s_coopScale"><span>Scale to squad</span><select id="setCoopScale"><option value="off">Off</option><option value="standard">Standard</option><option value="strong">Strong</option></select></label>
         <label class="srow" data-modes="waves" data-info="s_gmSpawn"><span>Enemy arrival</span><select id="setGmSpawn"><option value="auto">Game Master</option><option value="waves">In groups</option><option value="all">All at once</option></select></label>
+        <label class="srow" data-modes="rts" data-info="s_rtsSize"><span>Map size</span><select id="setRtsSize"><option value="small">Small</option><option value="normal">Normal</option><option value="large">Large</option></select></label>
+        <label class="srow" data-modes="rts" data-info="s_rtsTeams"><span>Teams</span><input type="checkbox" id="setRtsTeams"></label>
+        <label class="srow" data-modes="rts" data-info="rts_budget"><span>Unit budget</span><input type="checkbox" id="setRtsBudget"></label>
         <label class="srow" data-modes="amon" data-info="s_amonVs"><span>Opponents</span><select id="setAmonVs"><option value="0">Raider waves</option><option value="1">Each other (Versus)</option></select></label>
         <label class="srow" data-modes="amon" data-info="s_amonCmd"><span>Commanders</span><input type="checkbox" id="setAmonCmd" checked></label>
         <label class="srow" data-modes="amon" data-info="s_amonTimer"><span>Store timer</span><select id="setAmonTimer"><option value="0">Wait for Ready</option><option value="1">75 seconds</option></select></label>
@@ -313,6 +323,7 @@
     <label class="field">Max screen shake <span class="val" id="sShakeMaxV"></span><input type="range" id="sShakeMax" min="0.1" max="1" step="0.05"></label>
     <label class="check"><input type="checkbox" id="sFeel"> Hit-stop and slow motion on kills</label>
     <label class="check"><input type="checkbox" id="sKillCam"> Kill cam (replay the round-winning kill from the killer's eyes)</label>
+    <label class="check"><input type="checkbox" id="sRtsLock"> RTS: keep the mouse inside the window in fullscreen (F11), for edge panning</label>
     <label class="check"><input type="checkbox" id="sProps"> Grass and pebbles (applies next round)</label>
     <label class="field">Color-blind mode
       <select id="sCB"><option value="off">Off</option><option value="protan">Protanopia (red-weak)</option><option value="deutan">Deuteranopia (green-weak)</option><option value="tritan">Tritanopia (blue-yellow)</option></select></label>

@@ -13,6 +13,8 @@ import { loadCards, cardLines, hasDownside, validateCard, rarityOf, cardWeight }
 import { Game, CRITTER_MAX, MOUNT } from './sim.js';
 import { AmonGame } from './amon.js';
 import { AmonClient } from './amonui.js';
+import { RtsGame } from './rts.js';
+import { RtsClient } from './rtsui.js';
 import { openGallery } from './gallery.js';
 import { telegraphRows, shockRows, bossRow, COOP_DIFFICULTY, coopDiffKey, UNIT_NAMES, CORE_TWISTS } from './coop.js';
 import { prepareLevel, accel, movePlayer, groundBelow, wallSegments, seedThru, unstick } from './physics.js';
@@ -33,7 +35,7 @@ import { tipFor, TYPE_NOTES, STAT_AMP, MOD_AMP, BOOSTED_BY } from './cardinfo.js
 import { PRICES, BET, priceOf, owns, initEconomy, buy, matchPay, fmtCash } from './economy.js';
 import { loadArtAssets } from './art.js';
 import { openInfo, closeInfo, infoOpen } from './infopop.js';
-import { budgetRow, budgetView } from './budget.js';
+import { budgetRow, budgetView, budgetEstimate } from './budget.js';
 import { tournRows, giftOffer, giftAccept, giftDecline } from './tourn.js';
 
 const $ = id => document.getElementById(id);
@@ -652,7 +654,7 @@ const inPlay = () => S && S.inGame && currentScreen === 'none';
 // v1.2.11: you're out and watching the overhead camera (not the open world's free camera, the 2D view or AMON):
 // move keys / dragging pan it, the scroll wheel zooms, Jump goes back to following the fight.
 const spectating = () => {
-  if (!inPlay() || S.amon || !S.view || S.matchSettings.mode === 'open' || S.matchSettings.side) return false;
+  if (!inPlay() || S.amon || S.rts || !S.view || S.matchSettings.mode === 'open' || S.matchSettings.side) return false;
   if (S.matchSettings.commander && ['play', 'roundEnd', 'countdown'].includes(S.view.phase)) return true;   // v1.2.26 (Devin): commander mode pans like spectating
   const me = S.view.players.find(p => p.id === S.localId);
   return !!me && !me.alive && (S.view.phase === 'play' || S.view.phase === 'roundEnd');
@@ -662,6 +664,7 @@ const spectating = () => {
 function pressAction(code, e) {
   if (bound('netstats', code) && S && S.inGame && S.role !== 'solo') { netWinOpen = !netWinOpen; renderNetHud(true); }
   if (bound('netlog', code)) { if (e) e.preventDefault(); toggleNetLog(); }   // v1.2.10: record network logs to a file
+  if (S && S.rts) return;   // v1.2.27: the RTS has its own keys (rtsui.js)
   if (bound('practice', code) && S && S.inGame && S.matchSettings.mode === 'practice' && currentScreen === 'none') openPracticePanel($('practice').classList.contains('hidden'));
   if (bound('cursor', code) && S && S.inGame) {
     if (e) e.preventDefault();
@@ -684,7 +687,7 @@ function pressAction(code, e) {
   }
   if (bound('view', code) && !(e && e.altKey)) {   // (v1.2.16: not Alt+Tab)
     if (e) e.preventDefault();
-    if (S && S.amon) return;   // AMON: Tab holds the leaderboard (amonui.js)
+    if (S && (S.amon || S.rts)) return;   // AMON: Tab holds the leaderboard (amonui.js)
     if (S && S.inGame && S.matchSettings.mode === 'open' && currentScreen === 'none') {   // open world: always mouse-look; Tab picks the camera
       const meP = S.view && S.view.players.find(p => p.id === S.localId);
       if (meP && !meP.alive) { renderer.owSpecFollow = !renderer.owSpecFollow; renderer.owFly = null; toast(renderer.owSpecFollow ? 'Following a player' : 'Free camera: move keys fly, jump / crouch go up / down'); }   // out: free fly or follow
@@ -753,7 +756,7 @@ function buildWheel() {
   const c = document.createElement('div'); c.className = 'ewCenter'; el.appendChild(c);
 }
 function openWheel() {
-  if (!S || !S.inGame || S.amon || S.killCam) return;
+  if (!S || !S.inGame || S.amon || S.rts || S.killCam) return;
   buildWheel(); EW.open = true; EW.dx = EW.dy = 0; EW.sel = -1; EW.at = S.lastAimPt ? { ...S.lastAimPt } : null;
   renderer.lookFreeze = true;
   const pings = teamPings();
@@ -828,7 +831,7 @@ function bindInput() {
   if (window.steamBridge && window.steamBridge.onRefocus) window.steamBridge.onRefocus(() => renderer.checkGL());
   renderer.canvas.addEventListener('mousedown', e => {
     if (!inPlay()) return;
-    if (settings.view === 'first' && !locked() && !S.amon && !spectating()) { altFree = false; renderer.canvas.requestPointerLock(); return; }   // (AMON: the mouse runs the store, never locked)
+    if (settings.view === 'first' && !locked() && !S.amon && !S.rts && !spectating()) { altFree = false; renderer.canvas.requestPointerLock(); return; }   // (AMON: the mouse runs the store, never locked)
     keys['Mouse' + e.button] = true;
     pressAction('Mouse' + e.button, e);
   });
@@ -839,7 +842,7 @@ function bindInput() {
     if (!e.deltaY) return;
     if (spectating()) { renderer.specZoom(e.deltaY); return; }   // v1.2.11: scroll to zoom
     // v1.2.13 (Devin): the scroll wheel zooms the top-down view while you play too, and further out than the default
-    if (!inPlay() || S.amon || currentScreen !== 'none' || S.matchSettings.mode === 'open' || S.matchSettings.side || settings.view === 'first' || S.matchSettings.commander) return;
+    if (!inPlay() || S.amon || S.rts || currentScreen !== 'none' || S.matchSettings.mode === 'open' || S.matchSettings.side || settings.view === 'first' || S.matchSettings.commander) return;
     const co = S.matchSettings.core && S.view && S.view.core;
     if (co && co.cr && co.cr.some(r => r[0] === S.localId)) return;   // (Core: turning a carried block)
     settings.topZoom = Math.round(Math.min(2.2, Math.max(0.6, (settings.topZoom || 1) * (e.deltaY > 0 ? 1.1 : 1 / 1.1))) * 100) / 100;
@@ -858,7 +861,7 @@ function bindInput() {
   document.addEventListener('contextmenu', e => {
     if (cardDetailOpen()) { e.preventDefault(); closeCardDetail(); return; }
     const di = e.target.closest && e.target.closest('[data-info]');   // v1.2.25: right-click info popups (infopop.js)
-    if (di && !e.target.closest('.card')) { e.preventDefault(); if (infoOpen()) closeInfo(); else openInfo(di.dataset.info, e.clientX, e.clientY); return; }
+    if (di && !e.target.closest('.card')) { e.preventDefault(); if (infoOpen()) closeInfo(); else openInfo(di.dataset.info, e.clientX, e.clientY, infoExtra(di.dataset.info)); return; }
     const fs = e.target.closest && e.target.closest('.fsel');
     if (fs) { e.preventDefault(); openFighterDetail(fs.dataset.f); return; }
     const el = e.target.closest && e.target.closest('.card, .peekicon');
@@ -913,7 +916,7 @@ function gatherInput(local) {
     use: !blocked && held('use'),         // extraction: hold on a fallen teammate to revive them
     reload: !blocked && held('reload'),   // v1.2.15 Blood Volley: hold Reload
     blockSeq: I.blockSeq, reloadSeq: I.reloadSeq, useSeq: I.useSeq, jumpSeq: I.jumpSeq, shotSeq: I.shotSeq, ready: I.ready, rot: I.rot, aim: aim ? aim.aim : null, aimPoint: aim ? aim.aimPoint : null, fp, ots: fp && !!settings.ots,
-    fps: Math.round(NR.frame.hz()),   // v1.2.25: the host's shot budget eases off when anyone's frame rate drops
+    fps: document.hidden ? 0 : Math.round(NR.frame.hz()),   // v1.2.25: the host's shot budget eases off when anyone's frame rate drops (v1.2.27: not while alt-tabbed)
   };
 }
 
@@ -1074,6 +1077,12 @@ function sendMeta(extra = {}) {
 }
 function validateLobby() {
   const L = S.lobby;
+  if (L.settings.mode === 'rts') {   // v1.2.27: 2 to 8 commanders
+    if (L.players.length < 2) return 'Add at least one bot or wait for another player to join.';
+    if (L.players.length > 8) return 'The RTS takes up to 8 players.';
+    if (L.settings.rtsTeams && new Set(L.players.map(p => p.team || 0)).size < 2) return 'Put players on at least two different teams.';
+    return '';
+  }
   if (L.settings.mode === 'waves' || L.settings.mode === 'core' || L.settings.mode === 'practice' || L.settings.mode === 'open' || L.settings.mode === 'amon') return '';
   if (L.players.length < 2) return 'Add at least one bot or wait for another player to join.';
   if (teamPlay(L.settings) && new Set(L.players.map(p => p.team || 0)).size < 2) return 'Put players on at least two different teams.';
@@ -1086,7 +1095,7 @@ function lobbyOpenSeats() {
 }
 function renderLobby() {
   if (!S || S.inGame) return;
-  const L = S.lobby, host = isHostSide(), tdm = teamPlay(L.settings) || owSquads(L.settings) || (L.settings.mode === 'amon' && !!L.settings.amonVs);   // (v28: AMON Versus can be played in teams)
+  const L = S.lobby, host = isHostSide(), tdm = teamPlay(L.settings) || owSquads(L.settings) || (L.settings.mode === 'amon' && !!L.settings.amonVs) || (L.settings.mode === 'rts' && !!L.settings.rtsTeams);   // (v28: AMON Versus can be played in teams)
   const mode = owSquads(L.settings) ? 'tdm' : L.settings.mode;
   $('lobbyTitle').textContent = S.role === 'solo' ? 'Solo lobby' : S.role === 'host' ? `Hosting room ${S.code || '…'}` : `Room ${S.code || ''}`;
   if (S.role === 'solo') $('lobbyInfo').textContent = 'Add bots, pick a mode and start.';
@@ -1110,13 +1119,15 @@ function renderLobby() {
     const drag = tdm && (host || me) ? ` draggable="true" data-drag="${esc(p.id)}" title="Drag onto a team to move ${me ? 'yourself' : 'this player'}"` : '';
     return `<div class="prow${drag ? ' dragrow' : ''}"${drag}>${sw}<span><span data-noi18n>${esc(p.name)}</span> <span class="tag">${tag}</span></span>${diff}${team}${rm}</div>`;
   };
+  // v1.2.27 (Devin): people first, then bots, so friends joining a room are easy to spot
+  const ordered = L.players.map((p, i) => [p, i]).sort((a, b) => (a[0].isBot ? 1 : 0) - (b[0].isBot ? 1 : 0) || a[1] - b[1]);
   // v1.0.8: with teams on, the list is grouped into one box per team (drag a player onto a box to move them there)
   if (tdm) {
     $('playerList').innerHTML = ART.teamNames.map((n, t) => {
-      const rows = L.players.map((p, i) => [p, i]).filter(([p]) => (p.team || 0) === t);
+      const rows = ordered.filter(([p]) => (p.team || 0) === t);
       return `<div class="teambox${rows.length ? '' : ' empty'}" data-teambox="${t}" style="--tc:${ART.teamColors[t]}"><div class="teamhd"><span class="sw" style="background:${ART.teamColors[t]}"></span>${esc(n)} team <span class="tag">${rows.length || 'drop players here'}</span></div>${rows.map(([p, i]) => rowOf(p, i)).join('')}</div>`;
     }).join('');
-  } else $('playerList').innerHTML = L.players.map(rowOf).join('');
+  } else $('playerList').innerHTML = ordered.map(([p, i]) => rowOf(p, i)).join('');
   for (const p of L.players) {
     const d = document.querySelector(`[data-diff="${p.id}"]`); if (d) d.value = p.difficulty || 'normal';
     const tt = document.querySelector(`[data-team="${p.id}"]`); if (tt) tt.value = p.team || 0;
@@ -1132,6 +1143,7 @@ function renderLobby() {
   $('playerCount').textContent = `${L.players.length}/${RULES.maxPlayers}`;
   const practice = mode === 'practice';
   $('botRow').classList.toggle('hidden', !host || L.players.length >= RULES.maxPlayers || practice);
+  $('botColorHint').classList.toggle('hidden', !host || practice || tdm);
   // Mode buttons + only the settings that apply to the chosen mode.
   for (const b of document.querySelectorAll('#modeBtns [data-mode]')) {
     b.classList.toggle('sel', b.dataset.mode === L.settings.mode || (b.dataset.mode === 'ffa' && L.settings.mode === 'tdm'));   // v1.0.6: one Deathmatch button, teams are a setting
@@ -1156,6 +1168,7 @@ function renderLobby() {
   $('setRoundMods').value = ROUND_MODS[st.roundMods] || st.roundMods === 'random' ? st.roundMods : 'off';
   $('setSide').checked = !!st.side; $('setStocks').value = String(st.stocks || 3); $('setBrawlFlat').checked = !!st.brawlFlat; $('setBrawlItems').checked = st.brawlItems !== false; $('setBudget').checked = st.budget !== false;
   $('setCommander').checked = !!st.commander;
+  $('setRtsSize').value = st.rtsSize || 'normal'; $('setRtsTeams').checked = !!st.rtsTeams; $('setRtsBudget').checked = st.budget !== false;
   $('setPickTime').value = String(st.pickTime ?? 30); $('setAmonTimer').value = st.amonTimer ? '1' : '0'; $('setAmonVs').value = st.amonVs ? '1' : '0'; $('setAmonCmd').checked = st.amonCmd !== false;
   $('setRerolls').value = String(st.rerolls); $('setMaps').value = st.mapSource; $('setMapLava').checked = st.mapLava !== false; $('setMapIce').checked = st.mapIce !== false; $('setFF').checked = !!st.friendlyFire;
   $('setSpeed').checked = !!st.speed; $('setWaveDiff').value = coopDiffKey(st);
@@ -1174,14 +1187,24 @@ function renderLobby() {
   $('lobbyError').textContent = host ? err : 'Waiting for the host to start the match.';
 }
 const owSquads = st => st.mode === 'open' && st.owType !== 'extract' && !!st.owSquads;
-const LOBBY_INPUTS = ['setSide', 'setOwType', 'setOwBots', 'setOwSquads', 'setRounds', 'setRerolls', 'setMaps', 'setFF', 'setCombos', 'setHazards', 'setRoundMods', 'setCommander', 'setPickTime', 'setThemes', 'setSpeed', 'setWaveDiff', 'setCoopScale', 'setGmSpawn', 'setDummies', 'setDummyMode', 'setDummyHp', 'setGod', 'setAmonTimer', 'setAmonCmd', 'setBudget', 'setBrawlItems', 'setTTeams', 'setTLives'];
+const LOBBY_INPUTS = ['setSide', 'setOwType', 'setOwBots', 'setOwSquads', 'setRounds', 'setRerolls', 'setMaps', 'setFF', 'setCombos', 'setHazards', 'setRoundMods', 'setCommander', 'setPickTime', 'setThemes', 'setSpeed', 'setWaveDiff', 'setCoopScale', 'setGmSpawn', 'setDummies', 'setDummyMode', 'setDummyHp', 'setGod', 'setAmonTimer', 'setAmonCmd', 'setBudget', 'setBrawlItems', 'setTTeams', 'setTLives', 'setRtsSize', 'setRtsTeams', 'setRtsBudget'];
 let lobbyTab = 'match';
 const MODE_LINES = {
   ffa: 'Everyone for themselves (or turn on teams). Losers pick cards.', tdm: 'Team deathmatch. The losing team picks cards.',
   tourn: 'Everyone fights their own 1v1 arena each round. Run out of losses and you\'re out.', waves: 'Survive the raider waves together. Boss on the last wave.',
   core: 'Build a fort and protect the core.', open: 'Drop from the bus: battle royale or extraction.', brawl: 'Smash-style: knock rivals off the stage.',
-  amon: 'Autobattler: build a 5x5 army.', practice: 'Try any card on target dummies.',
+  amon: 'Autobattler: build a 5x5 army.', rts: 'Experimental. Real-time strategy: build a base, mine, research cards and wipe out the other bases.', practice: 'Try any card on target dummies.',
 };
+// v1.2.27 (Devin): right-click on Shot budget also estimates the shots / entities for the players in this lobby
+function infoExtra(key) {
+  if (key !== 'budget' || !S || !S.lobby || S.inGame) return null;
+  const L = S.lobby, hum = L.players.filter(p => !p.isBot).length, bots = L.players.length - hum, E = budgetEstimate(L.players.length, L.settings.mode);
+  return { more: `<p class="ipEst"><b>This lobby: ${E.n} player${E.n === 1 ? '' : 's'}</b> (${hum} ${hum === 1 ? 'person' : 'people'}, ${bots} bot${bots === 1 ? '' : 's'})<br>
+Early rounds: about <b>${E.early}</b> shots in the air, fights up to ~<b>${E.earlyPeak}</b><br>
+Late, with stacked cards: about <b>${E.late}</b>, fights up to ~<b>${E.latePeak}</b><br>
+Entities (players, turrets, clones, critters${L.settings.mode === 'waves' || L.settings.mode === 'core' ? ', raiders' : ''}): ~<b>${E.ents}</b> early, ~<b>${E.entsLate}</b> late</p>
+<p class="hint">Measured from bot matches; real numbers depend on the cards picked.</p>` };
+}
 let colorPopFor = null;
 function openColorPop(anchor) {
   const pop = $('colorPop'), L = S.lobby, colors = assignColors(L.players, L.settings.mode);
@@ -1209,7 +1232,7 @@ function setMyColor(c) {
   else S.net.send({ t: 'toHost', msg: { k: 'setColor', color: c } });
 }
 // turning teams on with everyone on one team: split them into two teams to start
-function splitTeams() { const L = S.lobby; if (teamPlay(L.settings) && new Set(L.players.map(p => p.team || 0)).size < 2) L.players.forEach((p, i) => { p.team = i % 2; }); }
+function splitTeams() { const L = S.lobby; if ((teamPlay(L.settings) || (L.settings.mode === 'rts' && L.settings.rtsTeams)) && new Set(L.players.map(p => p.team || 0)).size < 2) L.players.forEach((p, i) => { p.team = i % 2; }); }
 function bindLobby() {
   $('playerList').addEventListener('change', e => {
     const t = e.target;
@@ -1321,6 +1344,9 @@ function bindLobby() {
   $('setAmonTimer').onchange = set('amonTimer', t => t.value === '1');
   $('setAmonVs').onchange = set('amonVs', t => t.value === '1');
   $('setAmonCmd').onchange = set('amonCmd', t => t.checked);
+  $('setRtsSize').onchange = set('rtsSize', t => t.value);
+  $('setRtsBudget').onchange = set('budget', t => t.checked);
+  $('setRtsTeams').onchange = e => { if (!isHostSide()) return; S.lobby.settings.rtsTeams = e.target.checked; splitTeams(); sound.play('ui'); lobbyChanged(); };
   $('startBtn').onclick = startMatch;
   $('leaveLobby').onclick = () => leaveSession();
   $('fselLeave').onclick = () => leaveMatch();   // v28: picking has no time limit, so the pick screen has its own way out
@@ -1343,6 +1369,16 @@ function onPeerJoin(m) {
 // picks as the lobby's average card count at the next pick phase (with 50% more time). Either way they
 // watch until the next round starts.
 function lateJoin(id, name, token) {
+  if (S.rtsGame) {   // v1.2.27 RTS: your old base back (same game install), otherwise you watch
+    S.lobby.players = S.lobby.players.filter(p => p.id !== id && !(token && p.token === token)); S.lobby.players.push({ id, name, team: 0, isBot: false, token });
+    const old = token && S.rtsSeat && S.rtsSeat.get(token);
+    if (old && S.rtsGame.rebind(old, id)) { S.rtsSeat.set(token, id); const r0 = S.roster.get(old); if (r0) { S.roster.delete(old); S.roster.set(id, { ...r0, id }); } }
+    else S.rtsGame.addSpectator({ id, name, color: '#cccccc' });
+    const roster = [...S.roster.values()].map(x => ({ id: x.id, name: x.name, team: x.team, isBot: x.isBot, color: x.color, cosmetics: x.cosmetics, kind: 'hero' }));
+    S.net.send({ t: 'toPeer', id, msg: { k: 'start', roster, settings: S.matchSettings, late: true } });
+    toast(`${name} joined`); sendMeta();
+    return;
+  }
   if (S.amonGame) {   // AMON: a new seat with catch-up gold (or your old seat back)
     const lp = { id, name, team: 0, isBot: false, token };
     S.lobby.players = S.lobby.players.filter(p => p.id !== id); S.lobby.players.push(lp);
@@ -1399,6 +1435,7 @@ function onPeerLeave(m, forced) {
     S.game.removePlayer(m.id);
   }
   if (S.amonGame) S.amonGame.removePlayer(m.id);   // their board keeps fighting; the store runs itself
+  if (S.rtsGame) S.rtsGame.setConnected(m.id, false);   // v1.2.27 RTS: a bot runs their base until they come back
   if (p && !S.inGame && !forced) toast(`${p.name} left`);
   lobbyChanged();
   if (S.inGame) sendMeta();
@@ -1426,6 +1463,7 @@ function onHostMsg(m) {
     }
     case 'ping': (S.hostNet ||= new HostNetStats()).onPing(from, msg, r => S.net.send({ t: 'toPeer', id: from, msg: r })); break;
     case 'amon': if (S.amonGame) S.amonGame.action(from, msg.a); break;
+    case 'rts': if (S.rtsGame) S.rtsGame.action(from, msg.a); break;
     case 'pick': if (S.game) S.game.pick(from, msg.card); break;
     case 'giftOffer': if (S.game) giftOffer(S.game, from, msg.to, msg.card); break;   // v1.2.26 tournament card trades
     case 'giftAccept': if (S.game) giftAccept(S.game, from, msg.card); break;
@@ -1450,6 +1488,7 @@ function onPeerMsg(m) {
   switch (msg.k) {
     case 'lobby': S.lobby = msg.lobby; renderLobby(); break;
     case 'apub': case 'afield': if (S.amon) S.amon.onMsg(msg); break;
+    case 'rpub': case 'rsnap': case 'rmap': if (S.rts) S.rts.onMsg(msg); break;
     case 'fsel': fsel = msg.f; if (currentScreen !== 'fighterPick' && currentScreen !== 'pause') { show('fighterPick'); setLeaveLabels(); } renderFsel(); break;
     case 'start': beginGame(msg.roster, msg.settings, msg.late); break;
     case 'rosterAdd': if (S.inGame && msg.r && msg.r.id !== S.localId) { const prev = S.roster.get(msg.r.id); S.roster.set(msg.r.id, { ...msg.r, cards: prev ? prev.cards : [] }); scoreKeyCache = ''; } break;
@@ -1576,6 +1615,14 @@ function startMatch() {
     const free = FIGHTER_IDS.filter(id => !used.has(id)).sort(() => Math.random() - 0.5);
     roster = roster.map(r => r.isBot && !fp[r.id] ? { ...r, cosmetics: { ...(r.cosmetics || {}), model: free.length ? free.pop() : FIGHTER_IDS[Math.floor(Math.random() * FIGHTER_IDS.length)] } } : r);
   }
+  if (S.lobby.settings.mode === 'rts') {   // v1.2.27 RTS (rts.js): its own simulation, no shooter Game
+    S.game = null; S.rtsGame = new RtsGame({ roster, settings: { ...S.lobby.settings }, cards: CARDS });
+    S.rtsSeat = new Map(S.lobby.players.filter(p => p.token && !p.isBot).map(p => [p.token, p.id]));
+    S.pausers = new Set();
+    if (S.role === 'host') { S.net.send({ t: 'toAll', msg: { k: 'start', roster, settings: S.lobby.settings } }); sendMeta({ started: true }); }
+    beginGame(roster, S.lobby.settings);
+    return;
+  }
   if (S.lobby.settings.mode === 'amon') {   // AMON autobattler (amon.js): its own simulation, no shooter Game
     S.game = null; S.amonGame = new AmonGame({ roster, settings: { ...S.lobby.settings }, cards: CARDS });
     S.pausers = new Set();
@@ -1606,7 +1653,9 @@ function beginGame(roster, matchSettings, late = false) {
   S.inGame = true; S.lateJoined = !!late; S.matchSettings = { ...DEFAULT_LOBBY_SETTINGS, ...matchSettings };
   S.roster = new Map(roster.map(r => [r.id, { ...r, cards: [] }]));
   if (S.amon) { S.amon.dispose(); S.amon = null; }
+  if (S.rts) { S.rts.dispose(); S.rts = null; }
   if (S.matchSettings.mode === 'amon') { beginAmon(late); return; }
+  if (S.matchSettings.mode === 'rts') { beginRts(late); return; }
   if (S.matchSettings.mode === 'open') S.matchSettings.commander = false;
   if (S.matchSettings.mode === 'core') { S.matchSettings.mode = 'waves'; S.matchSettings.core = true; S.matchSettings.side = false; S.matchSettings.commander = false; }   // Core Defense plays as co-op waves (core.js)
   S.matchSettings.core = !!S.matchSettings.core && S.matchSettings.mode === 'waves';
@@ -1643,6 +1692,33 @@ function beginGame(roster, matchSettings, late = false) {
   sound.playMusic('battle');
 }
 
+// v1.2.27 RTS: the world, camera, controls and HUD live in rtsui.js / rtshud.js. The host also steps S.rtsGame there.
+function beginRts(late) {
+  if (S.owPrevView == null) S.owPrevView = settings.view;
+  settings.view = 'third';   // the RTS locks the mouse itself, only in fullscreen (F11)
+  if (document.pointerLockElement) document.exitPointerLock();
+  renderer.applySettings({ ...settings, view: 'third' });
+  $('practice').classList.add('hidden'); $('hud').classList.add('hidden');
+  S.outEvents = []; S.paused = false; S.offer = null;
+  S.view = { players: [], bullets: [], barricades: [], dynamics: [], shields: [], mines: [], laser: null, phase: 'rts', scores: {}, round: 0, waiting: 0 };
+  renderer.clearAll();
+  show('none');
+  const host = S.role !== 'peer';
+  S.rts = new RtsClient({
+    renderer, localId: S.localId, isHost: host, game: host ? S.rtsGame : null, cards: CARDS, keys, settings,
+    net: S.role === 'host' ? S.net : null,
+    rttOf: id => { const e = S.hostNet && S.hostNet.peers.get(id); return e && e.rtt > 0 ? e.rtt : 0; },
+    send: a => S.net.send({ t: a.t === 'ack' || a.t === 'fps' ? 'toHostU' : 'toHost', msg: { k: 'rts', a } }),   // snapshot acks go unreliable; orders reliable
+    toast, banner, sound,
+    uiOpen: () => currentScreen !== 'none' || infoOpen(),
+    openMenu: () => { if (currentScreen === 'none') togglePause(); },
+    toLobby: () => { if (S.role === 'host') S.net.send({ t: 'toAll', msg: { k: 'toLobby' } }); if (S.role !== 'peer') endToLobby(); },
+  });
+  if (late) toast('You joined a match in progress.');
+  setModeTip(S.matchSettings);
+  sound.playMusic('battle');
+}
+
 // AMON: the store / board UI and the battlefield camera live in amonui.js. The host also steps S.amonGame there.
 function beginAmon(late) {
   if (S.owPrevView == null) S.owPrevView = settings.view;
@@ -1675,13 +1751,14 @@ function setModeTip(ms) {
   let h = '';
   if (!ms) h = '';
   else if (ms.mode === 'amon') h = `<b>AMON</b>: drag cards from the store onto storage or the board to buy; drop a card on another copy to upgrade; drag onto the money bag to sell. Scroll zooms, hold middle mouse to rotate, ${k('up')}${k('left')}${k('down')}${k('right')} pans, Q / E switch fields, Tab leaderboard. In battle, click one of your units and press Space to take control of it (left button attacks, right button blocks if it can).`;
+  else if (ms.mode === 'rts') h = `<b>RTS</b>: drag a box or click to select, right-click to move, attack or mine. A then click attack-moves, Shift queues orders, Ctrl+number saves a group, double-tap the number to jump to it. Riggers build (B). F1 idle worker, F2 army, F3 research, Space last alert. Arrow keys, screen edges or the minimap move the camera; the wheel zooms. Press F11 for fullscreen: the mouse stays inside the window.`;
   else if (ms.brawl) h = `<b>Brawl</b>: ${k('jump')} again in the air for a second jump. In the air, hold ${k('dash')} to charge a dash toward the mouse and let go to dash (once per jump). Near a ledge you hang on: ${k('jump')} climbs up. While respawning, ${k('jump')} drops in early. ${k('down')} + ${k('jump')} drops through platforms.`;
   else if (ms.side) h = `<b>2D</b>: ${k('left')} / ${k('right')} move, ${k('up')} or ${k('jump')} jumps, ${k('down')} + ${k('jump')} drops through a platform. The mouse aims anywhere. Block as you touch the red wall to bounce off it.`;
   else if (ms.core) h = `<b>Core defense</b>: tap ${k('use')} to pick up a block, plank, slab, steel or spikes (or catch one as it falls). Hold ${k('use')} to show the hologram of where it goes (aim at a block to stack on top), scroll the mouse wheel to turn it, and let go to place it. Stack up to four high. No shooting while carrying; unsupported blocks fall. Hold ${k('use')} next to the core to pick it up and move it (press again to set it down). <b>Enter</b> readies you for the wave.`;
   else if (ms.mode === 'open') h = `<b>Open world</b>: ${k('jump')} leaves the bus and opens the chute. ${k('use')} gets in or out of vehicles${ms.owType === 'extract' ? ' and, held on a fallen teammate, revives them' : ''}. ${k('crouch')} crouches, ${k('view')} switches first / third person. Walk into an item to choose a card.`;
   else if (ms.mode === 'practice') h = `<b>Practice</b>: P opens the practice panel. Right click a card there for its details.`;
-  el.innerHTML = h; el.classList.toggle('hidden', !h); el.classList.toggle('top', !!(ms && (ms.mode === 'amon' || ms.brawl)));   // AMON store / brawl fighter cards sit at the bottom
-  el.classList.toggle('amon', !!(ms && ms.mode === 'amon'));
+  el.innerHTML = h; el.classList.toggle('hidden', !h); el.classList.toggle('top', !!(ms && (ms.mode === 'amon' || ms.mode === 'rts' || ms.brawl)));   // AMON store / brawl fighter cards sit at the bottom
+  el.classList.toggle('amon', !!(ms && (ms.mode === 'amon' || ms.mode === 'rts')));
   el.classList.remove('brief'); void el.offsetWidth; if (h) el.classList.add('brief');   // v1.2.0: the controls tip fades after a while (Wiki and Settings keep the full list)
 }
 // Open world loot: a small 3-card choice at the bottom of the screen. 1 / 2 / 3 (or a click with a free cursor) takes one.
@@ -1726,6 +1803,7 @@ function endToLobby() {
   renderer.applySettings(settings);
   S.inGame = false; S.game = null; S.offer = null;
   if (S.amon) { S.amon.dispose(); S.amon = null; } S.amonGame = null;
+  if (S.rts) { S.rts.dispose(); S.rts = null; } S.rtsGame = null; S.rtsSeat = null;
   if (S.lobby.settings.mode === 'practice') S.lobby.settings.mode = 'ffa';   // the practice range lives on the title screen only
   $('practice').classList.add('hidden'); $('statsWin').classList.add('hidden'); $('hoverTip').classList.add('hidden');
   renderer.clearAll();
@@ -2015,7 +2093,7 @@ function predWorld(s) {
 // v1.2.6: the window lost focus or was hidden (it then stops drawing frames): tell the host at once, reliably, that
 // every key is up, so your character doesn't keep running and shooting there until you're back.
 function peerNeutral() {
-  if (!S || !S.inGame || S.role !== 'peer' || !S.net || S.amon) return;
+  if (!S || !S.inGame || S.role !== 'peer' || !S.net || S.amon || S.rts) return;
   const q = S.inQ = (S.inQ || 0) + 1, w = { q, mx: 0, mz: 0, blockSeq: I.blockSeq, reloadSeq: I.reloadSeq, useSeq: I.useSeq, js: I.jumpSeq, ss: I.shotSeq };
   if (I.ready) w.ready = I.ready; if (I.rot) w.rot = I.rot; if (settings.view === 'first') { w.fp = 1; if (settings.ots) w.ots = 1; }
   if (S.dec) w.a = S.dec.ack(); w.t = Math.round(performance.now());
@@ -2237,7 +2315,7 @@ function renderNetHud(force) {
     $('netPing').textContent = `${NL.on ? '⏺ ' : ''}📶 ${ping == null ? '…' : Math.round(ping) + ' ms'}`;
   } else {
     const rows = S.hostNet ? S.hostNet.rows().filter(r => r[1] >= 0) : [];
-    if (S.amon && S.hostNet && t - (S.netRowsT || 0) > 1000) { S.netRowsT = t; S.net.send({ t: 'toAll', msg: { k: 'netRows', ns: S.hostNet.rows() } }); }
+    if ((S.amon || S.rts) && S.hostNet && t - (S.netRowsT || 0) > 1000) { S.netRowsT = t; S.net.send({ t: 'toAll', msg: { k: 'netRows', ns: S.hostNet.rows() } }); }
     ping = rows.length ? Math.max(...rows.map(r => r[1])) : null;
     warn = S.hostNet ? S.hostNet.worst(nameOf) : null;
     $('netPing').textContent = `${NL.on ? '⏺ ' : ''}📶 Host${ping == null ? '' : ` · worst ${Math.round(ping)} ms`}`;
@@ -3241,7 +3319,7 @@ function peekTile(r) {
 }
 // v1.0.9: the after-match screen keeps the pick screen's player column (wins + cards, hover for their build).
 function renderOverPeek() {
-  const heroes = S && !S.amon ? peekHeroes() : [], per = Math.max(3, Math.floor((innerHeight - 40) / 52));
+  const heroes = S && !S.amon && !S.rts ? peekHeroes() : [], per = Math.max(3, Math.floor((innerHeight - 40) / 52));
   $('overPeekL').innerHTML = heroes.slice(0, per).map(peekTile).join('');
   $('overPeekR').innerHTML = heroes.slice(per, per * 2).map(peekTile).join('');
 }
@@ -3249,7 +3327,7 @@ function renderOverPeek() {
 function renderPausePeek() {
   const box = $('pausePeek'); if (!box) return;
   const heroes = S ? peekHeroes() : [];
-  box.classList.toggle('hidden', !heroes.length || !!S.amon);
+  box.classList.toggle('hidden', !heroes.length || !!S.amon || !!S.rts);
   box.innerHTML = `<h4>${esc(t('Cards in play'))}</h4><div class="pprow">${heroes.map(peekTile).join('')}</div><p class="hint">${esc(t('Hover a player to see their cards. Right-click a card for details.'))}</p>`;
 }
 function fillPeekWin(id) {
@@ -3684,11 +3762,11 @@ function updateBudHud(me) {
   const blocked = !!v && performance.now() < (S.budNoteT || 0) && !!(me && me.alive);
   note.classList.toggle('hidden', !blocked);
   if (!v) return;
-  const k = Math.min(1, v.total / Math.max(1, v.cap)), mk = v.share ? Math.min(1, v.mine / v.share) : 0;
+  const k = v.cap ? Math.min(1, v.total / v.cap) : 0, mk = v.share ? Math.min(1, v.mine / v.share) : 0;
   bar.querySelector('.budFill').style.width = (k * 100).toFixed(1) + '%';
   bar.querySelector('.budMine').style.width = (v.share ? mk * 100 : 0).toFixed(1) + '%';
   bar.classList.toggle('hot', k >= 0.75); bar.classList.toggle('full', !!v.share && v.mine >= v.share); bar.classList.toggle('low', k < 0.4 && !v.share);
-  const t = v.share ? `Shots ${v.total}/${v.cap} · yours ${v.mine}/${v.share}` : `Shots ${v.total}/${v.cap}`;
+  const t = !v.cap ? `Shots ${v.total} · no cap` : v.share ? `Shots ${v.total}/${v.cap} · yours ${v.mine}/${v.share}` : `Shots ${v.total}/${v.cap}`;
   const el = bar.querySelector('.budTxt'); if (el.textContent !== t) el.textContent = t;
 }
 function updateHud() {
@@ -3871,7 +3949,7 @@ function applySettings() {
   saveSettings(settings);
   applyUiScale();
   setSlop(settings.slop);
-  renderer.applySettings(S && S.inGame && (S.matchSettings.commander || S.amon) ? { ...settings, view: 'third' } : settings);
+  renderer.applySettings(S && S.inGame && (S.matchSettings.commander || S.amon || S.rts) ? { ...settings, view: 'third' } : settings);
   if (S && S.amon && document.pointerLockElement) document.exitPointerLock();
   sound.setVolumes(settings);
 }
@@ -3882,6 +3960,7 @@ function applyAccess() {
   applyColorBlind(settings.colorBlind);
   document.querySelectorAll('#legend [data-tier]').forEach(i => { i.style.background = ART.tierColors[+i.dataset.tier]; });
   renderer.refreshLevel();
+  if (S && S.rts) S.rts.hideLevel();
   if (S && S.amon) S.amon.hideLevel();   // AMON has its own battlefield: rebuilding the arena must not show the old one
 }
 function applyLanguage(code) {
@@ -3897,7 +3976,7 @@ function bindSettings() {
     ['sEffects', 'effects', 'value'],
     ['sFov', 'fov', 'value', Number, v => v + '°'], ['sSens', 'sensitivity', 'value', Number, v => v.toFixed(2) + '×'],
     ['sMaster', 'master', 'value', Number, pct], ['sShakeMax', 'shakeMax', 'value', Number, pct], ['sMusic', 'music', 'value', Number, pct], ['sSfx', 'sfx', 'value', Number, pct],
-    ['sShadows', 'shadows', 'checked'], ['sShake', 'screenShake', 'checked'], ['sFeel', 'feel', 'checked'], ['sKillCam', 'killCam', 'checked'], ['sProps', 'props', 'checked'], ['sSlop', 'slop', 'checked'], ['sPillow', 'pillow', 'checked'],
+    ['sShadows', 'shadows', 'checked'], ['sShake', 'screenShake', 'checked'], ['sFeel', 'feel', 'checked'], ['sKillCam', 'killCam', 'checked'], ['sRtsLock', 'rtsLock', 'checked'], ['sProps', 'props', 'checked'], ['sSlop', 'slop', 'checked'], ['sPillow', 'pillow', 'checked'],
     ['sCB', 'colorBlind', 'value'], ['sRecommend', 'recommend', 'checked'],
     ['sCurAmmo', 'cursorAmmo', 'checked'], ['sHaze', 'shieldHaze', 'checked'],
     ['sLighting', 'lighting', 'value'], ['sShadowQ', 'shadowQ', 'value'], ['sAO', 'ao', 'checked'], ['sBloom', 'bloom', 'value'],
@@ -4234,7 +4313,7 @@ function frameBody(now) {
   // frame rate limit (Settings > Graphics): skip animation frames that come too soon
   const cap = +settings.fpsCap || 0;
   if (cap && now - last < 1000 / cap - 1) return;
-  if (S && S.game && S.game.settings) S.game.hostFps = NR.frame.hz();   // (v1.2.25 shot budget)
+  if (S && S.game && S.game.settings) S.game.hostFps = document.hidden ? 0 : NR.frame.hz();   // (v1.2.25 shot budget)
   fpsTick(now - last); gfxTick(now - last); loadGuard(now - last, now); NR.frame.tick();
   const gap = now - last, j0 = performance.now();
   renderNetHud();
@@ -4244,8 +4323,10 @@ function frameBody(now) {
   slopTick(dt);
   if (bannerT > 0 && (bannerT -= dt) <= 0) $('banner').classList.remove('show');
   if (splashT > 0 && (splashT -= dt) <= 0) hideSplash();
-  const ts = S && S.inGame && !S.amon ? timeScale(dt) : 1;
-  if (S && S.inGame && S.amon) {
+  const ts = S && S.inGame && !S.amon && !S.rts ? timeScale(dt) : 1;
+  if (S && S.inGame && S.rts) {
+    S.rts.frame(dt, S.paused, rawDt);
+  } else if (S && S.inGame && S.amon) {
     S.amon.frame(dt, S.paused, rawDt);   // v1.2.6: the battle clock runs on real time, so a slow host doesn't slow the battle down
   } else {
     if (S && S.inGame) {
@@ -4254,8 +4335,8 @@ function frameBody(now) {
     }
   }
   const j1 = performance.now();
-  if (S && S.inGame && S.amon) {
-    // AMON draws its own field (amonui.js)
+  if (S && S.inGame && (S.amon || S.rts)) {
+    // AMON / RTS draw their own field (amonui.js, rtsui.js)
   } else if (S && S.inGame) {
     if (S.resetYaw) {
       const lp = S.view.players.find(p => p.id === S.localId);
@@ -4288,7 +4369,7 @@ function startBackgroundHost() {
   try {
     const w = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 8)'], { type: 'text/javascript' })));
     w.onmessage = () => {
-      if (!S || !S.inGame || S.role !== 'host' || S.amon || !S.game) return;
+      if (!S || !S.inGame || S.role !== 'host' || S.amon || S.rts || !S.game) return;
       const t = performance.now(), since = t - simLast;
       if (since < (t - lastRaf < 150 ? 22 : 30)) return;   // frames are keeping up (or, hidden: about 30 a second)
       hostFrame(since < 300 ? since / 1000 : 1 / 30, S.lastTs || 1); simLast = t;   // (steps of 35 ms at most inside)
@@ -4372,5 +4453,5 @@ async function boot() {
   if (settings.firstRun && !autoJoin && !S) setTimeout(() => { if (!S) quietGfxCheck(); }, 1500);   // v1.1.9 (no intro)
 }
 // Development helper: inspect the running session from the browser console (blockshot.session).
-window.blockshot = { get session() { return S; }, get tview() { return S && S.view ? tournView(S.view) : null; }, get cards() { return CARDS; }, get renderer() { return renderer; }, settings };
+window.blockshot = { get session() { return S; }, get cards() { return CARDS; }, get renderer() { return renderer; }, settings };
 boot();
