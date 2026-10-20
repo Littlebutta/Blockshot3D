@@ -303,7 +303,7 @@ export class Game {
     inp.blockSeq = i.blockSeq | 0; inp.reloadSeq = i.reloadSeq | 0; inp.useSeq = i.useSeq | 0; inp.rot = (i.rot | 0) & 7;   // rot: Core Defense carry turn (scroll wheel)
     inp.jumpSeq = (i.jumpSeq ?? i.js) | 0; inp.shotSeq = (i.shotSeq ?? i.ss) | 0;   // v1.2.6: press counters, so a quick tap is never lost between two steps
     if (!p.alive || p.reviving) { p.fx.jSeq = inp.jumpSeq; p.lastShotSeq = inp.shotSeq; }   // (presses made while down don't fire once you're back)
-    if (fin(i.fps)) p.fps = clamp(i.fps, 1, 1000);   // v1.2.25: frame rate, for the shot budget
+    if (fin(i.fps)) p.fps = i.fps > 0 ? clamp(i.fps, 1, 1000) : 0;   // (0 = window in the background: not counted)   // v1.2.25: frame rate, for the shot budget
     if (i.q != null) { const q = i.q | 0; if (q !== inp.q) p.inAt = this.time; inp.q = q; }   // v30: input sequence, echoed back for prediction (v1.2.9: inAt, see predRows)
     if (i.aim && fin(i.aim.x) && fin(i.aim.y) && fin(i.aim.z)) inp.aim = norm(SIDE_ON ? { x: i.aim.x, y: i.aim.y, z: 0 } : i.aim);
     if (SIDE_ON) inp.mz = 0;

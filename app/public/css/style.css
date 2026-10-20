@@ -993,6 +993,7 @@ body:not([data-screen=title]) #steamAddBtn,body:not([data-screen=title]) #steamA
 .infopop .ipX{cursor:pointer;opacity:.7}
 .infopop .ipBody{padding:8px 12px 10px}
 .infopop .ipBody p{margin:0 0 6px}
+.infopop .ipEst{border-top:1px solid var(--line);padding-top:6px;line-height:1.5}
 .peekcol.many{max-height:calc(100vh - 40px);overflow-y:auto;gap:3px;scrollbar-width:thin;pointer-events:auto}
 .peekcol.many .peektile{padding-top:2px;padding-bottom:2px}
 .peekcol.many .peektile .pn{font-size:11px}
@@ -1000,17 +1001,26 @@ body:not([data-screen=title]) #steamAddBtn,body:not([data-screen=title]) #steamA
 #lobby .lobbyhead{text-align:center;margin-bottom:6px}
 #lobby .lobbyhead h2{margin:0 0 2px}
 #lobby .lobbyhead p{margin:0;font-size:13px;color:var(--muted)}
-#lobby .lobbygrid{grid-template-columns:minmax(260px,1fr) minmax(0,1.5fr);width:min(1180px,100%)}
+#lobby .lobbygrid{grid-template-columns:minmax(200px,230px) minmax(260px,1fr) minmax(0,1.5fr);width:min(1340px,100%)}
+@media (max-width:1100px){ #lobby .lobbygrid{grid-template-columns:minmax(0,1fr) minmax(0,1.5fr)} #lobby .lobbyside{grid-column:1/-1;position:static} }
 @media (max-width:860px){ #lobby .lobbygrid{grid-template-columns:minmax(0,1fr)} }
-#lobby .lobbyplayers #botRow{gap:6px;margin:0 0 6px}
+#lobby .lobbyside{position:sticky;top:0;display:grid;gap:12px;align-content:start}
+#lobby .lobbyside h4{margin:0 0 6px;color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.06em}
+#lobby .lobbyside #botRow select{width:100%;margin-bottom:6px}
+#lobby .lobbyside #botRow .row{gap:6px;margin:0;flex-wrap:wrap}
+#lobby .lobbyside .hint{margin:0;font-size:12px}
 #lobby .lobbyplayers #playerList{max-height:min(52vh,560px);overflow:auto;padding-right:4px}
-#lobby .colorpick{margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
-#lobby .colorpick summary{cursor:pointer;color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.06em}
-#lobby .colorpick .colorstrip{grid-template-columns:repeat(10,24px);gap:6px;margin-top:8px}
-#lobby .colorpick .colorstrip button{width:24px;height:24px}
+#lobby .colorpick{margin-top:0}
+#lobby .colorpick .colorstrip{grid-template-columns:repeat(6,26px);gap:6px}
+#lobby .colorpick .colorstrip button{width:26px;height:26px}
 .modetiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:6px}
 .modetiles button{font:inherit;background:rgba(255,255,255,.04);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px 6px 8px;cursor:pointer;display:grid;justify-items:center;gap:4px;transition:transform .1s,background .15s}
-.modetiles button i{font-style:normal;font-size:24px;line-height:1}
+.modetiles button i{font-style:normal;line-height:1;width:26px;height:26px;display:block;color:var(--muted)}
+.modetiles button i svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+.modetiles button i svg .f{fill:currentColor}
+.modetiles button.sel i,.modetiles button:hover:not(:disabled) i{color:var(--accent)}
+.modetiles button{position:relative}
+.modetiles button .exp{position:absolute;top:-7px;right:-4px;font:700 9px system-ui;font-style:normal;letter-spacing:.04em;text-transform:uppercase;background:#c95b2a;color:#fff;border-radius:6px;padding:1px 5px;pointer-events:none}
 .modetiles button b{font-size:12px;font-weight:700;white-space:nowrap}
 .modetiles button:hover:not(:disabled){transform:translateY(-1px);background:rgba(255,255,255,.08)}
 .modetiles button.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:rgba(255,207,58,.1)}

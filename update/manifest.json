@@ -1,6 +1,6 @@
 {
- "version": "1.2.26",
- "built": "2026-10-20T06:08:04.392Z",
+ "version": "1.2.27",
+ "built": "2026-10-20T19:25:35.051Z",
  "files": {
   ".gitignore": [
    "0068ba7ed54e738118cfb5244ca651fe18f44c4ef3e5236241677de513dfaa9d",
@@ -2119,16 +2119,16 @@
    554
   ],
   "package.json": [
-   "30e2892ecb7f39d8406e3f8337579ab73fa712f0dae95345e90362b652d32658",
+   "626163789f53e0955355fb0e9db3099cb1f19e223e2ffd81bf86bb1563c9f884",
    749
   ],
   "public/css/style.css": [
-   "b6a666951b29a9e6a9cda7139ddd3010e5291d86edfe66fce5c25f5528b7bea6",
-   88254
+   "10281644f0057ca7b04b3153560da3fb757536f205abb61d41cb58f80feebf77",
+   89223
   ],
   "public/index.html": [
-   "3dad20ab556eabdc5429dff687387aaffb328c195cf2915d42be9cee43202cfe",
-   41059
+   "e86bba91066c557c03a47946a8d21d1b50a37ed1f2e504f1a5e35e50fc09869e",
+   43713
   ],
   "public/js/a11y.js": [
    "01493123a592d8868fe91a15be7a72b6c8687f8deac62c1aff7898c1aca4b8c3",
@@ -2171,8 +2171,8 @@
    22535
   ],
   "public/js/budget.js": [
-   "225620934a24e7cb6f61971c218afc66acffc80527a2ee8d15bd0bd5e6ccad6d",
-   5277
+   "dc4689536a88a8b497b9deb0996d0336604fbd5e2251c018a5d512c6ecc05062",
+   6536
   ],
   "public/js/cardinfo.js": [
    "6c40ba0d38aed9466502f7763afeb7c954de8954d3c2de00825473d7051dcc44",
@@ -2183,8 +2183,8 @@
    13476
   ],
   "public/js/config.js": [
-   "e483c50b00d54fa2dcb2244ac189e324049ed294b6ed0fa4d19b00705210b673",
-   35821
+   "1f8e5a38009078148b527535bdb3a636af634f173a8508e8e0f3aef09df9db3e",
+   35982
   ],
   "public/js/coop.js": [
    "9282d7cdc1bf3eb0ee1708719083a3a8adca2a71c6c7248e6f63b21dea9b4400",
@@ -2219,16 +2219,16 @@
    24659
   ],
   "public/js/infopop.js": [
-   "a5aab68446bcfc5fc4d1c644fd8584eb47f202747c2de28453e84d165c6f259b",
-   9716
+   "88853ccaf3defadbb5986193fdb47921351ef9d60acfa6db7ef78cf2c2ba56e5",
+   11605
   ],
   "public/js/levelgen.js": [
    "58b7c92b10512abb4258c52dc7d492caa24f80d43ba5b0b4fff73835d512df55",
    40313
   ],
   "public/js/main.js": [
-   "f06fb7e27dcc190f771001380c259f772ca89fdca6e6f6b8b61639fcaf8e5c94",
-   328108
+   "26612f47f07bdc2ac14db5448582a5e5804d6e06765216f6e7f9cbeda4d02399",
+   334999
   ],
   "public/js/net.js": [
    "d415f683a93c1c3320d56977ba98fe00506efc8dacc6d989f8826a6d8c86a2de",
@@ -2251,8 +2251,8 @@
    27697
   ],
   "public/js/patchnotes.js": [
-   "426101efdce21f15592900c0ab84bbaa1c75347f12dd1d2630a0ec0aa4930f20",
-   16937
+   "aaa46a635f8005de011b67ef6dc033878d4406edf12475a8b1ac0ed05dd04d5b",
+   20270
   ],
   "public/js/physics.js": [
    "349c6151380f842e12e4a1aae299634bce6d4a913dc0af8eb47914864e5d8086",
@@ -2270,13 +2270,41 @@
    "68f0d19eb699b5354e1e85708e3623fe01797c728db60d260b3e644b35cb9741",
    10124
   ],
+  "public/js/rts.js": [
+   "1bff10096be00d684c209f930fd565993d031f18a3b17087d1254db44c695d16",
+   83513
+  ],
+  "public/js/rtsai.js": [
+   "3b506e2e9ea93fff8e4efd91005d0b03846026a9bf391e9130ff187d277860ae",
+   16894
+  ],
+  "public/js/rtsart.js": [
+   "d3454385fa17a551fb032062c959ea4de894622014d5946b910ad60bbe11c620",
+   24474
+  ],
+  "public/js/rtsdata.js": [
+   "0d2d5ce6c3c3b6d0c431d354aecfe9acba0f0d21ec13d12da5fcdf4791c1255a",
+   14548
+  ],
+  "public/js/rtshud.js": [
+   "775f582025ce8b4faf33c658d60b0770ca249cd79f4d7e318e14f45abd7c42e8",
+   53741
+  ],
+  "public/js/rtsmap.js": [
+   "0fad57d97162a2d0a0a54cf869aa4b4879624154638c392e6f528f6a5ab6278d",
+   24189
+  ],
+  "public/js/rtsui.js": [
+   "736e152cea3e2e6e7e8a5390373dc4a69b655b03593d1cb91e1ae89d0369a649",
+   60076
+  ],
   "public/js/scenery.js": [
    "14b0030fd9ea016b658179f9d5b43f770af21d249268300b5b39264435e3ff6c",
    30454
   ],
   "public/js/settings.js": [
-   "a9b5b08f83a8416a7ea1df09b3ef88320c4cb669b8325b3ed3ebfd7307ca9d36",
-   9240
+   "c3e561da5e22ec28ed495219412fcb58eb12b8d56d487e2f180ca7446330dfff",
+   9383
   ],
   "public/js/side.js": [
    "b9a3915b6085365e0ffadc8a589603a70ade68d62383e425f04b9695afeac523",
@@ -2287,8 +2315,8 @@
    17528
   ],
   "public/js/sim.js": [
-   "1851ed691464ffabf5c5a2bf683435b2bf3455806ee1c25364a2c25375519155",
-   284288
+   "3709612d8410577a3926f0ad30f28b1e4ef3209b0676a077933171e59fc62d56",
+   284353
   ],
   "public/js/slop.js": [
    "9dc85c181fa4b81008b22eeb11ad788a5774e5e7f4526200377d6ec34d6f9932",
@@ -2359,8 +2387,8 @@
    2422
   ],
   "tools/simtest.mjs": [
-   "c1e4a13dfd1e4f28f720b479a49c6ccad14f781eac475cb494ff04338f5c0d05",
-   171861
+   "25a3b31f3269c20d1cccf3f13b7af528efd10608b57ef055575403730dff51d8",
+   177283
   ],
   "tools/trim-build.cjs": [
    "f14cc62bb2ab8633c47b31e660b4a38c3774977e6e95d099f8a71b9b6c4d288d",

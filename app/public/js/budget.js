@@ -1,14 +1,16 @@
-// v1.2.25 entity / bullet budget (Devin): keeps big lobbies playable (at least ~10 fps) by capping how many shots can be
-// in the air at once. It never removes a shot that is already flying: when the cap is near, the players (and their
-// turrets / clones / critters) with the most shots out are stopped from firing new ones first, until some of theirs land.
-// The cap adapts: it shrinks while the host's sim step runs long or anyone's frame rate drops, and grows back when it's fine.
+// v1.2.25 entity / bullet budget (Devin): keeps big lobbies playable by limiting how many shots can be in the air at once.
+// It never removes a shot that is already flying: when the limit is near, the players (and their turrets / clones /
+// critters) with the most shots out are stopped from firing new ones first, until some of theirs land.
+// v1.2.27 (Devin): no fixed cap. There is no limit at all while everyone runs at 30+ fps. Only when the host's sim or
+// anyone's frame rate drops under 30 does a cap appear (at the current shot count, then lower while it stays slow); it
+// grows back while things are smooth and goes away again after a few smooth seconds.
 // Lobby setting settings.budget (Arena settings), on unless turned off.
 export const BUDGET = {
-  cap0: 700, capMin: 120, capMax: 1600,   // shots in the air
-  msSlow: 14, msGood: 8,                  // host sim step (ms) that counts as too slow / comfortable (a step every 16.7 ms)
-  fpsSlow: 20, fpsGood: 40,               // frame rate (host, or the slowest player that reports one); 20 keeps a margin over 10
-  perHead: 3,                             // the cap never goes below this many shots per player
-  every: 0.5, down: 0.85, up: 1.08,       // how often and how hard the cap moves
+  fpsTarget: 30, fpsGood: 36,             // frame rate (host, or the slowest player that reports one) to hold / that counts as smooth
+  msSlow: 22, msGood: 12,                 // host sim step (ms) that counts as too slow / comfortable
+  capMin: 60, perHead: 3,                 // a cap never goes below either of these (shots, shots per player)
+  every: 0.5, down: 0.88, up: 1.08,       // how often and how hard the cap moves
+  release: 6,                             // seconds of smooth play with room to spare before the cap is dropped again
   press: 0.75,                            // above this share of the cap, per-player limits start
   minShare: 3,                            // nobody is ever limited below this many shots
   notice: 1.2,                            // seconds the "can't shoot" notice stays after a blocked shot
@@ -24,7 +26,7 @@ export function budgetOwner(g, p) {
 }
 
 function state(g) {
-  return g.bud || (g.bud = { cap: BUDGET.cap0, total: 0, share: Infinity, counts: new Map(), acc: 0, n: 0, t: 0, ms: 0, fps: 0 });
+  return g.bud || (g.bud = { cap: Infinity, total: 0, goodT: 0, share: Infinity, counts: new Map(), acc: 0, n: 0, t: 0, ms: 0, fps: 0 });
 }
 
 // Once per sim step (end of step): recount shots per owner and, every BUDGET.every s, move the cap.
@@ -37,11 +39,15 @@ export function budgetTick(g, dt, stepMs) {
     let fps = g.hostFps || 0;
     for (const p of g.players) if (p.kind === 'hero' && p.connected && !p.isBot && p.fps > 0 && (!fps || p.fps < fps)) fps = p.fps;
     B.ms = ms; B.fps = fps;
-    const slow = ms > BUDGET.msSlow || (fps > 0 && fps < BUDGET.fpsSlow), good = ms < BUDGET.msGood && (!fps || fps >= BUDGET.fpsGood);
+    const slow = ms > BUDGET.msSlow || (fps > 0 && fps < BUDGET.fpsTarget), good = ms < BUDGET.msGood && (!fps || fps >= BUDGET.fpsGood);
     let heads = 0; for (const p of g.players) if (p.kind === 'hero' && p.alive) heads++;
     const floor = Math.max(BUDGET.capMin, BUDGET.perHead * heads);
-    if (slow) B.cap = Math.max(floor, Math.floor(Math.min(B.cap, Math.max(B.total, floor)) * BUDGET.down));
-    else if (good && B.total > B.cap * 0.6) B.cap = Math.min(BUDGET.capMax, Math.ceil(B.cap * BUDGET.up));
+    if (slow) { B.goodT = 0; B.cap = Math.max(floor, Math.floor(Math.min(B.cap, Math.max(B.total, floor)) * BUDGET.down)); }
+    else if (good && B.cap !== Infinity) {
+      if (B.total > B.cap * 0.6) B.cap = Math.ceil(B.cap * BUDGET.up);
+      B.goodT += B.t;
+      if (B.goodT >= BUDGET.release && B.total < B.cap * 0.8) B.cap = Infinity;   // smooth for a while: no limit again
+    } else B.goodT = 0;
     B.acc = 0; B.n = 0; B.t = 0;
   }
   B.counts.clear();
@@ -89,18 +95,31 @@ export function budgetAdd(g, p) {
 // Extra shots made by a shot (bounce splits, shrapnel): skipped only once the whole cap is used up.
 export const budgetRoom = g => !g.bud || g.bud.total < g.bud.cap;
 
-// Snapshot row: [total, cap, share (0 = no limit), then id, count pairs while there is a limit]
+// Snapshot row: [total, cap (0 = no cap), share (0 = no limit), then id, count pairs while there is a limit]
 export function budgetRow(g) {
   const B = g.bud;
   if (!B) return null;
-  const row = [B.total, B.cap, B.share === Infinity ? 0 : B.share];
+  const row = [B.total, B.cap === Infinity ? 0 : B.cap, B.share === Infinity ? 0 : B.share];
   if (B.share !== Infinity) for (const [id, c] of B.counts) row.push(id, c);
   return row;
 }
-// Client side: { total, cap, share, mine } from a snapshot row
+// Client side: { total, cap (0 = no cap), share, mine } from a snapshot row
 export function budgetView(row, id) {
   if (!row) return null;
   let mine = 0;
   for (let i = 3; i < row.length; i += 2) if (row[i] === id) { mine = row[i + 1]; break; }
   return { total: row[0], cap: row[1], share: row[2], mine };
+}
+
+// v1.2.27 lobby estimate (right-click on the Shot budget switch): roughly how many shots and entities a match with this
+// many players puts in play. From bot matches (normal bots, 4-20 players, up to ~30 rounds): early rounds average ~1 shot
+// in the air per player with fights peaking near 4; once fire-rate / multi-shot cards stack up, ~5 per player with peaks
+// near 15. Entities = players plus turrets, clones, critters and summons (and the raiders in co-op).
+export function budgetEstimate(n, mode) {
+  n = Math.max(1, n | 0);
+  const co = mode === 'waves' || mode === 'core';
+  return {
+    n, early: n, earlyPeak: n * 4, late: n * 5, latePeak: n * 15,
+    ents: co ? Math.round(n * 2 + 6) : n, entsLate: co ? Math.round(n * 3.5 + 8) : Math.round(n * 1.8),
+  };
 }

@@ -319,6 +319,8 @@ export const DEFAULT_LOBBY_SETTINGS = {
   owType: 'br',           // open world: 'br' (battle royale, red wall) | 'extract' (co-op extraction)
   owSquads: false,        // open world battle royale: play in the lobby teams
   owBots: 'some',         // open world roaming bots: 'off' | 'some' | 'lots'
+  rtsSize: 'normal',      // v1.2.27 RTS: map size (small / normal / large)
+  rtsTeams: false,        // v1.2.27 RTS: lobby teams fight together (shared vision)
   amonTimer: false,       // AMON: store closes after 75 s (false = waits for everyone to press Ready)
   amonVs: false,          // AMON Versus (v28): players fight each other's armies every round (teams fight together)
   tTeams: false,          // v1.2.26 tournament: play in the lobby teams (winners help allies, allies trade cards)

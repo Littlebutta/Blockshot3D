@@ -1,10 +1,10 @@
 // v1.2.25: right-click info popups. Any element with data-info="<key>" opens INFO[key] in a small window next to the
 // cursor (main.js contextmenu handler); a click, another right-click or Escape closes it.
 export const INFO = {
-  budget: ['Shot budget', `<p>Big lobbies can put more shots in the air than a PC can draw. The shot budget keeps the game at a playable frame rate (10+ fps) by capping how many shots can fly at once.</p>
-<p>It never deletes a shot that's already flying. When the cap gets close, whoever has the <b>most</b> shots out (counting their turrets, clones and critters) can't fire new ones until some of theirs land. Everyone else keeps shooting.</p>
-<p>The bar shows shots in the air against the cap. The bright part is yours; when it fills your share you'll see <b>Can't shoot</b> until it drains.</p>
-<p>The cap moves on its own: it shrinks when the host's game or anyone's frame rate slows down and grows back when things are smooth. The host can turn it off under Arena settings.</p>`],
+  budget: ['Shot budget', `<p>Big lobbies can put more shots in the air than a PC can draw. The shot budget keeps everyone at <b>30 fps or better</b> by limiting how many shots can fly at once, but only when the game actually slows down.</p>
+<p>There is no fixed cap. While the host and every player run at 30+ fps, nothing is limited. When anyone drops under 30, a cap appears at the current number of shots and tightens until the frame rate is back; once it has been smooth for a few seconds the cap goes away again.</p>
+<p>It never deletes a shot that's already flying. While there is a cap, whoever has the <b>most</b> shots out (counting their turrets, clones and critters) can't fire new ones until some of theirs land. Everyone else keeps shooting. The bar at the top shows shots in the air (and the cap while there is one); <b>Can't shoot</b> means your share is full.</p>
+<p>The host can turn it off under Arena settings.</p>`],
   // v1.2.26 lobby: every mode and setting explains itself on right-click
   m_ffa: ['Deathmatch', `<p>Everyone fights everyone. Lose a round and you pick an upgrade card; first to the target score wins.</p><p>Turn <b>Teams</b> on for team deathmatch (up to 8 teams): drag players onto a team in the list. The losing team picks cards.</p>`],
   m_tourn: ['Tournament', `<p>Deathmatch rules, but every round each player fights their own 1v1 in a separate arena. You only see your own arena.</p><p>Everyone has a set number of losses (default 4). Lose your arena and you lose one; at zero you're knocked out. Losers pick a card after each round. Last one standing wins.</p><p><b>Teams:</b> arenas pair players from different teams. Win your arena and you're sent to help an ally whose fight is still on. During the card pick you can offer a card to an ally who is also picking: they trade one card from their own hand for it.</p>`],
@@ -30,6 +30,10 @@ export const INFO = {
   s_amonVs: ['AMON opponents', `<p>Raider waves: everyone fights the same waves together. Versus: players fight each other's armies every round (teams fight together).</p>`],
   s_amonCmd: ['Commanders', `<p>Everyone picks a commander before the first store. Each has its own power and unit cards.</p>`],
   s_amonTimer: ['Store timer', `<p>Wait for Ready: the battle starts when everyone is ready. 75 seconds: the store closes after that anyway.</p>`],
+  m_rts: ['RTS (experimental)', `<p><b>Experimental:</b> new and not fully tested on real PCs yet, so expect rough edges and please report anything odd.</p><p>Real-time strategy for 2 to 8 players (bots welcome). You command The Steelborne: Riggers mine crystal and flux and build your base, Barracks, Factory and Airfield train the army, and the Archive researches by pulling cards from the shooter's pool. Any card fits any unit type. Destroy every enemy building to win.</p><p>Maps are generated: large highland maps with three cliff levels and ramps. Like StarCraft you can't see up a cliff until something of yours is up there (air units see everything). Crystal fields run dry; derricks and Reclaimers make crystal slowly forever.</p><p>Controls: drag to select, right-click to move / attack / mine, A-click attack-moves, Ctrl+number saves a group. F1 idle worker, F2 army, F3 research, Space last alert. In fullscreen (F11) the mouse stays in the window so the screen edges always pan.</p>`],
+  s_rtsSize: ['Map size', `<p>How big the generated map is. Normal grows with the number of players; Small is about 20% smaller, Large about 20% bigger.</p>`],
+  s_rtsTeams: ['Teams', `<p>Players on the same lobby team share vision and fight together. Off: everyone for themselves.</p>`],
+  rts_budget: ['Unit budget', `<p>Huge armies can be more than a PC can simulate and draw. The unit budget watches how fast the host runs the game (and everyone's frame rate) and caps the total number of units when it gets slow. Near the cap, the players with the most units are held from training more first, so smaller armies can still build.</p><p>Turn it off in the lobby to never limit units.</p>`],
   s_ff: ['Friendly fire', `<p>Bullets can hurt teammates.</p>`],
   s_side: ['2D side view', `<p>Flat camera with ROUNDS-style maps: drop-through platforms, swinging platforms and a damaging edge all around. A / D move, W or Space jumps, the mouse aims anywhere. Block as you touch an edge to bounce off it.</p>`],
   s_stocks: ['Stocks', `<p>Lives per round in Brawl.</p>`],
@@ -56,11 +60,11 @@ export function closeInfo() { if (pop) { pop.remove(); pop = null; } }
 export function infoOpen() { return !!pop; }
 export function openInfo(key, x, y, extra) {
   closeInfo();
-  const it = INFO[key] || (extra ? [extra.title, extra.html] : null);
+  const it = INFO[key] || (extra && extra.title ? [extra.title, extra.html] : null);
   if (!it) return false;
   pop = document.createElement('div');
   pop.className = 'infopop';
-  pop.innerHTML = `<div class="ipHead">${it[0]}<span class="ipX">✕</span></div><div class="ipBody">${it[1]}</div>`;
+  pop.innerHTML = `<div class="ipHead">${it[0]}<span class="ipX">✕</span></div><div class="ipBody">${it[1]}${extra && extra.more || ''}</div>`;
   document.body.appendChild(pop);
   const w = pop.offsetWidth, h = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, x + 12)) + 'px';
