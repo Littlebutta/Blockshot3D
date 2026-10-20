@@ -3,7 +3,7 @@
   "name": "Venom Rounds",
   "rarity": "uncommon",
   "icon": "🧪",
-  "description": "Bullets poison instead of dealing damage. The poison eats about 40% of the target's max health over 5 seconds, starting slow and speeding up.",
+  "description": "Bullets keep their damage and also poison. The poison eats about 22% of the target's max health over 5 seconds, starting slow and speeding up.",
   "image": "art.png",
   "modifiers": [
     {
@@ -12,5 +12,5 @@
       "value": 1
     }
   ],
-  "details": "One poison per target: each new hit resets the 5 second timer and the poison keeps getting faster the longer you keep it on, so steady hits hurt far more than one. Damage doesn't depend on your bullet damage (it is a share of their health, counting at most 1500 HP). Each extra level makes it 20% stronger. Bosses and heavy enemies take a quarter."
+  "details": "One poison per target: each new hit resets the 5 second timer and the poison keeps getting faster the longer you keep it on, so steady hits hurt far more than one. The bullet still deals its normal damage on top. Poison doesn't depend on your bullet damage (it is a share of their health, counting at most 1500 HP). Each extra level makes it 20% stronger. Bosses and heavy enemies take a quarter."
 }

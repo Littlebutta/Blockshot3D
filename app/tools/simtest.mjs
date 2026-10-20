@@ -66,7 +66,7 @@ const giveCard = (g, p, id) => { p.cards.push(id); g.recompute(p); };
 const flat = (g) => { g.level.boxes = g.level.boxes.filter(b => b.wall); g.level.dynamic = []; g.level.solids = g.level.solids.filter(s => s.wall); g.dyn = []; g.refreshSolids(); g.bullets = []; g.hazard = null; };
 
 // Player cap and colors
-check('maxPlayers is 20', C.RULES.maxPlayers === 20);
+check('maxPlayers is 100 (v1.2.25)', C.RULES.maxPlayers === 100);
 check('20 distinct FFA colors', new Set(C.assignColors(Array.from({ length: 20 }, () => ({})), 'ffa')).size === 20);
 check('10 distinct shades per team', new Set(C.assignColors(Array.from({ length: 20 }, (_, i) => ({ team: i % 2 })), 'tdm')).size === 20);
 
@@ -557,7 +557,7 @@ const pickAll = g => { for (const p of g.players) if (!p.picked && p.offer) g.pi
   const wm = cards.filter(c => c.weaponMod && c.rarity === 'mod'), sm = cards.filter(c => c.shieldMod && c.rarity === 'shieldmod'), leg = cardById.get('hydra-rounds');
   check('weapon mods weigh the same as legendary cards', wm.every(c => cardWeight(c) === cardWeight(leg)), wm.map(c => cardWeight(c)).join(','));
   check('shield mods weigh the same as legendary cards', sm.every(c => cardWeight(c) === cardWeight(leg)));
-  check('14 shield mods (v1.2.15: Scorched Floor, Purge Pulse, Swap Shot), 9 weapon mods (v1.2.15: Squad Caller)', sm.length === 14 && wm.length === 9, `${sm.length} ${wm.length}`);
+  check('14 shield mods (v1.2.15: Scorched Floor, Purge Pulse, Swap Shot), 9 weapon mods (v1.2.15: Squad Caller)', sm.length === 14 && wm.length === 11, `${sm.length} ${wm.length}`);
   check('more common cards', cards.filter(c => c.rarity === 'common').length >= 21);
   const g = freshGame(); const p = g.players[0]; giveCard(g, p, 'shield-clone'); giveCard(g, p, 'shield-turret');
   g.phase = 'picking'; p.picked = false; p.offer = ['shield-pillar']; g.pick(p.id, 'shield-pillar');
@@ -940,6 +940,7 @@ const pickAll = g => { for (const p of g.players) if (!p.picked && p.offer) g.pi
     let out = 0;
     for (let i = 0; i < 400; i++) { p.input.mx = Math.cos(i / 40); p.input.mz = Math.sin(i / 40); g.step(1 / 60); g.takeEvents(); if (edgeDistance(g.level.edges, p.pos.x, p.pos.z) < 0.3) out++; }
     check('players can\'t walk through polygon walls', out === 0, out);
+    for (const q of g.players) if (q !== p) q.alive = false;   // (nobody in the shot's way: this is about the walls)
     g.bullets = []; const b = g.spawnBullet(p, { x: 0, y: 1, z: 0 }, { x: 0.7071, y: 0, z: -0.7071 }, 30, false); b.bLeft = 3; b.life = 3;
     let maxOut = 9;
     for (let i = 0; i < 120 && b.alive; i++) { g.updateBullets(1 / 60); maxOut = Math.min(maxOut, edgeDistance(g.level.edges, b.pos.x, b.pos.z)); }
@@ -1156,8 +1157,12 @@ const { prepareLevel: prepLevel } = await J('physics.js');
   hp0 = a.hp; a.input.shoot = true; g.step(1 / 60);
   const ev = g.takeEvents();
   check('katana slash cuts a bullet with no explosion', !eb.alive && ev.some(e => e.t === 'cut') && !ev.some(e => e.t === 'boom') && a.hp === hp0);
-  for (let i = 0; i < 120; i++) { g.step(1 / 60); g.takeEvents(); }
-  check('holding the katana charges it', a.fx.kCharge >= 0.99);
+  let autoW = false;
+  for (let i = 0; i < 120; i++) { g.step(1 / 60); g.takeEvents(); if (g.bullets.some(x => String(x.fx).startsWith('slash'))) autoW = true; }
+  check('v1.2.22: a full katana charge fires the wave by itself and starts the next charge', autoW && a.fx.kCharge < 0.99);
+  g.bullets.length = 0; a.fx.kCharge = 0.9;
+  for (let i = 0; i < 2; i++) { g.step(1 / 60); g.takeEvents(); }
+  check('holding the katana charges it', a.fx.kCharge > 0.9);
   const fast = g.katanaChargeTime({ stats: { ...a.stats, fireRate: a.stats.fireRate * 2 } });
   check('fire rate speeds up the katana charge', fast < g.katanaChargeTime(a) * 0.6);
   a.stats.poison = 1; hp0 = b.hp; a.input.shoot = false; g.step(1 / 60);
@@ -1581,9 +1586,9 @@ for (const [mode, extra] of [['tdm', {}], ['waves', {}], ['waves', { core: true 
   const t0 = ag.phaseT; ag.step(0.05); check('AMON: 4x runs the battle clock 4x', Math.abs(ag.phaseT - t0 - 0.2) < 1e-6 || ag.phase !== 'battle');
   ag.startBattle(); check('AMON: the next battle is back to 1x', ag.speed === 1);
 }
-for (const [kind, scp] of [['plain', true], ['bees', true], ['plain', false]]) {   // v1.2.13: SCP and your own shots blocked back at you
+for (const [kind, scp] of [['plain', true], ['bees', true], ['squid', true], ['plain', false]]) {   // v1.2.13: SCP and your own shots blocked back at you
   const g = freshGame(); flat(g); const [a, e] = g.players; a.isBot = false; e.isBot = false; e.reviving = true; e.reviveT = 999;
-  a.cards = []; if (scp) giveCard(g, a, 'scp'); if (kind === 'bees') giveCard(g, a, 'bees'); giveCard(g, a, 'napalm-rounds'); giveCard(g, a, 'demolition'); giveCard(g, a, 'toxic-cloud');
+  a.cards = []; if (scp) giveCard(g, a, 'scp'); if (kind === 'bees' || kind === 'squid') giveCard(g, a, kind); giveCard(g, a, 'napalm-rounds'); giveCard(g, a, 'demolition'); giveCard(g, a, 'toxic-cloud');
   a.pos = { x: 0, y: 0, z: 0 }; a.fx.invulnT = 0; const hp0 = a.hp;
   const b = g.spawnBullet(a, { x: 3, y: 1.2, z: 0 }, { x: -1, y: 0, z: 0 }, 10, false);
   g.reflect(b, e, { x: -1, y: 0, z: 0 }); b.vel = { x: -10, y: 0, z: 0 }; b.pos = { x: 1.5, y: 1.2, z: 0 };
@@ -1714,7 +1719,7 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
   check("Gambler's Mag: each round starts with a roll", a.fx.gam >= 0 && a.fx.gam < 4);
   a.fx.gam = 0; const base = g.effDamage(a.stats); check("Gambler's Mag: double damage roll", Math.abs(shotDmg(g, a)[0].dmg - 2 * base) < 1e-6);
   a.fx.gam = 1; a.ammo = 3; check("Gambler's Mag: +50% bullets roll", shotDmg(g, a).length === 2);
-  a.fx.gam = 3; a.ammo = 3; check("Gambler's Mag: homing roll", shotDmg(g, a)[0].homing >= 5);
+  a.fx.gam = 3; a.ammo = 3; check("Gambler's Mag: homing roll", shotDmg(g, a)[0].homing >= 2.5);
   const r0 = a.fx.gam; let rolled = 0; for (let i = 0; i < 20; i++) { a.ammo = 0; a.reloadT = 0.01; g.updatePlayer(a, 0.02, true); if (a.fx.gam !== r0) rolled++; }
   check("Gambler's Mag: reloads roll again", rolled > 5, rolled);
 }
@@ -1825,8 +1830,8 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
 { // trap arenas
   const LG = await import('../public/js/levelgen.js'), TR = await import('../public/js/traps.js');
   const names = new Set(); let ok = true;
-  for (let s = 1; s < 60; s++) { const L = LG.generateLevel(4, 'traps', s, 'standard'); names.add(L.name); if (!L.traps || (!L.traps.length && !L.dynamic.some(d => d.kind === 'crusher'))) ok = false; }
-  check('trap arenas: 4 layouts, each with timed hazards', names.size === 4 && ok, [...names].join());
+  for (let s = 1; s < 60; s++) { const L = LG.generateLevel(4, 'traps', s, 'standard'); names.add(L.name); if (!L.traps || (!L.traps.length && !L.dynamic.some(d => d.kind === 'crusher' || d.kind === 'pinch'))) ok = false; }
+  check('trap arenas: 5 layouts (v1.2.22 Pinch Alley), each with timed hazards', names.size === 5 && ok, [...names].join());
   let inMixed = 0; for (let s = 1; s < 200; s++) if (LG.generateLevel(4, 'mixed', s, 'standard').traps) inMixed++;
   check('trap arenas: come up in Mixed too', inMixed > 10 && inMixed < 120, inMixed);
   const sp = { kind: 'spikes', period: 4, off: 0, on: 1.4 };
@@ -1844,6 +1849,197 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
   const snap = h.snapshot(); check('trap arenas: joiners get the traps and the trap clock', typeof snap.tp === 'number' && Array.isArray(h.levelForNet().traps));
   const lz = find('Laser Grid'); check('Laser Grid: sweeping lasers and fences', lz.level.traps.some(x => x.kind === 'sweep') && lz.level.traps.some(x => x.kind === 'fence'));
   const ry = find('Rail Yard'); check('Rail Yard: moving rails over a spike pit', ry.dyn.filter(o => o.kind === 'slide').length >= 2 && ry.level.traps.some(x => x.kind === 'spikes'));
+}
+
+// ---------------------------------------------------------------- v1.2.21-22 (Devin's huge patch list)
+{ // squid latch, gnaw, lifesteal, shake off, block knocks off
+  const SIM = await J('sim.js');
+  const g = freshGame(); flat(g); const [a, e] = g.players; a.isBot = e.isBot = false; e.fx.invulnT = 0;
+  a.cards = []; giveCard(g, a, 'squid'); a.pos = { x: -3, y: 0, z: 0 }; e.pos = { x: 3, y: 0, z: 0 }; a.hp = a.maxHp ? a.hp : a.hp;
+  a.hp = g.maxHp(a) * 0.5; const ah0 = a.hp, eh0 = e.hp;
+  const b = g.spawnBullet(a, { x: 1.5, y: g.chest(e), z: 0 }, { x: 1, y: 0, z: 0 }, 10, false); b.vel = { x: 10, y: 0, z: 0 };
+  let latched = false; for (let i = 0; i < 120; i++) { g.step(1 / 60); g.takeEvents(); if (b.latch) latched = true; }
+  check('squid: latches on and gnaws (several bites)', latched && b.latch && e.hp < eh0, `${latched} ${eh0 - e.hp}`);
+  check('squid: bites heal the shooter', a.hp > ah0, `${a.hp - ah0}`);
+  check('squid: victim gets the squid status bit', (e.fx.sqOnT || 0) > g.time);
+  for (let k = 1; k <= 5; k++) { e.input.jumpSeq = k; g.step(1 / 60); }
+  g.takeEvents();
+  check('squid: mashing jump shakes it off and stuns it', !b.latch && b.stunT > 0, `${!!b.latch} ${b.stunT}`);
+  b.stunT = 0; b.swT = 0; b.pos = { x: e.pos.x - 1.2, y: g.chest(e), z: e.pos.z }; b.vel = { x: 8, y: 0, z: 0 };
+  for (let i = 0; i < 30 && !b.latch; i++) { g.step(1 / 60); g.takeEvents(); }
+  e.blockT = 1; g.step(1 / 60); g.takeEvents();
+  check('squid: blocking knocks it off', !b.latch && b.stunT > 0);
+  check('squid and bees are weapon mods', cardById.get('squid').weaponMod === 'squid' && cardById.get('bees').weaponMod === 'bees');
+  check('squid keeps your normal gun (no p.mod)', !a.mod);
+}
+{ // Big Brother, Behemoth, pillar, Bulwark, Iron Lung, Seeker, venom, commander cards
+  const g = freshGame(); flat(g); const [a, e2] = g.players; a.isBot = false; e2.isBot = false; e2.reviving = true; e2.reviveT = 999; a.cards = []; giveCard(g, a, 'shield-spaceking'); g.phase = 'play';
+  a.blockCdT = 0; a.onGround = true; for (let i = 0; i < 60 * 12; i++) { a.input.block = true; g.step(1 / 60); g.takeEvents(); a.pos.y = 0; a.onGround = true; }
+  const bb = g.players.find(u => u.kind === 'bigbro');
+  check('Big Brother: a giant slow copy of you shows up within ~9 s of charging', bb && bb.size > 2 && bb.stats.moveSpeed < a.stats.moveSpeed * 0.6 && bb.kingOf === a.id, bb ? `${bb.size} ${bb.stats.moveSpeed} ${a.stats.moveSpeed}` : g.players.map(u => u.kind).join() + ' ' + g.phase + ' ' + a.fx.king);
+  check('Behemoth is legendary: +health, +regen', cardById.get('behemoth').rarity === 'legendary' && cardById.get('behemoth').modifiers.some(m => m.stat === 'regen'));
+  check('Bulwark is uncommon', cardById.get('bulwark').rarity === 'uncommon');
+  check('Iron Lung buffed (+65 hp)', cardById.get('iron-lung').modifiers[0].value === 65);
+  check('Seeker Chip turns gently (2)', cardById.get('seeker-chip').modifiers.find(m => m.stat === 'homing').value === 2);
+  check('commander cards are in the normal pool', ['sentry-unit', 'twin-protocol', 'wasp-drone'].every(id => !cardById.get(id).modes));
+  const v = freshGame(); flat(v); const [p, q] = v.players; p.cards = []; giveCard(v, p, 'venom-rounds'); q.fx.invulnT = 0; const h0 = q.hp;
+  const vb = v.spawnBullet(p, { x: q.pos.x - 1, y: v.chest(q), z: q.pos.z }, { x: 1, y: 0, z: 0 }, 20, false); v.applyHit(vb, q, { x: 1, y: 0, z: 0 });
+  check('venom: the bullet still deals its damage, poison on top', h0 - q.hp > 5 && q.fx.poisonS, h0 - q.hp);
+  const pg = freshGame(); flat(pg); const [pp] = pg.players; pp.cards = []; giveCard(pg, pp, 'shield-pillar'); pg.raisePillar(pp);
+  for (let i = 0; i < 120; i++) pg.updatePillars(1 / 60);
+  const pil = pg.barricades.find(x => x.kind === 'pillar'), sh = pg.shields.find(x => x.box);
+  check('pillar shield: taller pillar, shield only round the top, more health', pil.h > 3 && sh.y0 > pil.y0 + pil.h - 1 && sh.maxHp >= 300, `${pil.h} ${sh.y0} ${sh.maxHp}`);
+}
+{ // pinch pistons, shaped arenas, spawn spacing in big lobbies
+  const LG = await J('levelgen.js');
+  const find = n => { for (let s = 1; s < 200; s++) { const g = freshGame(2, { mapSource: 'traps' }); for (let i = 0; i < 8 && g.level.name !== n; i++) g.startRound(); if (g.level.name === n) { g.phase = 'play'; return g; } } };
+  const h = find('Pinch Alley'); const [c] = h.players; const jaw = h.dyn.find(o => o.kind === 'pinch'); const d = jaw.def;
+  c.fx.invulnT = 0; let dead = false;
+  for (let i = 0; i < 600 && !dead; i++) { c.pos = d.axis === 'x' ? { x: d.c, y: 0, z: jaw.pos.z } : { x: jaw.pos.x, y: 0, z: d.c }; c.vel = { x: 0, y: 0, z: 0 }; h.step(1 / 60); h.takeEvents(); dead = !c.alive; }
+  check('Pinch Alley: caught between the jaws when they shut kills you', dead);
+  for (const k of LG.SHAPED) {
+    const L = LG.generateLevel(8, k, 7, 'standard', 8);
+    const sp = LG.spawnPoints(L, Array(8).fill(1)).flat();
+    check('shaped arena ' + k + ': spawns on open ground', L.shape === k && sp.every(p => L.insideFn(p.x, p.z, 1)), L.name);
+  }
+  const st = LG.generateLevel(10, 'star', 3, 'standard', 10);
+  check('star: one leg per player (10 legs -> 20 hull corners)', st.poly.length === 20);
+  const md = n => { const L = LG.generateLevel(n, 'generated', 5, 'standard', n, { shape: 'rect' }), sp = LG.spawnPoints(L, Array(n).fill(1)).flat(); let m = 1e9; for (let i = 0; i < sp.length; i++) for (let j = i + 1; j < sp.length; j++) m = Math.min(m, Math.hypot(sp[i].x - sp[j].x, sp[i].z - sp[j].z)); return m; };
+  check('big lobbies: spawns at least 10 m apart at 20 players, 6 m at 100', md(20) >= 10 && md(100) >= 6, `${md(20)} ${md(100)}`);
+}
+{ // v1.2.23 Brawl: item boxes, weight cap, HUD rows; Core: move the core by holding use, spawns stay away from it
+  const B = await J('brawl.js');
+  const g = freshGame(2, { brawl: true }); for (const p of g.players) p.isBot = false;
+  g.phase = 'play'; g.bItemT = 0; g.step(1 / 60); g.takeEvents();
+  check('brawl: an item box drops', (g.bItems || []).length === 1, (g.bItems || []).length);
+  const it = g.bItems[0], a = g.players[0]; it.k = 'speed'; it.y = it.gy; a.pos = { x: it.x, y: it.gy, z: 0 }; a.vel = { x: 0, y: 0, z: 0 };
+  const w0 = g.walkSpeed(a); g.step(1 / 60); g.takeEvents();
+  check('brawl: touching a box grabs its power-up (speed)', a.fx.bItem && a.fx.bItem.k === 'speed' && g.walkSpeed(a) > w0 * 1.2 && !g.bItems.length);
+  check('brawl HUD rows carry the power-up', g.brawlRows().find(r => r[0] === a.id)[6] === 'speed');
+  const t = g.players[1]; t.cards = []; for (let i = 0; i < 8; i++) giveCard(g, t, 'behemoth'); g.recompute(t); t.pct = 100; t.bHp = t.hp; t.vel = { x: 0, y: 0, z: 0 };
+  B.brawlLaunch(g, t, 24, { x: 1, y: 0, z: 0 }); const vHeavy = Math.hypot(t.vel.x, t.vel.y);
+  const u = g.players[0]; u.fx.bItem = null; u.pct = 100; u.bHp = u.hp; u.vel = { x: 0, y: 0, z: 0 }; B.brawlLaunch(g, u, 24, { x: 1, y: 0, z: 0 }); const vLight = Math.hypot(u.vel.x, u.vel.y);
+  check('brawl: weight is capped (huge health builds still fly)', vHeavy >= vLight / (B.BRAWL.weightMax / B.BRAWL.weightMin) - 0.01, `${vHeavy} ${vLight}`);
+  check('brawl: new stages', B.generateBrawlLevel && [...Array(60).keys()].some(s => B.generateBrawlLevel(2, s * 7919, 'standard').name === 'Canopy'));
+  const CO = await J('core.js');
+  const c = freshGame(2, { mode: 'waves', core: true }); for (const p of c.players) p.isBot = false;
+  const h = c.heroes()[0]; h.pos = { x: c.core.pos.x + 1.5, y: 0, z: c.core.pos.z }; h.aim = { x: 1, y: 0, z: 0 };
+  h.input.useSeq = (h.input.useSeq | 0) + 1; h.input.use = true;
+  for (let i = 0; i < 50; i++) { c.step(1 / 60); c.takeEvents(); }
+  check('core: holding use by the core lifts it', h.carry && h.carry.kind === 'core');
+  for (let i = 0; i < 240; i++) { h.input.mx = 1; h.input.mz = 0; c.step(1 / 60); c.takeEvents(); }
+  h.input.mx = 0; h.input.use = false; c.step(1 / 60); h.input.useSeq++; h.input.use = true; c.step(1 / 60); h.input.use = false; for (let i = 0; i < 5; i++) c.step(1 / 60); c.takeEvents();
+  check('core: carried and set down somewhere else', !h.carry && c.core.pos.x > 6 && c.corePos.x === c.core.pos.x, `${c.core.pos.x} ${JSON.stringify(h.carry)}`);
+  let near = 1e9; for (let k = 0; k < 200; k++) { const pt = CO.coreSpawnGuard(c, { x: c.core.pos.x + (Math.random() - 0.5) * 20, y: 0, z: c.core.pos.z + (Math.random() - 0.5) * 20 }); near = Math.min(near, Math.hypot(pt.x - c.core.pos.x, pt.z - c.core.pos.z)); }
+  check('core: enemy spawns stay far from the moved core', near >= CO.CORE.spawnMin, near);
+  c.core.pos.x = 40; c.core.pos.z = 40; near = 1e9; for (let k = 0; k < 200; k++) { const pt = CO.coreSpawnGuard(c, { x: 40 - Math.random() * 6, y: 0, z: 40 - Math.random() * 6 }); near = Math.min(near, Math.hypot(pt.x - 40, pt.z - 40)); }
+  check('core: in a corner spawns still keep their distance', near >= CO.CORE.spawnMin, near);
+}
+{ // v1.2.24 AMON commanders
+  const { AmonGame } = await J('amon.js'); const AD = await J('amondata.js');
+  check('commanders: one per enemy faction plus as many new', AD.COMMANDERS.length === AD.FACTIONS.length * 2 && AD.FACTIONS.every(f => AD.COMMANDERS.some(c => c.fac === f.id)));
+  const ag = new AmonGame({ roster: roster(2, { human: true }), settings: { mode: 'amon' }, cards });
+  check('commanders: the game starts on the commander pick (no time limit)', ag.phase === 'cmd');
+  for (let i = 0; i < 2000; i++) ag.step(0.05);
+  check('commanders: still waiting for the human after a long time', ag.phase === 'cmd' && ag.players[1].cmd);
+  ag.action('p0', { t: 'cmd', c: 'ashgrave' }); ag.action('p0', { t: 'cmdReady', on: true }); ag.step(0.05);
+  check('commanders: picking and readying opens the store', ag.phase === 'shop' && ag.players[0].cmd === 'ashgrave');
+  let seen = false; for (let k = 0; k < 40 && !seen; k++) { ag.rollOffers(ag.players[0]); seen = ag.players[0].offers.some(id => id && id.startsWith('u-c-')); }
+  check('commanders: their own unit cards turn up in the owner\'s store', seen);
+  const p = ag.players[0]; p.board[7] = { uid: 999, id: 'u-rifle', rank: 2, grow: 0, bonus: 0 };
+  ag.startBattle(); const f = ag.fields[0], mine = f.units.filter(u => u.owner === 'p0');
+  check('commanders: the passive bonus is on your units (Ashgrave +1 splash)', mine.length && mine[0].st.splash >= (AD.UNIT_BY_ID.get('rifle').splash || 0) + 1);
+  let cast = false; for (let i = 0; i < 400 && !cast; i++) { ag.step(0.05); cast = f.evs.some(e => e.k === 'cmdCast'); }
+  check('commanders: the power casts during the battle', cast);
+  for (const C of AD.COMMANDERS) {   // every power runs without errors
+    const g2 = new AmonGame({ roster: roster(2), settings: { mode: 'amon' }, cards }); for (let i = 0; i < 3; i++) g2.step(0.05);
+    g2.players[0].cmd = C.id; g2.players[0].board[7] = { uid: 998, id: 'u-rifle', rank: 3, grow: 0, bonus: 0 }; g2.startBattle();
+    let ok = true; try { for (let i = 0; i < 300; i++) g2.step(0.05); } catch (err) { ok = false; console.log(C.id, err); }
+    if (!ok) check('commander power runs: ' + C.id, false);
+  }
+  const vs = new AmonGame({ roster: roster(4), settings: { mode: 'amon', amonVs: true }, cards });
+  let crash = null; try { for (let i = 0; i < 6000 && vs.round < 4; i++) vs.step(0.05); } catch (err) { crash = err; }
+  check('commanders: AMON Versus with commanders plays rounds', !crash && vs.round >= 3 && vs.players.every(q => q.cmd), crash || vs.round);
+}
+{ // v1.2.25 performance, shot budget, 100 players
+  const P = await J('physics.js'), BG = await J('budget.js');
+  const boxes = []; for (let k = 0; k < 300; k++) boxes.push({ x: Math.random() * 100 - 50, z: Math.random() * 100 - 50, w: 0.5 + Math.random() * 4, d: 0.5 + Math.random() * 4, y0: 0, h: Math.random() * 4 });
+  const L = P.prepareLevel({ boxes, hx: 50, hz: 50 }), flat = L.solids.slice();
+  let bad = 0;
+  for (let k = 0; k < 4000; k++) { const a = { x: Math.random() * 100 - 50, y: Math.random() * 3, z: Math.random() * 100 - 50 }, b = { x: Math.random() * 100 - 50, y: Math.random() * 3, z: Math.random() * 100 - 50 }; if (P.segBlocked(L.solids, a, b) !== P.segBlocked(flat, a, b) || !!P.pointInSolid(L.solids, a.x, a.y, a.z, 0.2) !== !!P.pointInSolid(flat, a.x, a.y, a.z, 0.2)) bad++; }
+  check('perf: arenas get the collision grid and it gives the same answers as checking every box', !!L.solids.grid && bad === 0, bad);
+  check('100 players: lobby cap', C.RULES.maxPlayers === 100);
+  const g = new Game({ roster: roster(100), settings: { mode: 'ffa', pickTime: 2, startPick: false }, cards }); g.start();
+  let crash = null; try { for (let i = 0; i < 60 * 8; i++) { g.step(1 / 60); g.takeEvents(); } } catch (err) { crash = err; }
+  check('100 players: a match runs', !crash && g.players.filter(p => p.kind === 'hero').length === 100, crash);
+  check('shot budget: on by default, reported in the snapshot', !!g.bud && Array.isArray(g.snapshot().bud));
+  // force the cap: the heaviest owner is stopped, a light one still shoots, and nothing in the air is removed
+  const [h, l] = g.players.filter(p => p.kind === 'hero');
+  g.phase = 'play'; g.bullets = []; g.bud.cap = 40;
+  for (const p of [h, l]) { p.alive = true; p.hp = 1e5; p.reloadT = 0; p.fireT = 0; p.ammo = 999; }
+  for (let k = 0; k < 40; k++) g.spawnBullet(h, { ...h.pos, y: 1 }, { x: 1, y: 0, z: 0 }, 1, false);
+  g.bud.cap = 40; BG.budgetTick(g, 0, 0);
+  const n0 = g.bullets.length;
+  h.fireT = 0; h.ammo = 999; g.tryShoot(h);
+  check('shot budget: the player with the most shots out cannot fire', g.bullets.length === n0 && (h.fx.budT || 0) > g.time);
+  check('shot budget: a blocked shot uses no ammo', h.ammo === 999);
+  l.fireT = 0; l.ammo = 999; g.tryShoot(l);
+  check('shot budget: a light shooter still fires', g.bullets.length > n0);
+  check('shot budget: shots already in the air are kept', g.bullets.filter(b => b.ownerRef === h).length === 40);
+  const t = g.spawnUnit('turret', h, { x: h.pos.x + 2, y: 0, z: h.pos.z });
+  check('shot budget: a turret counts as its owner', BG.budgetOwner(g, t) === h);
+  const off = new Game({ roster: roster(4), settings: { mode: 'ffa', pickTime: 2, startPick: false, budget: false }, cards }); off.start(); off.step(1 / 60);
+  check('shot budget: the lobby setting turns it off', !off.bud && off.snapshot().bud === null);
+  const B2 = { cap: 700, total: 0, share: Infinity, counts: new Map(), acc: 0, n: 0, t: 0 }; const g3 = { settings: {}, bud: B2, bullets: [], players: g.players, hostFps: 8, player: id => g.player(id) };
+  BG.budgetTick(g3, 0.6, 30);
+  check('shot budget: a slow frame rate lowers the cap', B2.cap < 700 && B2.cap >= BG.BUDGET.capMin, B2.cap);
+}
+{ // v1.2.26: teleport safety net, unit wins and the units-only draw, tournament mode, new map shapes
+  const T = await J('tourn.js'), LG = await J('levelgen.js');
+  const g = freshGame(2); flat(g); const [a, b] = g.players;
+  a.pos = { x: 3, y: 45, z: 2 }; a.vel = { x: 0, y: 20, z: 0 }; g.step(1 / 60); g.takeEvents();
+  check('teleport fix: flying above 40 m is capped, not sent back to spawn', Math.abs(a.pos.x - 3) < 0.5 && Math.abs(a.pos.z - 2) < 0.5 && a.pos.y <= 40.01, JSON.stringify(a.pos));
+  a.spawn = { x: -g.level.hx / 2, y: 0, z: 0 }; a.pos = { x: g.level.hx + 3, y: 1, z: 0 }; g.step(1 / 60); g.takeEvents();
+  check('teleport fix: past the edge is pushed back in, not sent to spawn', Math.abs(a.pos.x) <= g.level.hx && Math.hypot(a.pos.x - a.spawn.x, a.pos.z - a.spawn.z) > 2 && a.pos.x > 0, JSON.stringify(a.pos) + JSON.stringify(a.spawn));
+  // a clone or turret still standing wins for its owner; two sides of turrets with no damage for 10 s is a draw
+  const w = freshGame(2); flat(w); const [p, q] = w.players;
+  w.spawnUnit('clone', p, { x: 2, y: 0, z: 2 }); p.alive = false; q.alive = false; w.step(1 / 60); w.takeEvents();
+  check('unit wins: a clone left standing wins the round for its owner', w.phase === 'roundEnd' && w.roundWinner === w.scoreKey(p), w.roundWinner);
+  const d = freshGame(2); flat(d); const [p2, q2] = d.players;
+  const t1 = d.spawnUnit('turret', p2, { x: -10, y: 0, z: 0 }), t2 = d.spawnUnit('turret', q2, { x: 10, y: 0, z: 0 });
+  d.level.solids.push({ min: { x: -1, y: 0, z: -60 }, max: { x: 1, y: 40, z: 60 }, wall: true, vis: 3.5, oneWay: false }); d.refreshSolids();
+  p2.alive = false; q2.alive = false; t1.hp = t2.hp = 1e6;
+  let s2 = 0; for (; s2 < 60 * 14 && d.phase === 'play'; s2++) { d.step(1 / 60); d.takeEvents(); }
+  check('unit standoff: no damage for 10 s ends the round as a draw', d.phase === 'roundEnd' && d.roundWinner == null && s2 >= 60 * 9.9, `${d.phase} ${d.roundWinner} ${s2}`);
+  // tournament: own arenas (no hits across), lives, knockouts, losers pick; teams: card trades swap the two cards
+  for (const teams of [false, true]) {
+    const tg = new Game({ roster: roster(6).map((r, i) => ({ ...r, team: i % 2 })), settings: { mode: 'tourn', tTeams: teams, tLives: 2, pickTime: 2, startPick: false }, cards }); tg.start();
+    let cross = 0; const h0 = tg.hurt.bind(tg); tg.hurt = (t, am, src, ...r) => { if (src && t && T.arenaOf(tg, src) !== T.arenaOf(tg, t) && am > 0) cross++; return h0(t, am, src, ...r); };
+    const arenas = tg.tArenas.length, pairsOk = tg.tArenas.every(A => A.ids.length >= 2 && (!teams || new Set(A.ids.map(id => tg.player(id).team)).size === 2));
+    let ko = 0, picked = 0, losersOnly = true, traded = null;
+    for (let i = 0; i < 60 * 60 * 10 && tg.phase !== 'over'; i++) {
+      tg.step(1 / 60);
+      for (const e of tg.takeEvents()) { if (e.t === 'tKO') ko++; if (e.t === 'picking') { picked++; const ws = new Set(tg.tArenas.map(A => A.winner)); if (e.losers.some(id => ws.has(tg.scoreKey(tg.player(id))) && tg.tArenas.find(A => A.ids.includes(id)).winner === tg.scoreKey(tg.player(id)))) losersOnly = false; } }
+      if (teams && !traded && tg.phase === 'picking') {
+        const x = tg.players.find(p => p.offer && !p.picked), y = x && tg.players.find(p => p !== x && p.offer && !p.picked && tg.scoreKey(p) === tg.scoreKey(x));
+        if (y) { const cx = x.offer[0], cy = y.offer[1]; y.isBot = false; x.pickDelay = y.pickDelay = 99; T.giftOffer(tg, x.id, y.id, cx); T.giftAccept(tg, y.id, cy); traded = x.offer.includes(cy) && y.offer.includes(cx) && !x.offer.includes(cx); y.isBot = true; }
+      }
+    }
+    const name = teams ? 'tournament teams' : 'tournament';
+    check(`${name}: players are split into their own arenas` + (teams ? ' against the other team' : ''), arenas >= 3 && pairsOk, arenas);
+    check(`${name}: nobody is hurt from another arena`, cross === 0, cross);
+    check(`${name}: players are knocked out after their losses and someone wins`, ko >= 1 && tg.phase === 'over', `${ko} ${tg.phase}`);
+    check(`${name}: only the losers pick cards`, picked >= 1 && losersOnly);
+    if (teams && traded === null) {   // (no two allies happened to lose the same round: set one up)
+      const tg2 = new Game({ roster: roster(4).map((r, i) => ({ ...r, team: i % 2 })), settings: { mode: 'tourn', tTeams: true, pickTime: 2, startPick: false }, cards }); tg2.start();
+      const [x, , y] = tg2.players; tg2.offerCards([x, y]); x.pickDelay = y.pickDelay = 99;
+      const cx = x.offer[0], cy = y.offer[1]; T.giftOffer(tg2, x.id, y.id, cx); y.giftIn && T.giftAccept(tg2, y.id, cy);
+      traded = x.offer.includes(cy) && y.offer.includes(cx) && !x.offer.includes(cx);
+    }
+    if (teams) check('tournament teams: an ally trade swaps the offered card for one from the ally\'s hand', traded === true, traded);
+    const rows = T.tournRows(tg); check(`${name}: the snapshot carries lives and arenas`, rows && rows.p.length === 6 && rows.L === 2);
+  }
+  for (const k of ['pods', 'hive', 'bowtie']) { const L = LG.generateLevel(12, k, 11, 'standard', 12); check(`map shape ${k}: built and spawns are open ground`, L.shape === k && LG.spawnPoints(L, Array(12).fill(1)).flat().every(p => L.insideFn(p.x, p.z, 1))); }
 }
 console.log(`baseline: ${passes} passed, ${fails} failed, ${(Date.now() - t0) / 1000}s`);
 if (fails) process.exitCode = 1;

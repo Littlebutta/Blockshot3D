@@ -15,14 +15,15 @@ export function prepareLevel(level) {
     ...(b.stair ? { stair: 1 } : {}),   // v28 open world stairs: low steps you walk up (see STEP)
   }));
   level.edges = level.poly ? arenaEdges(level) : null;   // polygon arenas: angled walls (see clampToArena)
-  if (level.open) { level.grid = buildGrid(level.solids, 8); level.solids.grid = level.grid; level.solids.extra = []; level.solids.hAt = level.hAt; }
+  // v1.2.25: every level with more than a handful of boxes gets the grid (shaped / big-lobby arenas have hundreds)
+  if (level.open || level.solids.length >= 12) { level.grid = buildGrid(level.solids, level.open ? 8 : 4); level.solids.grid = level.grid; level.solids.extra = []; if (level.open) level.solids.hAt = level.hAt; }
   return level;
 }
 
 // Open world: a uniform grid over the static solids so collision only looks at nearby boxes.
 // A solids array may carry .grid (static boxes) plus .extra (moving / deployed solids, always checked).
-function buildGrid(solids, cell) {
-  const g = { cell, cells: new Map(), stamp: 0 };
+export function buildGrid(solids, cell) {
+  const g = { cell, cells: new Map(), stamp: 0, n: solids.length };
   for (const s of solids) {
     s._st = 0;
     for (let i = Math.floor(s.min.x / cell); i <= Math.floor(s.max.x / cell); i++)
@@ -32,6 +33,9 @@ function buildGrid(solids, cell) {
   }
   return g;
 }
+// v1.2.26 tournament arenas: while PA.a is set, deployed solids (walls) from another arena (s.arena) are skipped.
+export const PA = { a: null };
+const inArenaS = s => PA.a === null || s.arena === undefined || s.arena === null || s.arena === PA.a;
 // The solids that may touch the x/z rectangle (all of S when it has no grid).
 export function solidsNear(S, x0, z0, x1, z1) {
   const g = S.grid;
@@ -42,7 +46,29 @@ export function solidsNear(S, x0, z0, x1, z1) {
       const a = g.cells.get(i * 4096 + j); if (!a) continue;
       for (const s of a) if (s._st !== st) { s._st = st; out.push(s); }
     }
-  if (S.extra) for (const s of S.extra) out.push(s);
+  if (S.extra) for (const s of S.extra) if (inArenaS(s)) out.push(s);
+  return out;
+}
+// v1.2.25: the solids in the grid cells a straight x/z line passes through (cell walk), for long sight lines / shots
+// where the bounding rectangle would cover most of the map.
+export function solidsAlong(S, ax, az, bx, bz) {
+  const g = S.grid;
+  if (!g) return S;
+  const c = g.cell, st = ++g.stamp, out = [];
+  let i = Math.floor(ax / c), j = Math.floor(az / c);
+  const i1 = Math.floor(bx / c), j1 = Math.floor(bz / c), dx = bx - ax, dz = bz - az;
+  const si = dx > 0 ? 1 : -1, sj = dz > 0 ? 1 : -1;
+  const tdx = dx ? Math.abs(c / dx) : Infinity, tdz = dz ? Math.abs(c / dz) : Infinity;
+  let tx = dx ? ((dx > 0 ? (i + 1) * c - ax : ax - i * c) / Math.abs(dx)) : Infinity;
+  let tz = dz ? ((dz > 0 ? (j + 1) * c - az : az - j * c) / Math.abs(dz)) : Infinity;
+  for (let guard = 0; guard < 4096; guard++) {
+    const a = g.cells.get(i * 4096 + j);
+    if (a) for (const s of a) if (s._st !== st) { s._st = st; out.push(s); }
+    if (i === i1 && j === j1) break;
+    if (tx < tz) { i += si; tx += tdx; } else { j += sj; tz += tdz; }
+    if (tx > 1.0001 && tz > 1.0001 && (i !== i1 || j !== j1)) { const b = g.cells.get(i1 * 4096 + j1); if (b) for (const s of b) if (s._st !== st) { s._st = st; out.push(s); } break; }
+  }
+  if (S.extra) for (const s of S.extra) if (inArenaS(s)) out.push(s);
   return out;
 }
 // Ground height under (x,z): the open world's hills, 0 everywhere else.
@@ -246,7 +272,7 @@ export function segBlocked(S, a, b, skip) {
   if (n <= 1) return false;
   const hAt = S.hAt;   // open world: hills block the view too
   if (hAt) for (let i = 1; i < n; i++) { const t = i / n; if (a.y + dy * t < hAt(a.x + dx * t, a.z + dz * t)) return true; }
-  if (S.grid) S = solidsNear(S, Math.min(a.x, b.x), Math.min(a.z, b.z), Math.max(a.x, b.x), Math.max(a.z, b.z));
+  if (S.grid) S = solidsAlong(S, a.x, a.z, b.x, b.z);
   for (let k = 0; k < S.length; k++) {
     const s = S[k];
     if (skip && skip(s)) continue;

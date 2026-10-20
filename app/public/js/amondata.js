@@ -196,8 +196,8 @@ export const UNITS = [
     { desc: 'Small, tough tanks firing explosive shells.', shell: true, from: 'tiny-tank' }),
   P('troll', 'Cursed Brutes', 4, 2, '⛧', { hp: 480, atk: 38, rate: 0.7, range: 2, speed: 3.6, armor: 2, splash: 1.5, size: 1.4, tags: ['bio', 'large'], ab: { regen: { hps: 10 } } }, { shape: 'giant', color: '#6a3a5a', gear: 'axe' },
     { desc: 'Brutes from the ritual circle: big hits and fast regeneration.', from: 'shield-pentagram' }),
-  P('spaceking', 'Space King', 6, 1, '👑', { hp: 2200, atk: 90, rate: 0.6, range: 3, speed: 2.8, armor: 4, splash: 3, size: 2.6, hitsAir: true, tags: ['armored', 'large'], ab: { quake: { every: 7, r: 7, dmg: 80, stun: 1 } } }, { shape: 'giant', color: '#ffc928', gear: 'flame' },
-    { desc: 'A golden giant that stomps everything around it every 7 s.', from: 'shield-spaceking', vm: 1.2 }),
+  P('spaceking', 'Big Brother', 6, 1, '👑', { hp: 2200, atk: 90, rate: 0.6, range: 3, speed: 2.8, armor: 4, splash: 3, size: 2.6, hitsAir: true, tags: ['armored', 'large'], ab: { quake: { every: 7, r: 7, dmg: 80, stun: 1 } } }, { shape: 'giant', color: '#ffc928', gear: 'flame' },
+    { desc: 'A giant that stomps everything around it every 7 s.', from: 'shield-spaceking', vm: 1.2 }),
 ];
 // Units that only appear from abilities (no card).
 export const SUMMONS = [
@@ -504,7 +504,7 @@ export const TACTICS = [
   T('vanguard', 'Vanguard Doctrine', 2, '🗡', 'front', { atk: 0.35, speed: 0.25 }, 'The card in front leads the charge.'),
   T('rearguard', 'Rearguard', 2, '🛡', 'back', { hp: 0.35, armor: 1 }, 'The card behind holds the line.'),
   T('mirror', 'Mirror Array', 5, '🪞', 'ring', { amp: 0.5, atk: 0.1 }, 'Neighbors\' board effects are 50% stronger, and they hit a bit harder.'),
-  T('pens', 'Breeding Pens', 2, '🐣', 'adj', { recruitPct: 0.2 }, 'Every round, adjacent unit cards permanently gain 20% more units (at least 1, up to 6x their size). Big swarms of cheap units grow fastest.'),
+  T('pens', 'Breeding Pens', 2, '🐣', 'adj', { recruitPct: 0.2 }, 'Every round, adjacent unit cards permanently gain 20% more units (up to 6x their size).'),
   T('swarmdoc', 'Swarm Doctrine', 4, '🐜', 'row', { recruitPct: 0.35, hp: -0.1 }, 'Every round, unit cards in this row permanently gain 35% more units (up to 6x their size), each a little thinner.'),
   T('recruit', 'Recruitment Office', 2, '📋', 'adj', { recruit: 1 }, 'Every round, adjacent unit cards permanently gain one more unit (up to double their size).'),
   // translated from the shooter's shield mods
@@ -646,11 +646,11 @@ export function variantCard(c, kind) {
   }
   if (!holy && !Object.values(fx).some(v => v < 0)) fx.hp = -0.15;
   return { ...c, id: kind + ':' + c.id, name: (holy ? 'Holy ' : 'Cursed ') + c.name, fx, variant: kind, base: c.id, noShop: true,
-    desc: c.from && c.kind === 'tactic' && c.id.startsWith('t-') ? tacticDesc(fx, c.pattern) : (c.desc || '') };   // the holy / cursed rules live in the right-click details
+    desc: c.kind === 'tactic' && c.pattern ? tacticDesc(fx, c.pattern) : (c.desc || '') };   // v1.2.24: every holy / cursed card states its own numbers   // the holy / cursed rules live in the right-click details
 }
 export function buildAmonCards(shooterCards) {
   const base = [...UNITS.map(unitCard), ...TACTICS, ...cardTactics(shooterCards)];
-  const list = [...base, ...base.filter(c => c.kind === 'tactic' && cardKind(c) === 'tactic').flatMap(c => [variantCard(c, 'holy'), variantCard(c, 'cursed')])];
+  const list = [...base, ...base.filter(c => c.kind === 'tactic' && cardKind(c) === 'tactic').flatMap(c => [variantCard(c, 'holy'), variantCard(c, 'cursed')]), ...commanderCards()];   // (v1.2.24: commander unit cards, offered only to their commander's owner)
   const byId = new Map(list.map(c => [c.id, c]));
   for (const c of list) c.value = cardValue(c, 1);
   return { list, byId };
@@ -675,4 +675,113 @@ export function cardKind(c) {
   if (c.kind === 'unit') return 'unit';
   const keys = Object.keys(c.fx || {}).filter(k => c.fx[k]);
   return keys.length && keys.every(k => k === 'gold' || k === 'interest') ? 'economy' : 'tactic';
+}
+
+// ---------------------------------------------------------------- v1.2.24 commanders (Devin)
+// Every player picks a commander before the first store (no time limit), in AMON and AMON Versus. One for every
+// enemy faction (its leader), plus as many new ones. A commander gives:
+//  fx    a passive bonus for every unit you field (same keys as faction traits, plus hp / atk shares and gold a round),
+//  units its own unit cards that only turn up in your store (enemy troops fighting for you),
+//  power an ability it casts on its own during every battle (k = kind, every = seconds, first = first cast).
+// Power kinds (amon.js cmdPower): strike (n blasts on enemy clusters), storm, heal (share of max health), rally (damage buff),
+// shield (barrier as a share of max health), freeze (slow + stun), summon (n units), stealth, convert (n enemies),
+// snipe (n hits on the toughest enemies), quake (damage + stun at the biggest cluster), raise (skeletons from the dead),
+// random (a different kind every cast).
+const CM = (id, name, title, icon, color, fac, fx, units, power, text) => ({ id, name, title, icon, color, fac, fx, units, power, text });
+export const COMMANDERS = [
+  CM('korvak', 'General Korvak', 'Tank Commander', '🎖', '#c2a45a', 'tank', { armor: 2 }, ['scoutcar', 'lighttank', 'juggernaut', 'warhulk'],
+    { k: 'rally', every: 18, first: 6, atk: 0.35, dur: 6 }, 'Armored push: every 18 s your army hits 35% harder for 6 s.'),
+  CM('hivemother', 'The Hive Mother', 'Endless Swarm', '🐛', '#a65ad8', 'swarm', { speed: 0.15 }, ['crawlers', 'hound', 'nest', 'leviathan'],
+    { k: 'summon', every: 14, first: 5, unit: 'crawlers', n: 8 }, 'Brood call: 8 Crawlers join the fight every 14 s.'),
+  CM('mordrak', 'Mordrak the Bone Lord', 'Undead Legion', '💀', '#d8d0b0', 'bone', { lifesteal: 0.12 }, ['skelwar', 'banshee', 'necro', 'lich', 'bonedragon'],
+    { k: 'raise', every: 10, first: 8, n: 8 }, 'Rise again: every 10 s up to 8 of the fallen get back up as your skeletons.'),
+  CM('vex', 'Admiral Vex', 'Sky Fleet', '✈', '#6ab8ea', 'sky', { range: 2 }, ['kite', 'buzz', 'gunship', 'leviathan'],
+    { k: 'strike', every: 15, first: 7, n: 3, r: 3, dmg: 70 }, 'Air strike: 3 bombs on the enemy\'s biggest crowds every 15 s.'),
+  CM('ashgrave', 'Marshal Ashgrave', 'Artillery Corps', '🎯', '#d0904a', 'artillery', { splash: 1 }, ['slinger', 'mortar', 'sniper', 'walker', 'colossus'],
+    { k: 'strike', every: 16, first: 5, n: 6, r: 2.5, dmg: 45 }, 'Barrage: 6 shells rain on the enemy every 16 s.'),
+  CM('ignis', 'Ignis the Burning', 'Pyro Cult', '🔥', '#ff6a1a', 'pyro', { burn: 4 }, ['imp', 'spitter', 'hellbat', 'firedrake'],
+    { k: 'storm', every: 14, first: 6, n: 2, r: 5, dps: 30, dur: 5 }, 'Firestorm: 2 fields of fire on the enemy every 14 s.'),
+  CM('frostwitch', 'The Frost Witch', 'Winter Court', '❄', '#9ad8ff', 'frost', { slow: 0.2 }, ['icewolf', 'frostling', 'icegolem', 'golem'],
+    { k: 'freeze', every: 18, first: 6, slow: 0.5, dur: 4, stun: 1 }, 'Deep freeze: every 18 s the whole enemy army is stunned 1 s and slowed 50% for 4 s.'),
+  CM('brannoc', 'Lord Brannoc', 'Iron Legion', '⚔', '#b0b8c8', 'iron', { shieldPct: 0.12 }, ['brute', 'berserker', 'warlord', 'juggernaut', 'golem'],
+    { k: 'shield', every: 20, first: 8, pct: 0.25 }, 'Shield wall: every 20 s your units get a barrier worth 25% of their health.'),
+  CM('rhoga', 'Rhoga the Beastmaster', 'Wild Hunt', '🐺', '#a07a4a', 'beast', { speed: 0.12, rate: 0.1 }, ['hound', 'icewolf', 'behemoth', 'phasebeast'],
+    { k: 'summon', every: 16, first: 4, unit: 'hound', n: 5 }, 'Release the pack: 5 Rust Hounds every 16 s.'),
+  CM('mainframe', 'THE MAINFRAME', 'Machine Hive', '🤖', '#7ab0c0', 'machine', { block: 0.08 }, ['kite', 'buzz', 'walker', 'colossus', 'golem'],
+    { k: 'summon', every: 12, first: 3, unit: 'sentry', n: 3 }, 'Deploy: 3 sentry turrets every 12 s.'),
+  CM('choir', 'The Hollow Choir', 'Void Cult', '🌀', '#8a4ae0', 'void', { hex: 0.1 }, ['voidling', 'wisp', 'phasebeast'],
+    { k: 'convert', every: 16, first: 8, n: 2, maxV: 40 }, 'Whispers: every 16 s two enemies switch to your side.'),
+  CM('skarr', 'Skarr the Raider King', 'Scrap Raiders', '🏴', '#c05040', 'raider', { rate: 0.1, gold: 2 }, ['grunt', 'ratbomb', 'buggy', 'gunship', 'warlord'],
+    { k: 'rally', every: 15, first: 5, atk: 0.3, dur: 5 }, 'Loot fever: +2 gold every round, and every 15 s your army hits 30% harder for 5 s.'),
+  CM('rot', 'Doctor Rot', 'Plague Bearers', '☣', '#9ac03a', 'plague', { poison: 0.4 }, ['plaguerat', 'spitter', 'leech', 'plague'],
+    { k: 'storm', every: 12, first: 6, n: 1, r: 7, dps: 22, dur: 7 }, 'Miasma: a big poison cloud on the enemy every 12 s.'),
+  CM('paladin', 'The Fallen Paladin', 'Black Crusade', '✝', '#e8c870', 'crusade', { regenPct: 0.01 }, ['zealot', 'templar', 'seraph'],
+    { k: 'heal', every: 16, first: 10, pct: 0.3 }, 'Lay on hands: every 16 s your army heals 30% of its health.'),
+  CM('volta', 'Volta the Stormcaller', 'Storm Coven', '⚡', '#8ac0ff', 'storm', { chain: 1 }, ['sparkling', 'shaman', 'tempest'],
+    { k: 'storm', every: 13, first: 5, n: 3, r: 4, dps: 26, dur: 4 }, 'Thunderheads: 3 lightning storms every 13 s.'),
+  CM('silenthand', 'The Silent Hand', 'Shadow Clan', '🗡', '#7a6aa0', 'shadow', { stealth: 3 }, ['ninja', 'voidling', 'sniper', 'phasebeast'],
+    { k: 'snipe', every: 12, first: 6, n: 2, dmg: 140 }, 'Marked for death: every 12 s the two toughest enemies take 140 damage.'),
+  CM('anarchus', 'Anarchus', 'Chaos Horde', '🎲', '#ff4fd0', 'chaos', { random: 1 }, ['imp', 'ratbomb', 'behemoth', 'tempest'],
+    { k: 'random', every: 13, first: 5 }, 'Chaos: a random faction bonus every battle and a random power every 13 s.'),
+  CM('arbiter', 'The Arbiter', 'Countermeasure Legion', '⚖', '#40d0b0', 'counter', { hp: 0.08, atk: 0.08 }, ['flak', 'sniper', 'shaman', 'templar'],
+    { k: 'snipe', every: 15, first: 7, n: 3, dmg: 110 }, 'Judgement: +8% health and damage, and every 15 s the three toughest enemies take 110 damage.'),
+  // the new commanders
+  CM('aurora', 'Captain Aurora', 'Sunlight Guard', '☀', '#ffd86a', null, { regenPct: 0.008 }, ['zealot', 'sparkling', 'seraph'],
+    { k: 'heal', every: 10, first: 6, pct: 0.15 }, 'Dawn: every 10 s your army heals 15% of its health.'),
+  CM('goldfinger', 'Baroness Goldfinger', 'Merchant Princes', '💰', '#ffc23a', null, { gold: 3 }, ['grunt', 'scoutcar', 'buggy'],
+    { k: 'rally', every: 20, first: 8, atk: 0.2, dur: 6 }, 'Deep pockets: +3 gold every round.'),
+  CM('warden', 'The Warden', 'Wall Keepers', '🏰', '#9aa8b8', null, { armor: 1 }, ['brute', 'juggernaut', 'golem'],
+    { k: 'shield', every: 25, first: 0.5, pct: 0.35 }, 'Hold the line: your army starts with a barrier worth 35% of its health, again every 25 s.'),
+  CM('gearwright', 'Doctor Gearwright', 'Clockwork Guild', '🔧', '#c89a5a', null, { hp: 0.06 }, ['lighttank', 'walker', 'flak'],
+    { k: 'summon', every: 11, first: 4, unit: 'sentry', n: 3 }, 'Tinkerer: 3 sentry turrets every 11 s.'),
+  CM('nightshade', 'Lady Nightshade', 'Moonlit Court', '🌙', '#9a7ad8', null, { poison: 0.5 }, ['ninja', 'leech', 'plaguerat'],
+    { k: 'stealth', every: 18, first: 0.5, dur: 3 }, 'Moonveil: your army turns invisible for 3 s at the start and every 18 s.'),
+  CM('ragnar', 'Ragnar Thunderking', 'Northmen', '🔨', '#7ac8ff', null, { atk: 0.06 }, ['berserker', 'warlord', 'icegolem'],
+    { k: 'quake', every: 14, first: 7, r: 8, dmg: 60, stun: 1.5 }, 'Thunderclap: every 14 s the enemy\'s biggest crowd takes 60 damage and is stunned 1.5 s.'),
+  CM('nova', 'Star Admiral Nova', 'Orbital Fleet', '🚀', '#6af0ff', null, { range: 1 }, ['kite', 'gunship', 'firedrake'],
+    { k: 'strike', every: 20, first: 9, n: 1, r: 6, dmg: 220 }, 'Orbital lance: one huge blast (220 damage, 6 m) every 20 s.'),
+  CM('puppeteer', 'The Puppeteer', 'Strings Theatre', '🎭', '#ff7ab0', null, { hex: 0.06 }, ['voidling', 'necro', 'banshee'],
+    { k: 'convert', every: 10, first: 6, n: 1, maxV: 60 }, 'Strings: every 10 s an enemy switches to your side.'),
+  CM('sylva', 'Huntress Sylva', 'Greenwood Rangers', '🏹', '#6ad07a', null, { range: 2, rate: 0.1 }, ['sniper', 'slinger', 'hound'],
+    { k: 'snipe', every: 10, first: 5, n: 2, dmg: 90 }, 'Volley: +2 m range, and every 10 s the two toughest enemies take 90 damage.'),
+  CM('krag', 'Warmaster Krag', 'Blood Horde', '🪓', '#d04a3a', null, { speed: 0.1 }, ['berserker', 'brute', 'hound'],
+    { k: 'rally', every: 12, first: 3, atk: 0.5, dur: 4 }, 'Bloodlust: every 12 s your army hits 50% harder for 4 s.'),
+  CM('bloom', 'Mother Bloom', 'Verdant Circle', '🌸', '#ff9ad0', null, { regenPct: 0.005 }, ['shaman', 'nest', 'spitter'],
+    { k: 'heal', every: 6, first: 4, pct: 0.1 }, 'Blossom: every 6 s your army heals 10% of its health.'),
+  CM('tick', 'Chronomancer Tick', 'Clock Tower', '⏳', '#c0b0ff', null, { rate: 0.1 }, ['frostling', 'wisp', 'tempest'],
+    { k: 'freeze', every: 12, first: 5, slow: 0.6, dur: 3, stun: 0 }, 'Time slip: every 12 s the enemy army is slowed 60% for 3 s.'),
+  CM('vlad', 'Baron Vlad', 'Night Nobles', '🦇', '#a0204a', null, { lifesteal: 0.25 }, ['leech', 'banshee', 'lich'],
+    { k: 'storm', every: 14, first: 7, n: 1, r: 6, dps: 30, dur: 5 }, 'Blood moon: 25% lifesteal, and a draining cloud on the enemy every 14 s.'),
+  CM('blitz', 'Bombardier Blitz', 'Demolition Crew', '💣', '#ff9a3a', null, { splash: 1 }, ['ratbomb', 'mortar', 'walker'],
+    { k: 'strike', every: 14, first: 6, n: 4, r: 3, dmg: 55 }, 'Carpet bomb: 4 bombs every 14 s.'),
+  CM('omega', 'Overseer Omega', 'Panopticon', '👁', '#e0e0ff', null, { block: 0.08, hex: 0.08 }, ['buzz', 'colossus', 'overlord'],
+    { k: 'snipe', every: 14, first: 6, n: 1, dmg: 260 }, 'All-seeing eye: every 14 s the toughest enemy takes 260 damage.'),
+  CM('zix', 'Swarm Lord Zix', 'Chitin Brood', '🦂', '#b0d040', null, { speed: 0.15 }, ['crawlers', 'spitter', 'nest'],
+    { k: 'summon', every: 12, first: 3, unit: 'broodling', n: 10 }, 'Hatch: 10 broodlings every 12 s.'),
+  CM('elara', 'Paladin Elara', 'Dawn Order', '🛡', '#fff0b0', null, { armor: 1, regenPct: 0.005 }, ['zealot', 'templar', 'seraph'],
+    { k: 'shield', every: 15, first: 5, pct: 0.2, heal: 0.1 }, 'Aegis: every 15 s your army heals 10% and gets a 20% barrier.'),
+  CM('jester', 'The Jester', 'Carnival of Fools', '🃏', '#ff5ad0', null, { gold: 1, random: 1 }, ['imp', 'ratbomb', 'phasebeast'],
+    { k: 'random', every: 10, first: 4 }, 'Wild card: +1 gold a round, a random bonus each battle and a random power every 10 s.'),
+];
+export const CMD_BY_ID = new Map(COMMANDERS.map(c => [c.id, c]));
+export const CMD_POWERS = ['strike', 'storm', 'heal', 'rally', 'shield', 'freeze', 'summon', 'convert', 'snipe', 'quake'];
+// Commander units: player versions of enemy troops (unit cards only that commander's owner is offered)
+for (const c of COMMANDERS) {
+  c.cards = [];
+  for (const id of c.units) {
+    const e = UNIT_BY_ID.get(id); if (!e) continue;
+    const cid = 'c-' + id;
+    if (!UNIT_BY_ID.has(cid)) {
+      const count = Math.max(1, Math.round(TIER_TARGET[e.tier] * 0.9 / Math.max(0.5, e.v)));
+      const u = { ...e, id: cid, side: 0, count, icon: c.icon, desc: `${c.name}'s troops: ${e.name.toLowerCase()}s fighting for you.`, cmdUnit: id };
+      u.v = unitValue(u);
+      UNIT_BY_ID.set(cid, u);
+    }
+    c.cards.push('u-' + cid);
+  }
+}
+export function commanderCards() {
+  const out = [];
+  for (const [id, u] of UNIT_BY_ID) if (u.cmdUnit) out.push({ ...unitCard(u), noShop: true, cmd: true });
+  return out;
 }

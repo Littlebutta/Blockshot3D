@@ -1,18 +1,18 @@
 {
   "id": "shield-spaceking",
-  "name": "Space King",
+  "name": "Big Brother",
   "rarity": "shieldmod",
-  "icon": "👑",
-  "description": "Hold block to sing for the Space King. When the song ends, a boss steps out on your side.",
+  "icon": "🧍",
+  "description": "Hold block to charge. When it fills, a giant, slow copy of you stomps in on your side.",
   "displayLines": [
     {
-      "text": "Boss",
-      "label": "Full charge: a co-op boss fights for you this round",
+      "text": "Giant",
+      "label": "Full charge: a huge copy of you fights for you this round",
       "good": true
     },
     {
       "text": "Hold",
-      "label": "Block to charge (one long charge)",
+      "label": "Block to charge (about 9 s)",
       "good": true
     }
   ],
@@ -24,6 +24,6 @@
     }
   ],
   "shieldMod": "spaceking",
-  "details": "Hold block to charge (about 17 seconds at base stats, as long as growing a Sacred Grove circle and all 3 of its levels; you can't move or shoot while charging). Nothing happens while you charge except a light opera choir that others can hear.\n\nWhen the charge is full, one of the co-op bosses (The Warden or The Storm Engine) steps out next to you and fights on your side until it dies or the round ends. It never comes back next round. Once per round.\n\nLet go and the charge drains back, but not at once. Charging speed comes from Block cooldown and Block duration. No block bubble.",
+  "details": "Hold block to charge (about 9 seconds at base stats; you can't move or shoot while charging). When it is full, Big Brother steps out next to you: a giant copy of you (2.4x size, 3.5x your health, 1.5x damage, bigger bullets, your gun and cards) that moves at under half your speed. He fights on your side until he dies or the round ends, and his kills win rounds for you. Once per round.\n\nLet go and the charge drains back, but not at once. Charging speed comes from Block cooldown and Block duration. No block bubble.",
   "image": "art.png"
 }

@@ -26,25 +26,76 @@ export const BRAWL = {
   dash: { minHold: 0.25, maxCharge: 1.1, minDist: 3, maxDist: 11, time: 0.22, hover: -1.2, breakHits: 2 },   // hold the second jump to charge an air dash toward the mouse
   hang: { reach: 0.9, max: 5, regrab: 0.6 },   // ledge grab on the stage's outer edges
   float: 3.5,         // respawn: float in place (invulnerable) this long, or press jump to drop in early
+  weightMax: 1.3,     // v1.2.23: heaviest a fighter can get (big health builds were near unlaunchable)
+  weightMin: 0.8,
 };
+
+// v1.2.23 item boxes: drop onto a random floor every so often; touch one to grab its power-up.
+export const BITEMS = {
+  every: 13, life: 15, max: 2, dur: 8, reach: 1.4,
+  kinds: ['heal', 'power', 'heavy', 'speed', 'jump'],
+  heal: 35,          // damage % removed
+  power: 1.35,       // your hits launch this much farther
+  heavy: 1.5,        // you're this much heavier (past the weight cap)
+  speed: 1.3,        // move speed
+  jump: 1.25,        // jump height
+};
+export const BITEM_INFO = {
+  heal: { name: 'Bandage', icon: '✚', color: '#5dff8f' },
+  power: { name: 'Power Glove', icon: '✊', color: '#ff5d5d' },
+  heavy: { name: 'Anvil', icon: '⚓', color: '#9aa7b8' },
+  speed: { name: 'Sneakers', icon: '⚡', color: '#ffd84a' },
+  jump: { name: 'Spring', icon: '⤒', color: '#6cc8ff' },
+};
+// Strength of a fighter's active power-up of kind k (1 when they don't have it).
+export const bItemK = (g, p, k) => p && p.fx && p.fx.bItem && p.fx.bItem.k === k && p.fx.bItem.t > g.time ? BITEMS[k] : 1;
+let iid = 0;
+export function brawlItems(g, dt) {
+  if (g.phase !== 'play' || g.settings.brawlItems === false || !g.level.brawl) { g.bItems = []; return; }
+  const I = BITEMS, stands = g.level.side.stands;
+  g.bItems = g.bItems || [];
+  g.bItemT = (g.bItemT ?? I.every * 0.5) - dt;
+  if (g.bItemT <= 0) {
+    g.bItemT = I.every * (0.75 + Math.random() * 0.5);
+    if (g.bItems.length < I.max && stands.length) {
+      const [x0, x1, top] = stands[Math.floor(Math.random() * stands.length)];
+      const x = x0 + 0.8 + Math.random() * Math.max(0, x1 - x0 - 1.6);
+      g.bItems.push({ id: ++iid, k: I.kinds[Math.floor(Math.random() * I.kinds.length)], x, y: top + 10, gy: top, t: I.life });
+    }
+  }
+  for (const it of g.bItems) {
+    it.t -= dt;
+    if (it.y > it.gy) it.y = Math.max(it.gy, it.y - 7 * dt);
+    for (const p of g.players) {
+      if (p.kind !== 'hero' || !p.alive || !p.connected || it.t <= 0) continue;
+      if (Math.abs(p.pos.x - it.x) > I.reach || p.pos.y + 1.6 < it.y || p.pos.y > it.y + 1.2) continue;
+      it.t = 0;
+      if (it.k === 'heal') p.pct = Math.max(0, (p.pct || 0) - I.heal);
+      else p.fx.bItem = { k: it.k, t: g.time + I.dur };
+      g.emit({ t: 'brawlItem', p: p.id, k: it.k, x: it.x, y: it.y + 0.5, z: 0 });
+    }
+  }
+  g.bItems = g.bItems.filter(it => it.t > 0);
+}
+export const bItemRows = g => (g.bItems || []).map(it => [it.id, it.k, Math.round(it.x * 100) / 100, Math.round(it.y * 100) / 100, Math.round(it.t * 10) / 10]);
 
 // Fixed builds: every character body is a fighter. Builds lean into one idea each so the cards work together.
 export const FIGHTERS = {
   classic:  { name: 'The Brawler',      cards: ['battering-ram', 'twin-barrel', 'steady-hands', 'quick-hands', 'spring-heels'] },
-  bolt:     { name: 'Overcharge',       cards: ['mod-beam-rifle', 'storm-caller', 'rapid-cycler', 'quick-guard'] },
-  mochi:    { name: 'Bouncer',          cards: ['big-bubble', 'shock-bubble', 'repulsor', 'long-guard', 'big-iron', 'padded-vest'] },
+  bolt:     { name: 'Overcharge',       cards: ['mod-beam-rifle', 'storm-caller', 'quick-guard'] },   // v1.2.23: lost Rapid Cycler,
+  mochi:    { name: 'Bouncer',          cards: ['big-bubble', 'shock-bubble', 'repulsor', 'long-guard', 'big-iron', 'padded-vest', 'hollow-points'] },   // v1.2.23: + Hollow Points,
   sentinel: { name: 'Siege Knight',     cards: ['mass-driver', 'bulk-up', 'reinforced-plating', 'bulwark', 'shield-pillar'] },
-  quack:    { name: 'Rubber Ducky',     cards: ['pinball-bomb', 'splinter-bounce', 'kinetic-rebound', 'spring-heels', 'shield-slam'] },
-  astro:    { name: 'Star Caller',      cards: ['guided-meteor', 'volatile-payload', 'overclocked-legs', 'shield-rewind'] },
+  quack:    { name: 'Rubber Ducky',     cards: ['pinball-bomb', 'splinter-bounce', 'kinetic-rebound', 'spring-heels', 'shield-slam', 'quick-hands', 'heavy-slugs'] },   // v1.2.23: + Quick Hands, Heavy Slugs,
+  astro:    { name: 'Star Caller',      cards: ['guided-meteor', 'volatile-payload', 'overclocked-legs', 'shield-rewind', 'hollow-points', 'quick-hands'] },   // v1.2.23: + Hollow Points, Quick Hands,
   cubert:   { name: 'Blockhead',        cards: ['mod-grenade-launcher', 'fortify', 'heavy-slugs', 'iron-lung', 'titan-frame'] },
-  tiki:     { name: 'Fire Dancer',      cards: ['mod-flamethrower', 'wildfire', 'napalm-rounds', 'troll-blood', 'overclocked-legs', 'repulsor'] },   // v1.2.13 (Devin): block blasts people away
-  shroom:   { name: 'Spore Lord',       cards: ['plague-doctor', 'hex-rounds', 'sanctuary', 'wide-shells'] },
+  tiki:     { name: 'Fire Dancer',      cards: ['mod-flamethrower', 'wildfire', 'napalm-rounds', 'troll-blood', 'overclocked-legs', 'repulsor', 'thick-hide', 'bulk-up', 'velocity-rounds', 'hollow-points'] },   // v1.2.23: + Thick Hide, Bulk Up, Velocity Rounds, Hollow Points   // v1.2.13 (Devin): block blasts people away
+  shroom:   { name: 'Spore Lord',       cards: ['plague-doctor', 'hex-rounds', 'sanctuary', 'wide-shells', 'quick-hands'] },   // v1.2.23: + Quick Hands,
   prism:    { name: 'Refractor',        cards: ['trick-shot', 'kinetic-rebound', 'mirror-edge', 'velocity-rounds', 'shield-catcher'] },
   gumdrop:  { name: 'Sticky Situation', cards: ['demolition', 'scp', 'rebound-charge', 'ricochet-rounds', 'bulk-up'] },
-  vanguard: { name: 'Bulwark',          cards: ['mod-riot-shield', 'thick-hide', 'siphon-shield', 'reverb-barrage', 'fortress-stance'] },
-  wisp:     { name: 'Phantom Blade',    cards: ['mod-katana', 'blink-runner', 'vampiric-nanites', 'bullet-time'] },
-  strider:  { name: 'Rushdown',         cards: ['mod-scattergun', 'hollow-points', 'thruster', 'overclocked-legs', 'spring-heels', 'shield-slam'] },
-  fishbowl: { name: 'Deep Diver',       cards: ['bullet-hose', 'speed-loader', 'encore-engine', 'frost-rounds', 'shield-turret'] },
+  vanguard: { name: 'Bulwark',          cards: ['mod-riot-shield', 'siphon-shield', 'fortress-stance'] },   // v1.2.23: lost Thick Hide and Reverb Barrage,
+  wisp:     { name: 'Phantom Blade',    cards: ['mod-katana', 'blink-runner'] },   // v1.2.23: lost Vampiric Nanites and Bullet Time (won 9 in 10 bot fights),
+  strider:  { name: 'Rushdown',         cards: ['mod-scattergun', 'hollow-points', 'thruster', 'overclocked-legs', 'spring-heels', 'shield-slam', 'steady-hands', 'heavy-slugs'] },   // v1.2.23: + Steady Hands, Heavy Slugs,
+  fishbowl: { name: 'Deep Diver',       cards: ['bullet-hose', 'frost-rounds', 'shield-turret'] },   // v1.2.23: lost Encore Engine and Speed Loader,
 };
 export const FIGHTER_IDS = Object.keys(FIGHTERS);
 export const fighterOf = cos => FIGHTERS[cos && cos.model] ? cos.model : 'classic';
@@ -75,6 +126,12 @@ const STAGES = [
   { name: 'Pagoda', W: 9, p: [[0, 2.8, 10], [0, 5.6, 5]] },
   { name: 'Twin Lifts', W: 9, mv: [[-5, 2.5, 3, 'y', 2, 5], [5, 2.5, 3, 'y', 2, 5]] },
   { name: 'Crossroads', W: 10, p: [[-6.5, 2.8, 3.5], [6.5, 2.8, 3.5], [0, 5, 4]], mv: [[0, 8, 3, 'x', 6, 9]] },
+  // v1.2.23 new stages
+  { name: 'Canopy', W: 8, p: [[-4, 3, 3.5], [4, 3, 3.5]], hang: [[0, 6.2, 4, 3]] },
+  { name: 'Island Hop', W: 5, ledge: [[-14, -8, 0.8], [8, 14, 0.8]], mv: [[-6.5, 3.5, 2.5, 'y', 1.5, 5], [6.5, 3.5, 2.5, 'y', 1.5, 5]] },
+  { name: 'Clocktower', W: 9, b: [[0, 2.6, 3]], p: [[-5.5, 3.6, 3.5], [5.5, 3.6, 3.5], [0, 6.4, 4]] },
+  { name: 'Conveyor', W: 11, mv: [[0, 3, 5, 'x', 5, 7], [0, 6, 3, 'x', -4, 7]] },
+  { name: 'Ruins', W: 10, b: [[-6.5, 1.8, 2], [6.5, 1.8, 2]], p: [[-3, 3.8, 3], [3, 3.8, 3]], hang: [[0, 6, 3, 3.5]] },
 ];
 // Lobby option "Flat, wide stages": one long island, nothing else.
 const FLAT = [{ name: 'Wide Open', W: 16 }, { name: 'Long Haul', W: 19 }, { name: 'Flat Plains', W: 14, p: [[0, 3.4, 6]] }];
@@ -155,11 +212,11 @@ function brawlKO(g, p) {
 
 // Hit launch: replaces the normal hidden knockback for fighters. Harder hits and a higher % launch farther;
 // more max health makes you heavier. Hits restore your air jump so you can always try to recover.
-export function brawlLaunch(g, t, amt, dir) {
+export function brawlLaunch(g, t, amt, dir, src) {
   const pending = ((t.bHp ?? t.hp) - t.hp + (t.fx.bOver || 0)) * BRAWL.pctPerDmg;
   const pct = (t.pct || 0) + Math.max(0, pending);
-  const weight = Math.sqrt(Math.max(40, g.maxHp(t)) / DEFAULT_STATS.health) * (t.size || 1) ** 0.5;
-  const hitK = 0.55 + 0.45 * Math.min(2.5, amt / DEFAULT_STATS.damage);
+  const weight = Math.max(BRAWL.weightMin, Math.min(BRAWL.weightMax, Math.sqrt(Math.max(40, g.maxHp(t)) / DEFAULT_STATS.health) * (t.size || 1) ** 0.5)) * bItemK(g, t, 'heavy');
+  const hitK = (0.55 + 0.45 * Math.min(2.5, amt / DEFAULT_STATS.damage)) * bItemK(g, g.creditOf ? g.creditOf(src) : src, 'power');
   const v = (BRAWL.kbBase + pct * BRAWL.kbPct) * hitK / weight;
   const l = Math.hypot(dir.x, dir.y || 0) || 1, hx = dir.x / l, hy = (dir.y || 0) / l;
   let vx, vy;
@@ -177,6 +234,7 @@ export function brawlLaunch(g, t, amt, dir) {
 // Every tick while playing: turn health changes into damage % (damage raises it, healing lowers it), respawns,
 // and sudden death after BRAWL.suddenT.
 export function brawlTick(g, dt) {
+  brawlItems(g, dt);
   const sudden = g.time > BRAWL.suddenT;
   if (sudden && !g.overtime) { g.overtime = true; g.overtimeAt = g.time; g.emit({ t: 'overtime', brawl: true }); }
   if (sudden) g.suddenMul();   // (announces each doubling even when nobody is hit)

@@ -2,15 +2,17 @@
 import { RULES, DEFAULT_STATS, DEFAULT_LOBBY_SETTINGS, sizeFor, speedFor, UNITS, bulletGravityFor, ROUND_MODS } from './config.js';
 import { applyCard, finishStats, weightedOffer, VARIANT_CHANCE, variantBase } from './cards.js';
 import { generateLevel, spawnPoints, clearSpawns, mulberry32, edgeDistance, boundaryPoint } from './levelgen.js';
-import { prepareLevel, movePlayer, moveBody, accel, pointInSolid, rayExit, groundBelow, segBlocked, clampToArena, wallSegments } from './physics.js';
+import { tournOn, tournStart, tournCheck, tournAfter, tournRows } from './tourn.js';
+import { BUDGET, budgetTick, budgetAllow, budgetAdd, budgetRoom, budgetRow } from './budget.js';
+import { prepareLevel, movePlayer, moveBody, accel, pointInSolid, rayExit, groundBelow, segBlocked, clampToArena, wallSegments, buildGrid, PA } from './physics.js';
 import { planWave, splitWave, unitSpec, spawnBoss, spawnAllyBoss, bossThink, portalThink, coopTick, bossDown, telegraphRows, shockRows, bossRow, gmBudget, coopDiff, UNIT_COSTS, UNIT_NAMES, isBossWave, addBlotch, CORE_TWISTS } from './coop.js';
 import { botThink } from './ai.js';
 import { generateOpenWorld, owStart, owTick, owAir, owView, owBotThink, owRoundEnd, owDrive, owCarHit, OW } from './openworld.js';
 import { runHook } from './effects.js';
-import { TRAP, trapState, crusherAt, segDist } from './traps.js';
+import { TRAP, trapState, crusherAt, segDist, pinchAt, pinchPos } from './traps.js';
 import { SIDE, generateSideLevel, sideSpawnPoints, sideRules, swingStep, swingImpulse, inPit } from './side.js';
-import { CORE, generateCoreLevel, coreSpawnPoints, coreSpawnGuard, coreStart, coreCapture, coreTick, coreUse, corePlace, coreRows, coreAmonPick, coreAmonStats, coreAwardLeftovers } from './core.js';
-import { BRAWL, generateBrawlLevel, brawlSpawnPoints, brawlRules, brawlLaunch, brawlTick, applyFighter, brawlMove, brawlHit } from './brawl.js';
+import { CORE, generateCoreLevel, coreSpawnPoints, coreSpawnGuard, coreStart, coreCapture, coreTick, coreUse, corePlace, coreRows, coreAmonPick, coreAmonStats, coreAwardLeftovers, coreUseInput, coreCarrySlow } from './core.js';
+import { BRAWL, generateBrawlLevel, brawlSpawnPoints, brawlRules, brawlLaunch, brawlTick, applyFighter, brawlMove, brawlHit, bItemK, bItemRows } from './brawl.js';
 
 const PR = RULES.playerRadius, PH = RULES.playerHeight, CHEST = RULES.chest;
 const fin = v => typeof v === 'number' && isFinite(v);
@@ -59,9 +61,10 @@ function applySplit(s, k) { for (const key of SPLIT_STATS) if (typeof s[key] ===
 export const NAPALM = { life: 5, max: 40, perBullet: 8, dps: 0.22, burnFor: 2, polyWallTop: 1.0 };
 // Bullet Time: a field around the holder that slows bullets which can hurt them to 25% speed. More copies = bigger field.
 export const SLOWFIELD = { slow: 0.75, radius: 4, perCopy: 2.5, height: 3 };
-const UNIT_WINS = new Set(['turret', 'blockTurret', 'mount', 'critter']);   // v1.2.13: units that win a round for their owner (with a Space King)
+const UNIT_WINS = new Set(['turret', 'blockTurret', 'mount', 'critter', 'clone', 'twin', 'drone']);   // (v1.2.26: clones and summons too)   // v1.2.13: units that win a round for their owner (with a Space King)
 export const BANK_RANGE = 22;   // Bank Shot: how far a bounced bullet looks for a visible target   // extra bite reach for critters beyond touching distance
-export const PILLAR_SHIELD = 170;   // Pillar Shield health before Block size / Block duration scaling
+const PILLAR_LIP = 0.6;   // how far the top-only shield reaches down the pillar's sides
+export const PILLAR_SHIELD = 300;   // v1.2.22: was 170, and it now scales harder with Block size and Block duration   // Pillar Shield health before Block size / Block duration scaling
 // Turret shield mod: the turret's own block bubble. hp = base x (Block duration / 0.35)^0.75 x sqrt(Block size).
 // Broken: comes back full after `recharge` s. Intact: refills `regen` of its max per second once it's gone `delay` s without a hit.
 export const TURRET_SHIELD = { base: 50, recharge: 3, delay: 2.5, regen: 0.1 };
@@ -69,7 +72,7 @@ export const TURRET_SHIELD = { base: 50, recharge: 3, delay: 2.5, regen: 0.1 };
 //   reach: slash reach past your body (m, x your size); arc: half-angle of the slash (rad); slashMul: slash damage x your bullet damage;
 //   active: how long a slash keeps cutting bullets (s); chargeTime: full charge at the base fire rate (fire rate scales it);
 //   minCharge: release below this and no wave flies; wave*: the wave's speed (x bullet speed), life (s), width and damage
-export const KATANA = { reach: 2.1, arc: 1.1, slashMul: 1.4, active: 0.16, chargeTime: 1.1, minCharge: 0.25,
+export const KATANA = { grace: 0.32, reach: 2.1, arc: 1.1, slashMul: 1.4, active: 0.16, chargeTime: 1.1, minCharge: 0.25,
   waveSpeed: 0.85, waveLife: [0.8, 1.3], waveW: [0.5, 1.15], waveDmg: [1.0, 2.6], cutPad: 0.3, minScale: 0.7, maxScale: 2.6 };
 // Super Saiyan Hair shield mod: a separate health pool soaked before your own health, filled by holding block.
 //   mult: full pool = mult x your max health; fillTime: seconds from empty to full at base block stats
@@ -89,18 +92,24 @@ export const GROVE = { radius: 2.3, drawTime: RITUAL.drawTime, levelTime: RITUAL
   angelHeal: 0.03, angelHp: 0.6, angelShield: 70, chargeHeal: 0.004 };   // chargeHeal: a tiny heal (share of max health per second) while you charge
 // Space King shield mod: one long charge (as long as growing a grove circle plus all 3 of its levels), nothing happens meanwhile
 // except a soft opera choir, then a co-op boss steps out on your side for the rest of the round. Once per round.
-export const KING = { time: 17, decay: 1.5, humEvery: 8.2, cdMul: 1.4 };
+export const KING = { time: 9, decay: 1.5, humEvery: 8.2, cdMul: 1.4 };   // v1.2.22: charges in 9 s (was 17)
+// v1.2.22 (Devin) Big Brother replaces the Space King boss: a giant copy of you (x hp, x damage, x move speed, body size)
+export const BIGBRO = { hp: 3.5, dmg: 1.5, speed: 0.45, size: 2.4 };
 // Life drain stat: siphons from the nearest visible enemy within base + Drain range metres.
 export const DRAIN_RANGE = 5;
 // Rewind Blink: how far back (s) the blink goes. Bullet Catcher: how far (m) released bullets look for a target, and their damage bonus.
 export const REWIND_T = 6;   // v26: rewinds further back (was 3.5 s)
 // Poison (v26): one poison per target that eats about POISON.share of max health over POISON.dur seconds, the rate ramping up
 // the longer it stays on. New hits refresh the timer without resetting the ramp, so keeping someone poisoned hurts far more.
-export const POISON = { dur: 5, share: 0.4, rampCap: 12, boss: 0.25, perLevel: 0.2, hpCap: 1500 };   // hpCap: the share is of at most this much health
+export const POISON = { dur: 5, share: 0.22, rampCap: 12, boss: 0.25, perLevel: 0.2, hpCap: 1500 };   // hpCap: the share is of at most this much health
 // Shock Bubble (v26): blocking sends one shock burst through the floor around you instead of a constant aura.
 // Squid / Bees (v26): swimming and swarming bullets. cap = top speed (people can outrun them), turn = rad/s, see = target range.
 export const SWARM = { bee: { cap: 8.5, turn: 7, see: 30, life: 6, look: 2.4, spread: 0.7, wob: 0.75 },   // v28 bees: slower, look further ahead, fly spread out
    squid: { cap: 13, turn: 3.4, see: 26, life: 6.5, pulse: 1.05 } };
+// v1.2.22 (Devin) squid rework: a squid that reaches someone latches on and gnaws (bite = share of its damage every `every` s,
+// for up to `latch` s), healing its shooter. Blocking or a shield knocks it off; mashing jump (`mash` presses in `win` s)
+// shakes every squid off and stuns them for `stun` s before they look for a new target.
+export const SQUID = { bite: 0.24, every: 0.45, latch: 3.6, steal: 0.25, mash: 4, win: 1.2, stun: 2.2, blockStun: 1.2 };
 // Toxic Cloud (v26): impacts leave a poison cloud that drifts on in the bullet's direction and spreads out.
 export const TOXIC = { life: 4, max: 30, perBullet: 4, dps: 0.3, drift: 1.3, grow: 1.9 };
 // 2D side view: bullets drop this much harder, so arcing shots takes skill (v26).
@@ -162,6 +171,8 @@ export class Game {
     this.settings.side = !!this.settings.side && this.settings.mode !== 'open';   // 2D side view: every mode except the open world
     if (this.settings.side) this.settings.hazards = false;   // the laser / saws / turret are built for the top-down arenas
     if (['practice', 'open'].includes(this.settings.mode) || this.settings.brawl || this.settings.core) this.settings.roundMods = 'off';
+    this.tourn = this.settings.mode === 'tourn';   // v1.2.26 Tournament (tourn.js): its own 1v1 arenas, in 3D, without the roaming hazards
+    if (this.tourn) { this.settings.side = false; this.settings.hazards = false; }
     this.rmod = null;
     this.allCards = cards;
     this.cardById = new Map(cards.map(c => [c.id, c]));
@@ -226,6 +237,7 @@ export class Game {
       gen: undefined, roamer: undefined, home: undefined, noBlock: undefined, coreProp: undefined, heavy: undefined, coreDeaths: undefined,
       coreRespT: undefined, carry: undefined, coreReady: undefined, coreUnit: undefined, healN: undefined, fighter: undefined, stocks: undefined,
       pct: undefined, bHp: undefined, announced: undefined, casterId: undefined, riderId: undefined, anchor: undefined, hpCap: undefined,
+      arena: undefined, tLives: undefined, tko: undefined, giftIn: undefined, fps: undefined,
     };
   }
   maxHp(p) { return p.stats.health + (p.bonusHp || 0); }
@@ -249,19 +261,27 @@ export class Game {
   heroes() { return this.players.filter(p => p.kind === 'hero'); }
   scoreKey(p) {
     if (!p) return null;
+    if (p._skN === this.stepN && p._skG === this && p._skT === p.team && p._skO === p.ownerId && this._inStep) return p._sk;   // v1.2.25: once per player per step (asked per bullet per target)
+    const k = this.scoreKey0(p); p._skN = this.stepN; p._skG = this; p._sk = k; p._skT = p.team; p._skO = p.ownerId;
+    return k;
+  }
+  scoreKey0(p) {
     if (p.kind === 'hazardTurret') return 'hazard';
     if (p.ownerId) return this.scoreKey(this.player(p.ownerId)) || 'gone';
     if (this.isWaves()) return p.team === 1 ? 'waves' : 'players';
     if (this.isOpen()) return p.roamer ? 'roamers' : this.isExtract() ? 'players' : this.settings.owSquads ? 't' + p.team : p.id;
     if (this.isPractice()) return 't' + p.team;
+    if (this.tourn) return this.settings.tTeams ? 't' + p.team : p.id;
     return this.settings.mode === 'tdm' ? 't' + p.team : p.id;
   }
   isEnemy(a, b) {
     if (!a || !b || a === b) return false;
+    if (this.tourn && a.arena !== b.arena) return false;   // v1.2.26: another arena's players don't exist for you
     return this.scoreKey(a) !== this.scoreKey(b);
   }
   canHurt(src, t) {
     if (!src) return true;
+    if (this.tourn && src.arena !== t.arena) return false;
     if (src === t) return !(t.stats.noSelfDamage > 0);   // you can always hurt yourself, unless SCP
     if (!this.isEnemy(src, t)) return this.settings.friendlyFire; // friendly fire only covers allies
     return true;
@@ -283,6 +303,7 @@ export class Game {
     inp.blockSeq = i.blockSeq | 0; inp.reloadSeq = i.reloadSeq | 0; inp.useSeq = i.useSeq | 0; inp.rot = (i.rot | 0) & 7;   // rot: Core Defense carry turn (scroll wheel)
     inp.jumpSeq = (i.jumpSeq ?? i.js) | 0; inp.shotSeq = (i.shotSeq ?? i.ss) | 0;   // v1.2.6: press counters, so a quick tap is never lost between two steps
     if (!p.alive || p.reviving) { p.fx.jSeq = inp.jumpSeq; p.lastShotSeq = inp.shotSeq; }   // (presses made while down don't fire once you're back)
+    if (fin(i.fps)) p.fps = clamp(i.fps, 1, 1000);   // v1.2.25: frame rate, for the shot budget
     if (i.q != null) { const q = i.q | 0; if (q !== inp.q) p.inAt = this.time; inp.q = q; }   // v30: input sequence, echoed back for prediction (v1.2.9: inAt, see predRows)
     if (i.aim && fin(i.aim.x) && fin(i.aim.y) && fin(i.aim.z)) inp.aim = norm(SIDE_ON ? { x: i.aim.x, y: i.aim.y, z: 0 } : i.aim);
     if (SIDE_ON) inp.mz = 0;
@@ -309,7 +330,7 @@ export class Game {
     this.oneModEach(p);
     const s = { ...DEFAULT_STATS };
     p.mod = null; p.smod = null;
-    for (const id of p.cards) { const c = this.cardById.get(id); if (c) { applyCard(s, c); if (c.weaponMod && c.weaponMod !== 'squad') p.mod = c.weaponMod; if (c.shieldMod) p.smod = c.shieldMod; } }   // (Squad Caller keeps your normal gun)
+    for (const id of p.cards) { const c = this.cardById.get(id); if (c) { applyCard(s, c); if (c.weaponMod && !['squad', 'bees', 'squid'].includes(c.weaponMod)) p.mod = c.weaponMod; if (c.shieldMod) p.smod = c.shieldMod; } }   // (Squad Caller keeps your normal gun)
     this.roundCards(p, s);
     finishStats(s);
     if (this.rmod && p.kind === 'hero' && !p.dummy && ROUND_MODS[this.rmod]) { applyCard(s, { modifiers: ROUND_MODS[this.rmod].mods }); s.ammo = Math.max(1, Math.round(s.ammo)); }   // v1.2.15 round modifier (after the clamps)
@@ -483,13 +504,14 @@ export class Game {
       this.emit({ t: 'left', p: p.id, bot: true });
     }
     for (const p of this.players) { p.lateJoin = false; p.respawnT = null; }
-    const heroes = this.heroes().filter(p => p.connected);
+    const heroes = this.heroes().filter(p => p.connected && !p.tko);   // (tournament: the knocked out only watch)
     const groups = [], idx = new Map();
     for (const p of heroes) {
       const k = this.scoreKey(p);
       if (!idx.has(k)) { idx.set(k, groups.length); groups.push([]); }
       groups[idx.get(k)].push(p);
     }
+    const tArenas = this.tourn ? tournStart(this, heroes) : null;
     for (let i = groups.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [groups[i], groups[j]] = [groups[j], groups[i]]; }
     // Co-op: the Game Master buys this wave from its credit budget (coop.js) and splits it into an opening
     // group plus reinforcements. The final wave brings the boss.
@@ -503,12 +525,15 @@ export class Game {
     const open = this.isOpen(), side = this.isSide();
     SIDE_ON = side; BRAWL_ON = this.isBrawl();
     if (this.settings.core && this.coreSeed == null) this.coreSeed = seed;   // v28 Core Defense: one map for the whole match (made for wave 1)
-    const level = open ? generateOpenWorld(seed, this.settings) : this.settings.core ? generateCoreLevel(this.coreSeed, this.settings.themes) : BRAWL_ON ? generateBrawlLevel(heroes.length, seed, this.settings.themes, !!this.settings.brawlFlat) : side ? generateSideLevel(heroes.length + Math.ceil(totalUnits / 3), this.settings.mapSource, seed, this.settings.themes, { spread: this.settings.mode === 'tdm' || this.isWaves() }) : generateLevel(heroes.length + Math.ceil(totalUnits / 2), this.settings.mapSource, seed, this.settings.themes, heroes.length + waveCount, { noLava: this.isWaves(), liquids: { lava: this.settings.mapLava !== false, ice: this.settings.mapIce !== false } });
+    const level = open ? generateOpenWorld(seed, this.settings) : this.settings.core ? generateCoreLevel(this.coreSeed, this.settings.themes) : BRAWL_ON ? generateBrawlLevel(heroes.length, seed, this.settings.themes, !!this.settings.brawlFlat) : side ? generateSideLevel(heroes.length + Math.ceil(totalUnits / 3), this.settings.mapSource, seed, this.settings.themes, { spread: this.settings.mode === 'tdm' || this.isWaves() }) : generateLevel(tArenas ? Math.max(...tArenas.map(A => A.length)) : heroes.length + Math.ceil(totalUnits / 2), this.settings.mapSource, seed, this.settings.themes, heroes.length + waveCount, { noLava: this.isWaves(), liquids: { lava: this.settings.mapLava !== false, ice: this.settings.mapIce !== false } });
     level.rmod = this.rmod;
     if (this.rmod && ROUND_MODS[this.rmod].grav) level.gravK = (level.gravK || 1) * ROUND_MODS[this.rmod].grav;
     const sizes = groups.map(g => g.length);
     if (waveCount) sizes.push(waveCount);
-    const pts = open ? sizes.map(n => Array.from({ length: n }, () => ({ x: 0, y: OW.busY, z: 0 }))) : this.settings.core ? coreSpawnPoints(level, sizes) : BRAWL_ON ? brawlSpawnPoints(level, sizes) : side ? sideSpawnPoints(level, sizes) : spawnPoints(level, sizes, { coop: this.isWaves() && sizes.length === 2 });
+    // tournament: every arena is the same map, each with its own spawn points (one group per side in it)
+    const tGroups = tArenas ? tArenas.map(A => { const m = new Map(); for (const p of A) { const k = this.scoreKey(p); if (!m.has(k)) m.set(k, []); m.get(k).push(p); } return [...m.values()]; }) : null;
+    const tPts = tGroups ? tGroups.map(G => spawnPoints(level, G.map(x => x.length), {})) : null;
+    const pts = tPts ? tPts.flat() : open ? sizes.map(n => Array.from({ length: n }, () => ({ x: 0, y: OW.busY, z: 0 }))) : this.settings.core ? coreSpawnPoints(level, sizes, (coreKeep && coreKeep.cx != null ? { x: coreKeep.cx, z: coreKeep.cz } : this.corePos) || undefined) : BRAWL_ON ? brawlSpawnPoints(level, sizes) : side ? sideSpawnPoints(level, sizes) : spawnPoints(level, sizes, { coop: this.isWaves() && sizes.length === 2 });
     if (!open && !side) clearSpawns(level, pts.flat());
     this.level = prepareLevel(level);
     this.buildDynamics();
@@ -517,8 +542,10 @@ export class Game {
     const corePos = this.settings.core && coreKeep && !coreNoHeal ? new Map(heroes.filter(p => p.alive && p.pos).map(p => [p.id, { ...p.pos }])) : null;
     for (const p of this.players) { p.alive = false; p.reviving = false; }
     for (const p of heroes) if (this.rmod !== prevMod || (!BRAWL_ON && (p.stats.overdrive > 0 || p.stats.ascend > 0))) this.recompute(p);   // v1.2.15: round-based cards
+    this.bItems = []; this.bItemT = null;
     if (BRAWL_ON) for (const p of this.players) { p.stocks = p.connected && heroes.includes(p) ? Math.max(1, this.settings.stocks || BRAWL.stocks) : 0; p.respawnT = null; }
-    groups.forEach((g, gi) => g.forEach((p, k) => this.resetPlayer(p, (corePos && corePos.get(p.id)) || pts[gi][k])));
+    if (tGroups) { tGroups.forEach((G, ai) => G.forEach((g, gi) => g.forEach((p, k) => this.resetPlayer(p, tPts[ai][gi][k])))); this.tSpots = tPts.flat(2); }
+    else groups.forEach((g, gi) => g.forEach((p, k) => this.resetPlayer(p, (corePos && corePos.get(p.id)) || pts[gi][k])));
     this.ow = null;
     for (const p of this.players) { p.ow = null; p.veh = null; }
     if (open) owStart(this, heroes);
@@ -588,12 +615,16 @@ export class Game {
       stats = { ...owner.stats, projectiles: owner.stats.projectiles + 1, spread: 0.08, moveSpeed: 0, jump: 0, health: owner.stats.health * 1.2 };
       name = `${owner.name}'s turret`;
     } else if (kind === 'drone') {
-      stats = { ...DEFAULT_STATS, health: UNITS.drone.health, damage: UNITS.drone.damage, fireRate: 4, ammo: 6, reloadTime: 1.2, bulletSpeed: 32, moveSpeed: 7.5, bulletSize: 0.1 };
+      stats = { ...DEFAULT_STATS, health: UNITS.drone.health, damage: UNITS.drone.damage, fireRate: 4, ammo: 6, reloadTime: 1.2, bulletSpeed: 32, moveSpeed: 4.2, bulletSize: 0.1 };
       name = `${owner.name}'s drone`;
     } else if (kind === 'hazardTurret') {
       stats = { ...DEFAULT_STATS, health: UNITS.hazardTurret.health, damage: UNITS.hazardTurret.damage, projectiles: 2, spread: 0.08, fireRate: 2.2, ammo: 6, reloadTime: 1.8, moveSpeed: 0, jump: 0, blockCooldown: 4 };
       name = 'Turret'; color = '#cfd6e4'; team = -1;
     } else if (kind === 'wave') { stats = extra.stats; name = extra.name; color = extra.color; team = 1; cards = extra.cards || []; cosmetics = extra.cosmetics || null; }
+    else if (kind === 'bigbro') {   // v1.2.22 Big Brother (was Space King): a giant, slow copy of you with your gun and cards
+      stats = { ...owner.stats, health: owner.stats.health * BIGBRO.hp, damage: owner.stats.damage * BIGBRO.dmg, bulletSize: owner.stats.bulletSize * 1.6, moveSpeed: owner.stats.moveSpeed * BIGBRO.speed, jump: owner.stats.jump * 0.8, revive: 0 };
+      name = `${owner.name}'s Big Brother`; cosmetics = owner.cosmetics; cards = owner.cards.filter(id => !/spaceking/.test(id));
+    }
     else if (kind === 'clone') { stats = { ...owner.stats, revive: 0 }; name = `${owner.name}'s clone`; cosmetics = owner.cosmetics; cards = owner.cards.slice(); }
     else if (kind === 'critter') { stats = extra.stats; name = `${owner.name}'s critter`; }
     else if (kind === 'blockTurret' || kind === 'mount') { stats = extra.stats; name = `${owner.name}'s turret`; }
@@ -612,7 +643,8 @@ export class Game {
       if (p.kind === 'splitter') { p.fixedSize = 1.5; p.melee = 14 + this.round; }
       if (extra.melee) p.melee = extra.melee;
     }
-    if (kind === 'clone') { p.mod = owner.mod; p.smod = 'clone'; p.ephemeral = true; }   // a clone can block too: that splits the clone itself
+    if (kind === 'clone') { p.mod = owner.mod; p.smod = 'clone'; p.ephemeral = true; }
+    if (kind === 'bigbro') { p.mod = owner.mod; p.fixedSize = BIGBRO.size; p.noBlock = true; p.heavy = true; p.kingOf = owner.id; }   // a clone can block too: that splits the clone itself
     if (kind === 'critter') { p.fixedSize = 0.5; p.melee = extra.melee; p.lifeT = 12; p.ephemeral = true; }
     if (kind === 'blockTurret') { p.fixedSize = extra.size; p.lifeT = extra.life; p.noBlock = true; p.ephemeral = true; }
     if (kind === 'mount') { p.fixedSize = MOUNT.size; p.noBlock = true; p.ephemeral = true; p.heavy = true; p.casterId = owner.id; p.riderId = null; }
@@ -621,6 +653,7 @@ export class Game {
     if (kind === 'decoy') { p.fixedSize = owner.size || 1; p.noBlock = true; p.ephemeral = true; p.lifeT = extra.life || 2; }
     if (kind === 'soldier') { p.fixedSize = NEWC.squad.size; p.noBlock = true; p.ephemeral = true; }
     p.stats = stats; p.cards = cards;
+    if (this.tourn) p.arena = owner.arena ?? null;   // (a unit fights in its owner's arena)
     this.players.push(p);
     this.resetPlayer(p, pt);
     return p;
@@ -777,6 +810,26 @@ export class Game {
       }
     }
   }
+  // v1.2.22 pinch pistons: a jaw shoves anyone in its way toward the middle while closing; caught between shut jaws = dead
+  pinchStep(o) {
+    const d = o.def, c = pinchAt(d, this.time), ax = d.axis, was = o.st;
+    o.pos[ax] = pinchPos(d, c.k); o.st = c.st;
+    if (c.st === 3 && was !== 3 && d.side > 0) this.emit({ t: 'nc', k: 'crush', x: ax === 'x' ? d.c : o.pos.x, z: ax === 'x' ? o.pos.z : d.c });
+    if (c.st < 2 || c.st > 3) return;
+    const pa = ax === 'x' ? 'z' : 'x';
+    for (const p of this.players) {
+      if (!p.alive || p.reviving || p.flying) continue;
+      const r = PR * (p.size || 1), oa = o.w / 2 + r - Math.abs(p.pos.x - o.pos.x), ob = o.d / 2 + r - Math.abs(p.pos.z - o.pos.z);
+      if (oa <= 0 || ob <= 0 || p.pos.y >= o.pos.y + o.h - 0.05 || p.pos.y + PH * (p.size || 1) <= o.pos.y) continue;
+      const pen = ax === 'x' ? oa : ob;
+      if (c.st === 3 || Math.abs(p.pos[ax] - d.c) < r + 0.15) {   // caught in the middle
+        if (this.phase === 'play' && (p.fx.crushCd || 0) <= this.time) { p.fx.crushCd = this.time + 0.5; this.dmgTag = 'blast'; this.hurt(p, 9999, null, { x: 0, y: 1, z: 0 }); }
+        continue;
+      }
+      p.pos[ax] -= d.side * (pen + 0.03); p.vel[ax] = -d.side * 6;   // pushed toward the middle with the jaw
+      if (Math.abs(p.pos[pa] - o.pos[pa]) > 0) { /* stays in its lane */ }
+    }
+  }
   // Spike floors, laser fences and sweeping lasers (traps.js): hurt whoever touches them while they're on.
   updateTraps() {
     const L = this.level, T = this.time;
@@ -828,7 +881,7 @@ export class Game {
     s.min.y = o.pos.y; s.max.y = o.pos.y + o.h;
   }
   impulse(o, J) {
-    if (!o || o.kind === 'slide' || o.kind === 'piston' || o.kind === 'crusher') return;
+    if (!o || o.kind === 'slide' || o.kind === 'piston' || o.kind === 'crusher' || o.kind === 'pinch') return;
     if (o.kind === 'swing') { swingImpulse(o, J); return; }
     o.vel.x += J.x / o.mass; o.vel.y += J.y / o.mass; o.vel.z += J.z / o.mass;
   }
@@ -846,6 +899,8 @@ export class Game {
         o.h = o.def.hMin + (o.def.hMax - o.def.hMin) * k;
       } else if (o.kind === 'crusher') {
         this.crusherStep(o);
+      } else if (o.kind === 'pinch') {
+        this.pinchStep(o);
       } else if (o.kind === 'swing') {
         swingStep(o, dt);
       } else if ((o.kind === 'crate' || o.kind === 'barrel') && o.gone) {
@@ -904,7 +959,10 @@ export class Game {
     this.solids = L.solids.concat(...B.map(b => b.solids), this.dyn.map(o => o.solid));
     this._solK = { out: this.solids, ls: L.solids, n: L.solids.length, dyn: this.dyn, nd: this.dyn.length, bs: B.map(b => b.solids) };
     if (this._wallSrc !== this.level.solids) { this._wallSrc = this.level.solids; this.wallSolids = this.level.solids.filter(s => s.wall); }   // v1.2.6: once per level, not every tick
-    if (this.level.grid) {   // open world: static boxes through the grid, the rest always checked
+    if (this.tourn) for (const b of B) for (const q of b.solids) q.arena = b.ownerRef ? b.ownerRef.arena ?? null : null;   // (tournament: walls only stand in their builder's arena)
+    if (this.tourn && !this.level.grid) { this.level.grid = buildGrid(L.solids, 4); L.solids.grid = this.level.grid; L.solids.extra = []; }   // (the arena filter works on the grid's extras)
+    if (this.level.grid && this.level.grid.n !== L.solids.length) { this.level.grid = buildGrid(L.solids, this.level.open ? 8 : 4); L.solids.grid = this.level.grid; L.solids.extra = []; }   // (tests push boxes in)
+    if (this.level.grid) {   // static boxes through the grid, the rest always checked
       this.solids.grid = this.level.grid; this.solids.hAt = this.level.hAt;
       this.solids.extra = this.solids.length > this.level.solids.length ? this.solids.slice(this.level.solids.length) : [];
     }
@@ -924,6 +982,7 @@ export class Game {
       const x = b.x + ux * b.len * 0.42 * i / 2, z = b.z + uz * b.len * 0.42 * i / 2;
       for (const s of this.solids) {
         if (s.wall || (skip && s.barricade === skip) || s.noPlayer) continue;
+        if (this.tourn && s.arena != null && b.ownerRef && s.arena !== b.ownerRef.arena) continue;   // (another arena's walls)
         if (x > s.min.x && x < s.max.x && z > s.min.z && z < s.max.z && s.max.y <= (s.barricade ? wallLimit : limit) && s.max.y > top) top = s.max.y;
       }
     }
@@ -1017,6 +1076,7 @@ export class Game {
   turretShieldUp(q) { const ts = q.fx.tshield; return !!(ts && ts.hp > 0); }
   // Damage that hits a turret's bubble wears it down; when it breaks it recharges (like the Riot Shield).
   soakShield(q, amt) {
+    if (amt > 0) this.lastDmgT = this.time;
     const ts = q.fx.tshield;
     if (q.blockT > 0 || !ts || ts.hp <= 0) return;
     ts.hp -= amt; ts.lastHit = this.time;
@@ -1304,12 +1364,13 @@ export class Game {
     let y0 = groundBelow(this.solids, x, z, p.pos.y + 0.05);
     // v28: over a pit / off the stage (Brawl's Siege Knight), the pillar starts under your feet instead of from the void (which dragged you down to it)
     if (!(y0 > p.pos.y - 8) || (L.side && L.hAt && y0 <= L.hAt(x, z) + 1)) y0 = p.pos.y - 0.05;
-    const b = { id: this.nextId++, kind: 'pillar', owner: p.id, ownerRef: p, x, z, y0, len: w, th: w, h: 0.05, hMax: RULES.tierHeights[2] * 1.4, ang: 0, hp: 400, maxHp: 400, grow: true };
+    const b = { id: this.nextId++, kind: 'pillar', owner: p.id, ownerRef: p, x, z, y0, len: w, th: w, h: 0.05, hMax: RULES.tierHeights[2] * 2, ang: 0, hp: 400, maxHp: 400, grow: true };   // v1.2.22 (Devin): taller (x2 tier, was x1.4)
     b.solids = this.wallSegments(b);
     this.barricades.push(b); this.refreshSolids();
-    const pool = Math.round(PILLAR_SHIELD * bs * Math.sqrt((s.blockDuration || DEFAULT_STATS.blockDuration) / DEFAULT_STATS.blockDuration));
+    const pool = Math.round(PILLAR_SHIELD * Math.pow(bs, 1.3) * ((s.blockDuration || DEFAULT_STATS.blockDuration) / DEFAULT_STATS.blockDuration));
     const W = w + 0.4;
-    this.shields.push({ id: this.nextId++, owner: p.id, ownerRef: p, box: true, pillar: b, x, z, y0, w: W, d: W, h: b.h + this.pillarShieldTop(p), t: Infinity,
+    // v1.2.22 (Devin): the shield only wraps the top of the pillar (where you stand), from just under its top edge up
+    this.shields.push({ id: this.nextId++, owner: p.id, ownerRef: p, box: true, pillar: b, x, z, y0: y0 + b.h - PILLAR_LIP, w: W, d: W, h: PILLAR_LIP + this.pillarShieldTop(p), t: Infinity,
       hp: pool, maxHp: pool, shock: 0, leech: s.blockLeech > 0 ? 1 : 0 });
     // stand on it right away, so the rising pillar lifts you instead of shoving you aside
     if (Math.abs(p.pos.x - x) < w / 2 && Math.abs(p.pos.z - z) < w / 2) { p.pos.y = y0 + b.h; p.vel.y = Math.max(0, p.vel.y); p.onGround = true; }
@@ -1332,7 +1393,7 @@ export class Game {
     }
     if (this.barricades.some(b => b.kind === 'pillar')) this.refreshSolids();
     // the square shield follows its pillar's height
-    for (const s of this.shields) if (s.box && s.pillar) { s.y0 = s.pillar.y0; s.h = s.pillar.h + this.pillarShieldTop(s.ownerRef); }
+    for (const s of this.shields) if (s.box && s.pillar) { s.y0 = s.pillar.y0 + s.pillar.h - PILLAR_LIP; s.h = PILLAR_LIP + this.pillarShieldTop(s.ownerRef); }
   }
 
   // Rewind Blink: blocking jumps you back to where you were REWIND_T seconds ago, and heals you back up to the health you had then.
@@ -1525,6 +1586,12 @@ export class Game {
 
   // ------------------------------------------------------------ main loop
   step(dt) {
+    this._inStep = true;
+    const t0 = performance.now();
+    try { this.step0(dt); } finally { this._inStep = false; }
+    budgetTick(this, dt, performance.now() - t0);   // v1.2.25 entity / bullet budget (budget.js)
+  }
+  step0(dt) {
     this.stepDt = dt; this.stepN++;
     if (this.phase === 'countdown') {
       this.phaseT -= dt; this.time += dt;
@@ -1596,6 +1663,7 @@ export class Game {
   updatePlayers(dt, canAct) {
     for (const p of this.players) {
       if (!p.alive) continue;
+      if (this.tourn) PA.a = p.arena ?? null;   // (v1.2.26: only your own arena's walls)
       if (p.lifeT != null && canAct) { p.lifeT -= dt; if (p.lifeT <= 0) { this.expireUnit(p); continue; } }
       if (p.reviving) { this.updateReviving(p, dt); continue; }
       if (p.kind === 'hero') this.mountUse(p);   // v1.2.8 Gun Nest: E mans / leaves a turret
@@ -1610,6 +1678,7 @@ export class Game {
       this.updatePlayer(p, dt, canAct);
       if (real) { p.input = real; this.riderPin(p); }
     }
+    PA.a = null;
   }
 
   updateReviving(p, dt) {
@@ -1654,15 +1723,15 @@ export class Game {
     p.fx.jPrev = !!inp.jump;
     const js = inp.jumpSeq | 0;   // v1.2.6: a jump press that came and went between two steps (or a lost packet) still buffers a jump
     if (p.fx.jSeq === undefined) p.fx.jSeq = js;
-    if (js !== p.fx.jSeq) { p.fx.jSeq = js; p.fx.jBuf = this.time; }
+    if (js !== p.fx.jSeq) { p.fx.jSeq = js; p.fx.jBuf = this.time; if ((p.fx.sqOnT || 0) > this.time) (p.fx.mash || (p.fx.mash = [])).push(this.time); }   // v1.2.22: mashing jump shakes off squid
     if (p.onGround) p.fx.airT = 0; else if (p.fx.airT !== 9) p.fx.airT = (p.fx.airT || 0) + dt;
     const wantJump = inp.jump || this.time - (p.fx.jBuf ?? -9) < 0.13;
     const coyote = !BRAWL_ON && !p.onGround && p.fx.airT < 0.1 && p.vel.y <= 0.5;
     if (bHold) { /* brawl.js moved them */ }
     else if (inp.drop && p.onGround && p.groundOneWay && !frozen) { p.dropThru = 0.3; p.onGround = false; p.vel.y = Math.min(p.vel.y, -1); p.fx.jBuf = -9; }   // v1.2.6: the chord's jump press is used up (no coyote jump back up)
-    else if (wantJump && !hold && !frozen && (p.onGround || coyote) && s.jump > 0) { p.fx.jBuf = -9; p.fx.airT = 9; p.vel.y = s.jump * (L.side ? SIDE.jumpMul * Math.sqrt(L.gravK || 1) : 1) * (L.ice ? ICE.jumpK : 1); p.onGround = false; this.emit({ t: 'jump', p: p.id }); }
+    else if (wantJump && !hold && !frozen && (p.onGround || coyote) && s.jump > 0) { p.fx.jBuf = -9; p.fx.airT = 9; p.vel.y = s.jump * (L.side ? SIDE.jumpMul * Math.sqrt(L.gravK || 1) : 1) * (L.ice ? ICE.jumpK : 1) * (BRAWL_ON ? bItemK(this, p, 'jump') : 1); p.onGround = false; this.emit({ t: 'jump', p: p.id }); }
     else if (BRAWL_ON && inp.jump && !p.fx.jHeld && !hold && !frozen && !p.onGround && (p.fx.airJ || 0) > 0 && s.jump > 0) {   // brawl: double jump
-      p.vel.y = s.jump * SIDE.jumpMul * 0.95; p.fx.airJ--; p.fx.launchT = 0; this.emit({ t: 'jump', p: p.id });
+      p.vel.y = s.jump * SIDE.jumpMul * 0.95 * bItemK(this, p, 'jump'); p.fx.airJ--; p.fx.launchT = 0; this.emit({ t: 'jump', p: p.id });
     }
     if (BRAWL_ON) { if (p.onGround) p.fx.airJ = BRAWL.airJumps; p.fx.jHeld = !!inp.jump; }
     if (inp.aim) p.aim = inp.aim;
@@ -1681,8 +1750,19 @@ export class Game {
     if (L.lava && !p.flying) this.lavaRules(p);
     if (L.brawl) { brawlRules(this, p); if (!p.alive) return; }
     else if (L.side) { sideRules(this, p, dt); if (!p.alive) return; }
-    if (!fin(p.pos.x) || !fin(p.pos.y) || !fin(p.pos.z) || p.pos.y > (L.open ? OW.ceil : 40) || p.pos.y < (L.hAt ? L.hAt(p.pos.x, p.pos.z) - 3 : -1) || Math.abs(p.pos.x) > L.hx || Math.abs(p.pos.z) > L.hz || (L.edges && edgeDistance(L.edges, p.pos.x, p.pos.z) < -1.5)) {
+    // v1.2.26 (Devin: players teleporting with no teleport cards): this safety net used to send you back to your spawn
+    // whenever you went above 40 m (a big launch, Thrust, explosions) or a little past the arena edge. Now only a broken
+    // position does that; too high hits an invisible ceiling, past the edge is pushed back in, under the floor is lifted
+    // back onto it (lava and ice keep their own rules: falling in there still counts).
+    const top = L.open ? OW.ceil : 40, floorY = L.hAt ? L.hAt(p.pos.x, p.pos.z) : 0;
+    if (!fin(p.pos.x) || !fin(p.pos.y) || !fin(p.pos.z) || ((L.lava || L.ice) && p.pos.y < floorY - (L.hAt ? 3 : 1))) {
       p.pos = { ...p.spawn }; p.vel = { x: 0, y: 0, z: 0 };
+    } else {
+      if (p.pos.y > top) { p.pos.y = top; if (p.vel.y > 0) p.vel.y = 0; }
+      if (p.pos.y < floorY - (L.hAt ? 3 : 1)) { p.pos.y = floorY; if (p.vel.y < 0) p.vel.y = 0; }
+      if (Math.abs(p.pos.x) > L.hx || Math.abs(p.pos.z) > L.hz || (L.edges && edgeDistance(L.edges, p.pos.x, p.pos.z) < -1.5)) {
+        const c = this.clampArena(p.pos.x, p.pos.z, PR * (p.size || 1)); p.pos.x = c.x; p.pos.z = c.z;
+      }
     }
     p.fireT -= dt; p.blockCdT -= dt; p.flashT -= dt;
     if (p.blockT > 0) {
@@ -1712,8 +1792,8 @@ export class Game {
       const u = inp.useSeq | 0;
       if (p.lastUseSeq === undefined) p.lastUseSeq = u;
       // v26: press picks up (or catches); while carrying, hold to aim the hologram and let go to put it down
-      if (u !== p.lastUseSeq) { p.lastUseSeq = u; if (p.carry) p.carry.armed = true; else coreUse(this, p); }
-      if (p.carry && p.carry.armed && !inp.use) { if (this.phase === 'play' || this.phase === 'countdown') corePlace(this, p); else p.carry.armed = false; }
+      const pressed = u !== p.lastUseSeq; if (pressed) p.lastUseSeq = u;
+      coreUseInput(this, p, pressed, !!inp.use, dt);   // v1.2.23: holding it by the core lifts the core
     }
     const ss = inp.shotSeq | 0; if (p.lastShotSeq === undefined) p.lastShotSeq = ss;
     if (canAct) {
@@ -1738,7 +1818,7 @@ export class Game {
 
   // Top walking speed right now (crouch, chill and wet slow it). v30: also sent to the player for local prediction.
   walkSpeed(p) {
-    return (p.crouch ? OW.crouch.speed : 1) * (this.hairFull(p) && !p.fx.hold ? HAIR.fullSpeed : 1) * this.rushK(p) * p.stats.moveSpeed * speedFor(p.size) * ((p.fx.chillT || 0) > this.time ? 1 - (p.fx.chillK || 0.4) : 1) * ((p.fx.wetT || 0) > this.time ? ICE.wetSlow : 1);
+    return (BRAWL_ON ? bItemK(this, p, 'speed') : 1) * (p.carry ? coreCarrySlow(p) : 1) * (p.crouch ? OW.crouch.speed : 1) * (this.hairFull(p) && !p.fx.hold ? HAIR.fullSpeed : 1) * this.rushK(p) * p.stats.moveSpeed * speedFor(p.size) * ((p.fx.chillT || 0) > this.time ? 1 - (p.fx.chillK || 0.4) : 1) * ((p.fx.wetT || 0) > this.time ? ICE.wetSlow : 1);
   }
   // v30 client-side prediction: per remote human [id, last input seq applied, walk speed, jump speed, ok, on ground].
   // ok = 0 whenever the simple walk/jump model would guess wrong (vehicles, falling in, brawl, holds, moving floors...).
@@ -1876,6 +1956,7 @@ export class Game {
   // Bullets in a wave: your bullets per shot, plus the extra ones charged by holding.
   waveCount(p, extra) { return Math.max(1, Math.round(p.stats.projectiles)) + Math.max(0, Math.min(RIOT.maxExtra, extra | 0)); }
   fireWave(p, extra) {
+    if (!budgetAllow(this, p)) return;
     if (p.stats.tank > 0) return this.fireShell(p, extra);
     const s = p.stats, n = this.waveCount(p, extra);
     const step = n > 1 ? Math.min(0.16, 1.3 / (n - 1)) : 0;   // a fan, never wider than ~75 degrees
@@ -1920,7 +2001,7 @@ export class Game {
   }
   // Bullets: blocked where they cross the shield's surface (an arc RIOT.radius out from the holder).
   riotCheck(b, prev) {
-    for (const q of this.players) {
+    for (const q of this._riotQ || this.players) {
       if (q.mod !== 'shield' || q.id === b.owner || !this.riotUp(q) || !this.isEnemy(b.ownerRef, q)) continue;
       const R = RIOT.radius * q.size;
       const d1 = Math.hypot(prev.x - q.pos.x, prev.z - q.pos.z), d2 = Math.hypot(b.pos.x - q.pos.x, b.pos.z - q.pos.z);
@@ -1958,7 +2039,10 @@ export class Game {
       f.kHeld = true; f.kCharge = 0;
       if (p.fireT <= 0) this.katanaSlash(p);
     } else if (held) {
-      if ((f.kHeldT = (f.kHeldT || 0) + dt) > 0.12) f.kCharge = Math.min(1, (f.kCharge || 0) + dt / this.katanaChargeTime(p));
+      // v1.2.22 (Devin): a longer grace before holding counts as charging (quick slashes stay plain melee), and a full
+      // charge fires the wave by itself and starts charging the next one while you keep holding
+      if ((f.kHeldT = (f.kHeldT || 0) + dt) > KATANA.grace) f.kCharge = Math.min(1, (f.kCharge || 0) + dt / this.katanaChargeTime(p));
+      if (f.kCharge >= 1) { this.katanaWave(p, 1); f.kCharge = 0; f.kHeldT = KATANA.grace * 0.5; }
     } else if (f.kHeld) {                         // release: a charged slash flies off as a wave
       f.kHeld = false; f.kHeldT = 0;
       if ((f.kCharge || 0) >= KATANA.minCharge) this.katanaWave(p, f.kCharge);
@@ -2021,6 +2105,7 @@ export class Game {
   // Swing size follows your bullet damage (sqrt), never below KATANA.minScale so low-damage builds can still hit.
   katanaScale(p) { return clamp(Math.sqrt(this.effDamage(p.stats) / DEFAULT_STATS.damage), KATANA.minScale, KATANA.maxScale); }
   katanaWave(p, charge) {
+    if (!budgetAllow(this, p)) return;
     const s = p.stats, n = Math.max(1, Math.round(s.projectiles)), lerp = ([a, b], k) => a + (b - a) * k, ks = this.katanaScale(p);
     p.fireT = Math.max(p.fireT, 0.2);
     for (let k = 0; k < n; k++) {
@@ -2084,8 +2169,7 @@ export class Game {
     p.fx.king = 0; p.fx.kingUsed = true; p.blockCdT = p.stats.blockCooldown * KING.cdMul;
     const a = Math.atan2(p.aim.x, p.aim.z), at = { x: p.pos.x + Math.sin(a) * 3.5, z: p.pos.z + Math.cos(a) * 3.5 };
     const spot = this.freeSpot(at.x, at.z, p.pos.x, p.pos.z, PR * 2.8, p.pos.y);
-    const b = spawnAllyBoss(this, p, spot);
-    b.kingOf = p.id;
+    const b = this.spawnUnit('bigbro', p, spot);
     this.unitsChanged();
     this.emit({ t: 'kingSummon', p: p.id, name: b.name, x: spot.x, y: spot.y, z: spot.z });
   }
@@ -2336,6 +2420,7 @@ export class Game {
   tryShoot(p, encore = false) {
     if (p.mod === 'shield' || p.mod === 'katana') return;   // the shield and katana charge instead (updateShieldGun / updateKatana)
     if (!encore && (p.reloadT > 0 || p.fireT > 0 || p.ammo <= 0)) return;
+    if (!budgetAllow(this, p)) return;   // v1.2.25: too many of your shots in the air (no ammo used)
     const s = p.stats;
     if (!encore) { p.fireT = 1 / (s.fireRate * (s.runGun > 0 && Math.hypot(p.input.mx || 0, p.input.mz || 0) >= 0.1 ? 1 + s.runGun : 1)); p.ammo--; }   // (v1.2.15 Running Gun)
     if (!encore && s.encore > 0 && p.mod !== 'critter') {
@@ -2576,7 +2661,7 @@ export class Game {
         b.vel = v; b.swOff = Math.random() * Math.PI * 2; b.swWob = (0.6 + Math.random() * 0.8) * (Math.random() < 0.5 ? -1 : 1);
       }
     }
-    this.bullets.push(b);
+    this.bullets.push(b); budgetAdd(this, p);
     return b;
   }
 
@@ -2591,6 +2676,7 @@ export class Game {
     const tag = this.dmgTag || (quiet ? 'dot' : 'hit'); this.dmgTag = null;   // v1.2.11: what kind of damage, for the death recap
     if (!t.alive || t.reviving || this.phase !== 'play') return;
     if ((t.fx.invulnT || 0) > this.time) return;
+    if (amt > 0) this.lastDmgT = this.time;   // (v1.2.26: a units-only standoff with no damage ends in a draw)
     // v1.2.15 Gilded Shell: a hit (not burn / poison ticks) that would hurt you just shatters a shell instead
     if ((t.fx.shell || 0) > 0 && !quiet && amt >= 1 && src !== t && this.canHurt(src, t)) {
       t.fx.shell--; t.flashT = 0.12;
@@ -2626,7 +2712,7 @@ export class Game {
     t.hp -= rest; if (!quiet) t.flashT = 0.12;   // steady damage (burn, poison, shock) shows its own effect instead of a white flash
     if (this.isPractice() && this.settings.practiceGod && !t.isBot && t.kind === 'hero' && t.hp < 1) t.hp = 1;   // practice: you can't die
     if (BRAWL_ON && t.kind === 'hero' && amt > 0) brawlHit(this, t);   // a hit lets go of a ledge; two break a dash charge
-    if (dir && BRAWL_ON && t.kind === 'hero') brawlLaunch(this, t, amt, dir);   // brawl: launches grow with damage %
+    if (dir && BRAWL_ON && t.kind === 'hero') brawlLaunch(this, t, amt, dir, src);   // brawl: launches grow with damage %
     else if (dir && !t.heavy) { // hidden knockback (the boss and portals don't budge): every hit pushes, harder the more damage it does (stacks with the Knockback stat)
       const k = Math.min(RULES.hitKnockMax, RULES.hitKnockBase + amt * RULES.hitKnockPerDamage) / t.size;
       t.vel.x += dir.x * k; t.vel.z += dir.z * k;
@@ -2684,16 +2770,19 @@ export class Game {
     return { kk: tag, dl: L.map(x => x.n ? [x.s, x.k, Math.round(x.a), x.o, x.n] : [x.s, x.k, Math.round(x.a)]) };   // units: + owner id, name (they may be gone by the time it shows)
   }
 
+  // v1.2.23 Brawl HUD rows: [id, damage %, stocks, fighter, air jump left, air dash ready, power-up kind or 0]
+  brawlRows() {
+    return this.heroes().filter(p => p.connected).map(p => [p.id, Math.round(p.pct || 0), p.stocks || 0, p.fighter || 'classic', p.fx.airJ || 0, p.fx.dashUsed ? 0 : 1, p.fx.bItem && p.fx.bItem.t > this.time ? p.fx.bItem.k : 0]);
+  }
   // ---------------------------------------------------------- bullet hits
   applyHit(b, q, dir) {
     const src = b.ownerRef, hm = this.ncHitMul(b, q);   // v1.2.15: Pressure Stack, Bounty Mark
-    if (b.poison > 0) {
-      this.addPoison(q, src, b.poison);
-      this.hurt(q, 0.01, src, dir);
-    } else if (b.flame) {
+    // v1.2.21 (Devin): poison rides on top of the bullet's own damage (it used to replace it); the poison share is smaller to make room
+    if (b.poison > 0) this.addPoison(q, src, b.poison);
+    if (b.flame) {
       this.hurt(q, b.dmg * 0.25 * hm, src, null, true);
       this.setBurn(q, 3, b.dmg * 0.6, src, src);   // a flamethrower stream is one burn (refreshed), not a stack per flame
-    } else this.hurt(q, b.dmg * hm, src, dir);
+    } else { this._hitCown = b.cown; this.hurt(q, b.dmg * hm, src, dir); this._hitCown = null; }   // (v1.2.26: an Overpen fragment stays the original shooter's)
     this.ncOnHit(b, q, hm);   // v1.2.15: Ammo Leech, Battle Rhythm, Bounty heal, Gravity Well
     if (b.ignite > 0) this.setBurn(q, 3, b.dmg * 0.18 * b.ignite, src);
     if (b.chill > 0) { q.fx.chillK = Math.max((q.fx.chillT || 0) > this.time ? q.fx.chillK || 0 : 0, Math.min(0.65, 0.4 + 0.1 * (b.chill - 1))); q.fx.chillT = this.time + 1.5 * b.chill; }   // stacked chill slows harder
@@ -2717,7 +2806,7 @@ export class Game {
     }
   }
   shrapnelBurst(b, hitQ = null) {
-    const n = 3 * Math.round(b.shrapnel);
+    const n = budgetRoom(this) ? 3 * Math.round(b.shrapnel) : 0;   // (v1.2.25: none once the shot budget is used up)
     for (let k = 0; k < n; k++) {
       const a = Math.random() * Math.PI * 2, d = norm({ x: Math.cos(a), y: 0.2 + Math.random() * 0.4, z: Math.sin(a) });
       const f = this.spawnBullet(b.ownerRef, { x: b.pos.x + d.x * 0.3, y: Math.max(0.3, b.pos.y), z: b.pos.z + d.z * 0.3 }, d, 18, false);
@@ -2836,7 +2925,7 @@ export class Game {
       if (vol > 0) this.explode({ ...b.pos }, b.dmg, b.ownerRef, { knock: b.knockback, cown: b.cown, noSelf: true });
       if (b.shrapnel > 0) this.shrapnelBurst(b);
     }
-    if (b.bounceSplit > 0 && !b.splitChild) {
+    if (b.bounceSplit > 0 && !b.splitChild && budgetRoom(this)) {
       const n = Math.round(b.bounceSplit);
       for (let k = 1; k <= n; k++) {
         const sgn = k % 2 ? 1 : -1, ang = sgn * 0.35 * Math.ceil(k / 2);
@@ -2892,11 +2981,11 @@ export class Game {
 
   // Shields (bubbles and deployed walls) get first say on every bullet, even drilling ones.
   shieldCheck(b, prev) {
-    for (const q of this.players) {
-      if (!q.alive || q.reviving || !this.shielded(q) || q.id === b.owner || !this.isEnemy(b.ownerRef, q)) continue;
+    for (const q of this._shQ || this.players) {   // (v1.2.25: updateBullets lists who has a shield up once per step)
+      if (!q.alive || q.reviving || q.id === b.owner) continue;
       const R = 1.05 * q.stats.blockSize * q.size, c = { x: q.pos.x, y: q.pos.y + 0.8 * q.size, z: q.pos.z };
       const off = { x: b.pos.x - c.x, y: b.pos.y - c.y, z: b.pos.z - c.z }, d = len(off);
-      if (d < R + b.r) {
+      if (d < R + b.r && this.shielded(q) && this.isEnemy(b.ownerRef, q)) {
         const n = norm(off);
         b.pos = { x: c.x + n.x * (R + b.r + 0.03), y: c.y + n.y * (R + b.r + 0.03), z: c.z + n.z * (R + b.r + 0.03) };
         if (q.blockT > 0 && q.smod === 'catcher') { this.catchBullet(b, q); return true; }
@@ -2911,8 +3000,11 @@ export class Game {
         return true;
       }
     }
-    const tShot = this.isTurret(b.ownerRef);
+    let tShot = null;
     for (const s of this.shields) {
+      const qx = b.pos.x - s.x, qz = b.pos.z - s.z, qr = (s.w + s.d) * 0.5 + b.r + 0.2;
+      if (qx * qx + qz * qz > qr * qr) continue;   // v1.2.25: nowhere near this one (every test below is inside this circle)
+      if (tShot === null) tShot = this.isTurret(b.ownerRef);
       if (tShot && s.hp > 0 && !s.box && s.owner !== b.owner && !this.isEnemy(b.ownerRef, s.ownerRef)) {   // a turret's shot stops on a friendly bastion
         const [lx, lz] = this.shieldLocal(s, b.pos.x, b.pos.z);
         if (Math.abs(lx) < s.w / 2 + b.r && Math.abs(lz) < s.d / 2 + b.r && b.pos.y > s.y0 && b.pos.y < s.y0 + s.h) { this.killBullet(b, true); return true; }
@@ -3017,6 +3109,46 @@ export class Game {
   }
   // v1.2.8: a squid / bee that runs out of time pops where it is, so its impact effects (napalm on the floor below,
   // explosions, shrapnel, toxic clouds) still go off like any other bullet's (they used to just vanish mid-air).
+  // v1.2.22 squid latch: stick to the target at a spot on its body, bite now and then, heal the shooter
+  squidLatch(b, q) {
+    const a = Math.random() * Math.PI * 2, R = PR * q.size * 0.9;
+    b.latch = { q, ox: Math.cos(a) * R, oz: Math.sin(a) * R, oy: (0.35 + Math.random() * 0.5) * PH * q.size, bt: 0.12, end: this.time + SQUID.latch };
+    b.vel = { x: 0, y: 0, z: 0 }; b.life = Math.max(b.life, SQUID.latch + 0.2);
+    q.fx.sqOnT = this.time + 0.25;
+    this.emit({ t: 'nc', k: 'squidOn', p: q.id, x: b.pos.x, y: b.pos.y, z: b.pos.z });
+  }
+  squidDetach(b, stun, dir) {
+    const q = b.latch && b.latch.q; b.latch = null; b.stunT = stun; b.swTgt = null;
+    const d = dir || norm({ x: b.pos.x - (q ? q.pos.x : b.pos.x) || 0.3, y: 0, z: b.pos.z - (q ? q.pos.z : b.pos.z) || 0.3 });
+    b.vel = { x: d.x * 7, y: 4, z: this.level.side ? 0 : d.z * 7 };
+    b.life = Math.max(b.life, stun + 2.5);
+  }
+  squidGnaw(b, dt) {
+    const Lt = b.latch, q = Lt.q;
+    if (!q.alive || q.reviving || !this.isEnemy(b.ownerRef, q)) { this.squidDetach(b, 0.3); return; }
+    if (this.shielded(q)) { this.squidDetach(b, SQUID.blockStun); this.emit({ t: 'nc', k: 'squidOff', p: q.id, x: b.pos.x, y: b.pos.y, z: b.pos.z }); return; }   // block / shield knocks it off
+    const m = q.fx.mash;
+    if (m && m.length) {
+      while (m.length && this.time - m[0] > SQUID.win) m.shift();
+      if (m.length >= SQUID.mash) {   // shaken off: every squid on them lets go and is stunned
+        m.length = 0;
+        for (const o of this.bullets) if (o.alive && o.latch && o.latch.q === q) this.squidDetach(o, SQUID.stun);
+        this.emit({ t: 'nc', k: 'squidOff', p: q.id, x: q.pos.x, y: this.chest(q), z: q.pos.z });
+        return;
+      }
+    }
+    b.pos = { x: q.pos.x + Lt.ox, y: q.pos.y + Lt.oy, z: q.pos.z + (this.level.side ? 0 : Lt.oz) };
+    q.fx.sqOnT = this.time + 0.25;
+    if (this.time >= Lt.end || b.life <= 0) { b.latch = null; this.swarmExpire(b); return; }
+    if ((Lt.bt -= dt) > 0) return;
+    Lt.bt = SQUID.every;
+    const d0 = b.dmg, src = b.ownerRef, h0 = q.hp;
+    b.dmg = d0 * SQUID.bite; this.dmgTag = 'bite';
+    this.applyHit(b, q, null);
+    b.dmg = d0;
+    const dealt = Math.max(0, h0 - q.hp);
+    if (src && src.alive && src.kind === 'hero' && dealt > 0) { const h1 = src.hp; src.hp = Math.min(this.maxHp(src), src.hp + dealt * SQUID.steal); this.healPing(src, h1); }
+  }
   swarmExpire(b) {
     const pop = b.napalm > 0 || b.explosive > 0 || b.shrapnel > 0 || b.toxic > 0;
     if (b.napalm > 0) { const gy = groundBelow(this.solids, b.pos.x, b.pos.z, b.pos.y + 0.1); if (b.pos.y - gy < 3) this.napalmSplat(b, { x: b.pos.x, y: gy, z: b.pos.z }, { x: 0, y: 1, z: 0 }, null); }
@@ -3083,8 +3215,28 @@ export class Game {
     const L = this.level;
     const holders = this.players.filter(h => h.alive && !h.reviving && h.stats.slowField > 0);
     for (const h of holders) h.fieldR = this.slowFieldRadius(h.stats.slowField);
+    // v1.2.25: per-step lookups so a bullet only tests the players near it (big lobbies have hundreds of bullets)
+    this._shQ = this.players.filter(q => q.alive && !q.reviving && this.shielded(q));
+    this._riotQ = this.players.filter(q => q.mod === 'shield');
+    const PG = new Map(), PGC = 4, hasBags = this.barricades.length > 0;
+    let pgR = 0;
+    this.players.forEach((q, i) => {
+      if (!q.alive) return;
+      q._bi = i;
+      const k = Math.floor(q.pos.x / PGC) * 4096 + Math.floor(q.pos.z / PGC);
+      let a = PG.get(k); if (!a) PG.set(k, a = []); a.push(q);
+      const r = PR * q.size * (q.stats.hitScale || 1); if (r > pgR) pgR = r;
+    });
+    const near = [], nearOf = (b, hr) => {
+      near.length = 0;
+      const R = pgR + hr + 0.01, i0 = Math.floor((b.pos.x - R) / PGC), i1 = Math.floor((b.pos.x + R) / PGC), j0 = Math.floor((b.pos.z - R) / PGC), j1 = Math.floor((b.pos.z + R) / PGC);
+      for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const a = PG.get(i * 4096 + j); if (a) for (const q of a) near.push(q); }
+      if (near.length > 1) near.sort((x, y) => x._bi - y._bi);   // same order as the full player list
+      return near;
+    };
     for (const b of this.bullets) {
       if (!b.alive) continue;
+      if (this.tourn) PA.a = b.ownerRef ? b.ownerRef.arena ?? null : null;
       b.slowK = holders.length && !b.hold ? this.bulletSlow(b, holders) : 1;
       const dt = dt0 * b.slowK;
       if (b.caught && this.holdCaught(b, dt)) continue;
@@ -3130,10 +3282,14 @@ export class Game {
           b.vel = { x: nd.x * sp2, y: nd.y * sp2, z: nd.z * sp2 };
         }
       }
-      if (b.swarm) this.swarmSteer(b, dt);
-      b.vel.y -= (b.grav ?? RULES.bulletGravity) * dt;
+      if (b.latch) { this.squidGnaw(b, dt); continue; }   // v1.2.22: latched squid ride their target
+      if (b.stunT > 0) { b.stunT -= dt; b.vel.x *= 1 - Math.min(1, dt * 2); b.vel.z *= 1 - Math.min(1, dt * 2); b.vel.y = Math.max(b.vel.y - 6 * dt, -4); if (b.stunT <= 0) { b.swTgt = null; b.swT = 0; } }
+      else if (b.swarm) this.swarmSteer(b, dt);
+      if (!(b.stunT > 0)) b.vel.y -= (b.grav ?? RULES.bulletGravity) * dt;
       if (b.fuse != null) { b.fuse -= dt; if (b.fuse <= 0) { this.killBullet(b, true); continue; } }
       const steps = Math.max(1, Math.ceil(sp * dt / 0.25)), h = dt / steps;
+      const tShot = this.isTurret(b.ownerRef);
+      const friendlyBag = hasBags ? (s => s.barricade && !tShot && !this.canHurt(b.ownerRef, s.barricade.ownerRef)) : null;
       for (let k = 0; k < steps && b.alive && !b.hold; k++) {
         const prev = { ...b.pos };
         b.pos.x += b.vel.x * h; b.pos.y += b.vel.y * h; b.pos.z += b.vel.z * h;
@@ -3149,9 +3305,7 @@ export class Game {
         }
         if (Math.abs(b.pos.x) > L.hx + 2 || Math.abs(b.pos.z) > L.hz + 2 || b.pos.y > (L.open ? OW.ceil : 45) || (L.side && b.pos.y < L.side.bottom - 4)) { this.killBullet(b, false); break; }
         if (this.shieldCheck(b, prev)) continue;
-        if (this.riotCheck(b, prev)) continue;
-        const tShot = this.isTurret(b.ownerRef);
-        const friendlyBag = s => s.barricade && !tShot && !this.canHurt(b.ownerRef, s.barricade.ownerRef);
+        if (this._riotQ.length && this.riotCheck(b, prev)) continue;
         const s = pointInSolid(this.solids, b.pos.x, b.pos.y, b.pos.z, b.r, friendlyBag);
         if (s) {
           if (tShot && s.barricade && !this.canHurt(b.ownerRef, s.barricade.ownerRef)) { this.killBullet(b, true); break; }   // turret shots stop on friendly walls
@@ -3186,7 +3340,7 @@ export class Game {
         const fy = L.hAt ? L.hAt(b.pos.x, b.pos.z) : 0;
         if (b.pos.y < fy + b.r) { if (b.napalm > 0) this.napalmSplat(b, { x: b.pos.x, y: fy, z: b.pos.z }, { x: 0, y: 1, z: 0 }, null); b.pos.y = fy + b.r; if (!this.bounce(b, 'y')) break; continue; }
         if (b.cutter) this.waveCuts(b);
-        for (const q of this.players) {
+        for (const q of b.ring > 0 ? this.players : nearOf(b, b.hitR || b.r)) {
           if (!q.alive || q.reviving || (q.id === b.owner && !b.bounced) || q.id === b.noHit || (q.ow && q.ow.st === 'bus')) continue;
           const hr = b.hitR || b.r, qr = PR * q.size * (q.stats.hitScale || 1) + hr;   // (v1.2.15 Light Frame: smaller hitbox)
           if ((b.pos.x > q.pos.x - qr && b.pos.x < q.pos.x + qr && b.pos.z > q.pos.z - qr && b.pos.z < q.pos.z + qr &&
@@ -3198,6 +3352,8 @@ export class Game {
               const set = this.pierceHits.get(key) || new Set(); this.pierceHits.set(key, set);
               if (set.has(q.id)) continue; set.add(q.id);
             }
+            if (b.stunT > 0) continue;   // v1.2.22: a stunned squid drifts through people
+            if (b.swarm === 'squid' && !b.pierce) { this.squidLatch(b, q); break; }   // v1.2.22: squid latch on instead of popping
             const dir = norm({ x: b.vel.x, y: L.side ? b.vel.y * 0.6 : 0, z: b.vel.z });   // side view: hits knock you up and down too
             this.applyHit(b, q, dir);
             if (b.napalm > 0) { const gy = groundBelow(this.solids, q.pos.x, q.pos.z, q.pos.y + 0.3); this.napalmSplat(b, { x: q.pos.x, y: gy, z: q.pos.z }, { x: 0, y: 1, z: 0 }, null); }
@@ -3209,6 +3365,7 @@ export class Game {
         }
       }
     }
+    this._shQ = this._riotQ = null; PA.a = null;
     this.bullets = this.bullets.filter(b => b.alive);
     if (this.pierceHits && this.pierceHits.size > 200) this.pierceHits.clear();
   }
@@ -3329,6 +3486,7 @@ export class Game {
       else if (!enemiesUp) this.endRound('players');
       return;
     }
+    if (this.tourn) { tournCheck(this); return; }
     const keys = new Set(this.players.filter(p => p.kind === 'hero' && live(p)).map(p => this.scoreKey(p)));
     if (keys.size === 0 && !BRAWL_ON) {
       // v1.2.13 (Devin): everyone's down, but a Space King, deployed turret or critter still standing wins the round for its owner.
@@ -3340,10 +3498,12 @@ export class Game {
         if (k && k !== 'gone' && k !== 'hazard') side.set(k, (side.get(k) || 0) + Math.max(0, u.hp));
       }
       if (side.size === 1) { this.endRound([...side.keys()][0]); return; }
-      if (side.size > 1) {
+      if (side.size > 1) {   // v1.2.26 (Devin): they fight on while damage is being dealt; 10 s with none (turrets out of each other's reach) is a draw
         this.unitsOnlyT = (this.unitsOnlyT ?? this.time);
-        if (this.time - this.unitsOnlyT < 8) return;
-        this.endRound([...side.entries()].sort((a, b) => b[1] - a[1])[0][0]); return;
+        const quiet = this.time - Math.max(this.unitsOnlyT, this.lastDmgT ?? -1e9);
+        if (quiet >= 10) { this.endRound(null); return; }
+        if (this.time - this.unitsOnlyT < 60) return;
+        this.endRound([...side.entries()].sort((a, b) => b[1] - a[1])[0][0]); return;   // (a minute of trading blows: most health left)
       }
     }
     this.unitsOnlyT = null;
@@ -3412,6 +3572,7 @@ export class Game {
       }
       return this.offerCards(this.heroes().filter(p => p.connected));
     }
+    if (this.tourn) return tournAfter(this);   // v1.2.26: lives, knockouts, losers pick (tourn.js)
     const champ = Object.keys(this.scores).find(k => this.scores[k] >= this.settings.roundsToWin);
     const activeKeys = new Set(this.heroes().filter(p => p.connected).map(p => this.scoreKey(p)));
     if (champ || activeKeys.size < 2) {
@@ -3447,6 +3608,8 @@ export class Game {
   nextOffer(p, exclude = []) {
     p.offer = this.makeOffer(p, exclude);
     p.pickT = this.pickLimit(p); p.pickDelay = 0.8 + Math.random() * 1.5;
+    // v1.2.26 tournament teams: a bot whose human ally is picking too waits a little, so the ally can offer it a card
+    if (p.isBot && this.tourn && this.settings.tTeams && this.players.some(q => q !== p && !q.isBot && q.kind === 'hero' && q.connected && !q.picked && q.picksLeft > 0 && this.scoreKey(q) === this.scoreKey(p))) p.pickDelay += 6;
     this.onOffer(p);
   }
   // What the pick screen shows about this player's current offer (pick 1 of 2, timer, catch-up).
@@ -3707,6 +3870,7 @@ export class Game {
     if (!held) { p.fx.vhT = 0; p.fx.vhDone = false; return; }
     p.fx.vhT = (p.fx.vhT || 0) + dt;
     if (p.fx.vhDone || p.fx.vhT < NEWC.volley.hold || (p.fx.vCd || 0) > this.time || p.hp <= 1 || p.mod === 'katana' || p.mod === 'shield') return;
+    if (!budgetAllow(this, p)) return;
     p.fx.vhDone = true; p.fx.vCd = this.time + NEWC.volley.cd;
     const s = p.stats, V = NEWC.volley, cost = p.hp * V.cost;
     p.hp = Math.max(1, p.hp - cost);
@@ -3753,7 +3917,7 @@ export class Game {
     }
     if (s.gamble > 0 && f.gam != null) {   // Gambler's Mag (encores too)
       const g = NEWC.gamble[f.gam], lv = s.gamble;
-      if (g === 'dmg') B.dmg *= 1 + lv; else if (g === 'proj') B.proj *= 1 + 0.5 * lv; else if (g === 'bounce') B.bounce += 2 * lv; else if (g === 'homing') B.homing += 5 * lv;
+      if (g === 'dmg') B.dmg *= 1 + lv; else if (g === 'proj') B.proj *= 1 + 0.5 * lv; else if (g === 'bounce') B.bounce += 2 * lv; else if (g === 'homing') B.homing += 2.5 * lv;
     }
     return B;
   }
@@ -3848,6 +4012,7 @@ export class Game {
       if (best) {
         const o = { x: t.pos.x, y: this.chest(t), z: t.pos.z }, d = norm({ x: best.pos.x - o.x, y: this.chest(best) - o.y, z: best.pos.z - o.z });
         const b = this.spawnBullet(src, o, d, Math.max(24, ss.bulletSpeed), false);
+        if (this._hitCown) b.cown = this._hitCown;
         Object.assign(b, { dmg: over * ss.overpen, noHit: t.id, grav: 0, bLeft: 0, explosive: 0, shrapnel: 0, napalm: 0, toxic: 0, limpet: 0, chain: 0, bounceSplit: 0, bounceExplode: 0, swarm: null, fx: undefined, homing: 0 });
         this.emit({ t: 'nc', k: 'overpen', p: src.id, x1: o.x, y1: o.y, z1: o.z, x2: best.pos.x, y2: this.chest(best), z2: best.pos.z });
       }
@@ -3961,7 +4126,7 @@ export class Game {
     const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100, r3 = v => Math.round(v * 1000) / 1000;
     const h = this.hazard;
     return {
-      ph: this.phase, pt: fin(this.phaseT) ? r2(this.phaseT) : -1, rd: this.round, sc: this.scores,
+      ph: this.phase, pt: fin(this.phaseT) ? r2(this.phaseT) : -1, rd: this.round, sc: this.scores, bud: budgetRow(this), tn: tournRows(this),
       pw: this.phase === 'picking' ? this.players.filter(p => !p.picked).length : 0,
       pl: this.players.filter(p => p.connected).map(p => [
         p.id, r2(p.pos.x), r2(p.pos.y), r2(p.pos.z), r2(p.aim.x), r2(p.aim.y), r2(p.aim.z),   // (v1.0.1: aim to 2 places, less traffic)
@@ -3970,14 +4135,14 @@ export class Game {
         p.blockCdT > 0 ? r2(p.blockCdT / p.stats.blockCooldown) : 0, p.flashT > 0 ? 1 : 0,
         r1(p.vel.x), r1(p.vel.y), r1(p.vel.z), p.stats.skyfall > 0 ? 1 : 0, r2(p.stats.blockSize),
         p.mod || 0, p.fx.charging ? p.fx.chargeShots : 0, p.mod === 'shield' && (p.fx.shieldBrokenT || 0) > this.time ? 1 : 0,
-        (this.burning(p) ? 1 : 0) | (p.fx.poisonS || (p.fx.toxT || 0) > this.time ? 2 : 0) | ((p.fx.chillT || 0) > this.time ? 4 : 0) | ((p.fx.hexT || 0) > this.time ? 8 : 0) | ((p.fx.wetT || 0) > this.time ? 16 : 0),
+        (this.burning(p) ? 1 : 0) | (p.fx.poisonS || (p.fx.toxT || 0) > this.time ? 2 : 0) | ((p.fx.chillT || 0) > this.time ? 4 : 0) | ((p.fx.hexT || 0) > this.time ? 8 : 0) | ((p.fx.wetT || 0) > this.time ? 16 : 0) | ((p.fx.sqOnT || 0) > this.time ? 32 : 0),
         r2(p.size),
         (p.stats.blockShock > 0 ? 1 : 0) | (p.stats.blockLeech > 0 ? 2 : 0) | (p.stats.blockDeploy > 0 ? 4 : 0),
         r2(p.stats.bulletSpeed), r2(this.bulletGrav(p)), this.playerFlags(p), r2(this.riotFrac(p)), r2(this.pillarFrac(p)),
         p.healN || 0, p.mod === 'critter' ? this.critterCount(p) : -1, r2(this.slowFieldRadius(p.stats.slowField || 0)),
         this.extRow(p),
       ]),
-      bfx: this.bullets.filter(b => b.fx).map(b => b.swarm === 'bee' && b.swTgt ? [b.id, b.fx, b.swTgt.id] : [b.id, b.fx]),   // v1.2.20: [2] who a bee is after (it turns red for them)
+      bfx: this.bullets.filter(b => b.fx).map(b => b.latch ? [b.id, b.fx, b.latch.q.id, 1] : b.swarm === 'bee' && b.swTgt ? [b.id, b.fx, b.swTgt.id] : [b.id, b.fx]),   // v1.2.20: [2] who a bee is after (it turns red for them)
       bu: this.bullets.map(b => [b.id, r2(b.pos.x), r2(b.pos.y), r2(b.pos.z), b.hold ? 0 : r2(b.vel.x * (b.slowK ?? 1)), b.hold ? 0 : r2(b.vel.y * (b.slowK ?? 1)), b.hold ? 0 : r2(b.vel.z * (b.slowK ?? 1)),
         r3(b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r), b.owner, b.ring ? r2(b.ring) : 0, b.cown && b.cown !== b.owner ? b.cown : 0,
         b.hold ? 0 : r2((b.grav ?? RULES.bulletGravity) * (b.slowK ?? 1) ** 2)]),   // v1.2.9: [11] its gravity, so joiners' decoders predict the drop (netcodec.js GRAV)
@@ -3992,7 +4157,7 @@ export class Game {
       ow: this.ow ? this.owSnap() : null,
       co: this.settings.core ? coreRows(this) : null,
       mv: this.predRows(),
-      bw: BRAWL_ON ? this.heroes().filter(p => p.connected).map(p => [p.id, Math.round(p.pct || 0), p.stocks || 0, p.fighter || 'classic']) : null,
+      bw: BRAWL_ON ? this.brawlRows() : null, bi: BRAWL_ON ? bItemRows(this) : null, bwt: BRAWL_ON ? Math.max(0, Math.ceil(BRAWL.suddenT - this.time)) : null,
     };
   }
   // Open world rows; the taken-loot list rides along once a second (and right after something is picked up).

@@ -30,16 +30,18 @@ export const CORE = {
   spikes: { len: 2.4, th: 1.0, h: 0.5, hp: 240, dps: 30 },   // hurts enemies standing in or chewing on it
   fallG: 22,              // blocks with nothing under them fall (m/s^2); a hard landing chips them
   turret: { hp: 220, size: 0.8, shield: 70 },
-  reach: 2.6,             // how close you need to be to pick something up
+  reach: 3.4,             // how close you need to be to pick something up (v1.2.23: was 2.6)
   place: 2.2,             // how far in front of you things are put down when there's no aim point
-  placeMin: 1.4, placeMax: 4.2,   // v26: things go where you aim (the cursor / crosshair), kept this close
+  placeMin: 1.2, placeMax: 5.5,   // (v1.2.23: was 1.4 - 4.2)   // v26: things go where you aim (the cursor / crosshair), kept this close
   snap: 0.3, snapAng: Math.PI / 4,   // v26: placement snaps to a 0.3 m grid and 45 degree turns (tidy walls)
-  catchR: 3.2, catchY: 4.5,       // v26: grab a falling drop this close (sideways) and no higher than this above you
+  catchR: 4, catchY: 5.5,         // (v1.2.23: was 3.2 / 4.5)       // v26: grab a falling drop this close (sideways) and no higher than this above you
   meleeWall: 0.8,         // melee enemies chew through blocks they're pressed against (share of their melee per second)
   useLock: 0.35,          // v28: after putting something down, the use key can't pick anything up for this long
-  stackMax: 4.9,          // v28: things can be put down this high above your feet (three blocks stack from the ground)
+  stackMax: 6,          // v28: things can be put down this high above your feet (three blocks stack from the ground)
   turrets: true,          // v1.2.3 (Devin): turrets drop again, at random on any wave (odds.turret), no set turret waves
   amonFrom: 3, amonChance: r => Math.min(0.5, 0.05 * (r - 2)),   // v28: AMON enemies join the raids, more each wave
+  nudge: 0.7,             // v1.2.23: a piece that would just clip the corner of another one slides off it (up to this far) instead of perching on it
+  move: { hold: 0.6, reach: 3.2, slow: 0.6, ahead: 2.2, edge: 6 },   // v1.2.23 (Devin): hold the use key by the core to pick it up and carry it (slowed); press again to put it down
   flowCell: 1,            // v28: path grid size (m) that melee raiders walk around your builds with
 };
 // How many upgrades (a card for everyone) fall this wave. v1.2.3 (Devin: too rare): one on every wave from wave 2,
@@ -49,6 +51,7 @@ export function coreUpgrades(r) {
   return 1 + (r % 5 === 0 ? 1 : 0) + (r >= 15 ? 1 : 0);
 }
 
+export const corePos = g => (g.core && g.core.pos ? g.core.pos : g.corePos || { x: 0, z: 0 });
 export function isCore(g) { return !!(g.settings && g.settings.core); }
 
 export function generateCoreLevel(seed, themeSet) {
@@ -62,28 +65,38 @@ export function generateCoreLevel(seed, themeSet) {
   return { seed, name: 'Battlefield', hx, hz, lava: false, ice: false, theme: pickTheme(rng, themeSet), boxes, dynamic: [], poly: null, shape: 'rect', core: true };
 }
 // Heroes start around the core; enemies start on the edges, spread around the whole ring.
-export function coreSpawnPoints(level, sizes) {
+export function coreSpawnPoints(level, sizes, cp = { x: 0, z: 0 }) {
   return sizes.map((n, gi) => Array.from({ length: n }, (_, k) => {
-    if (gi < sizes.length - 1 || sizes.length === 1) { const a = k * 2.4 + gi; return { x: Math.cos(a) * 4, y: 0, z: Math.sin(a) * 4 }; }
+    if (gi < sizes.length - 1 || sizes.length === 1) { const a = k * 2.4 + gi; return { x: cp.x + Math.cos(a) * 4, y: 0, z: cp.z + Math.sin(a) * 4 }; }
     return edgeSpot(level, Math.random() * Math.PI * 2);
   }));
 }
-function edgeSpot(L, a) {
-  const r = L.hx - 2.5, m = Math.max(Math.abs(Math.cos(a)), Math.abs(Math.sin(a)));
-  return { x: Math.cos(a) / m * r, y: 0, z: Math.sin(a) / m * r };
+// The edge of the field straight out from (ox, oz) at angle a.
+function edgeSpot(L, a, ox = 0, oz = 0) {
+  const r = L.hx - 2.5, c = Math.cos(a), s = Math.sin(a);
+  const tx = c > 1e-6 ? (r - ox) / c : c < -1e-6 ? (-r - ox) / c : Infinity, tz = s > 1e-6 ? (r - oz) / s : s < -1e-6 ? (-r - oz) / s : Infinity, t = Math.max(0, Math.min(tx, tz));
+  return { x: ox + c * t, y: 0, z: oz + s * t };
 }
-// Never closer than CORE.spawnMin to the core: pushed straight out if it would be.
+// Never closer than CORE.spawnMin to the core (wherever it was moved): pushed straight out to the edge, or when that
+// edge is too close (the core sits by a wall) to the farthest edge spot nearby.
 export function coreSpawnGuard(g, pt) {
-  const d = Math.hypot(pt.x, pt.z);
+  const c = corePos(g), d = Math.hypot(pt.x - c.x, pt.z - c.z);
   if (d >= CORE.spawnMin) return pt;
-  const a = d > 0.1 ? Math.atan2(pt.z, pt.x) : Math.random() * Math.PI * 2;
-  return { ...edgeSpot(g.level, a), y: pt.y || 0 };
+  const a0 = d > 0.1 ? Math.atan2(pt.z - c.z, pt.x - c.x) : Math.random() * Math.PI * 2;
+  let best = null, bd = -1;
+  for (let k = 0; k < 16; k++) {
+    const a = a0 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI / 8, e = edgeSpot(g.level, a, c.x, c.z), ed = Math.hypot(e.x - c.x, e.z - c.z);
+    if (ed >= CORE.spawnMin) return { ...e, y: pt.y || 0 };
+    if (ed > bd) { bd = ed; best = e; }
+  }
+  return { ...best, y: pt.y || 0 };
 }
 
 // ---------------------------------------------------------------- the core
 function spawnCore(g, hpFrac = 1) {
   const stats = { ...DEFAULT_STATS, health: CORE.hp, damage: 0, moveSpeed: 0, jump: 0, fireRate: 0.01, ammo: 1, blockCooldown: 99 };
-  const c = g.spawnUnit('wave', null, { x: 0, y: 0, z: 0 }, { stats, unitKind: 'core', name: 'Core', color: '#7fd8ff', difficulty: 'normal' });
+  const cp = g.corePos || { x: 0, z: 0 };
+  const c = g.spawnUnit('wave', null, { x: cp.x, y: 0, z: cp.z }, { stats, unitKind: 'core', name: 'Core', color: '#7fd8ff', difficulty: 'normal' });
   c.team = 0; c.fixedSize = CORE.size; c.size = CORE.size; c.heavy = true; c.noBlock = true; c.isBot = false; c.coreUnit = true;
   c.hp = Math.max(1, CORE.hp * hpFrac);
   g.core = c;
@@ -117,14 +130,17 @@ export function coreCapture(g) {
   const c = g.core;
   return {
     hp: c && c.alive ? c.hp / CORE.hp : (g.coreSaved ? g.coreSaved.hp : 1),
+    cx: c ? c.pos.x : (g.corePos || { x: 0 }).x, cz: c ? c.pos.z : (g.corePos || { z: 0 }).z,
     walls: g.barricades.filter(b => b.coreProp).map(b => ({ kind: b.kind, x: b.x, z: b.z, ang: b.ang, y0: b.y0, hp: b.hp / b.maxHp })),
     turrets: g.players.filter(u => u.coreProp === 'turret' && u.alive).map(u => ({ x: u.pos.x, z: u.pos.z, y: u.pos.y, hp: u.hp / u.stats.health, sh: u.fx.tshield ? u.fx.tshield.hp / u.fx.tshield.max : 1 })),
     drops: (g.coreDrops || []).map(d => ({ ...d })),
-    carry: g.heroes().filter(p => p.carry).map(p => [p.id, { ...p.carry }]),
+    carry: g.heroes().filter(p => p.carry && p.carry.kind !== 'core').map(p => [p.id, { ...p.carry }]),
   };
 }
 export function coreStart(g, keep, noHeal) {
   const heal = noHeal ? 0 : CORE.heal;
+  g.corePos = keep && keep.cx != null ? { x: keep.cx, z: keep.cz } : g.corePos || { x: 0, z: 0 };
+  for (const p of g.heroes()) if (p.carry && p.carry.kind === 'core') p.carry = null;
   spawnCore(g, Math.min(1, (keep ? keep.hp : 1) + heal));
   g.coreDrops = [];
   if (keep) {
@@ -138,8 +154,8 @@ export function coreStart(g, keep, noHeal) {
   g.coreDropT = 2;
   const retry = !!(keep && noHeal), ups = retry ? 0 : coreUpgrades(g.round);   // (a retry gets back the drops it started with)
   for (let k = 0; k < ups; k++) {   // this wave's upgrades, somewhere between the core and the edge
-    const a = Math.random() * Math.PI * 2, r = 9 + Math.random() * 14;
-    g.coreDrops.push({ id: g.nextId++, kind: 'upgrade', x: Math.cos(a) * r, z: Math.sin(a) * r, y: CORE.drop.y + k * 4, landed: false });
+    const a = Math.random() * Math.PI * 2, r = 9 + Math.random() * 14, cp = g.corePos, q = g.clampArena(cp.x + Math.cos(a) * r, cp.z + Math.sin(a) * r, 3);
+    g.coreDrops.push({ id: g.nextId++, kind: 'upgrade', x: q.x, z: q.z, y: CORE.drop.y + k * 4, landed: false });
   }
   for (const p of g.heroes()) p.coreReady = false;
   g.coreSaved = coreCapture(g);   // for "Retry wave"
@@ -158,7 +174,8 @@ export function coreTick(g, dt) {
       let r = Math.random() * tot, kind = odds[0][0];
       for (const [k, w] of odds) { if (r < w) { kind = k; break; } r -= w; }
       let x = 0, z = 0;
-      for (let k = 0; k < 8; k++) { x = (Math.random() * 2 - 1) * (L.hx - 3); z = (Math.random() * 2 - 1) * (L.hz - 3); if (Math.hypot(x, z) > 4) break; }
+      const cp = corePos(g);
+      for (let k = 0; k < 8; k++) { x = (Math.random() * 2 - 1) * (L.hx - 3); z = (Math.random() * 2 - 1) * (L.hz - 3); if (Math.hypot(x - cp.x, z - cp.z) > 4) break; }
       g.coreDrops.push({ id: g.nextId++, kind, x, z, y: CORE.drop.y, landed: false });
     }
   }
@@ -206,6 +223,7 @@ export function coreTick(g, dt) {
       if (b.kind === 'spikes' && !spiked && !u.flying) { spiked = true; g.hurt(u, CORE.spikes.dps * dt, g.core, null); }
     }
   }
+  coreCarryTick(g);
   // respawns: the timer grows with every death this wave
   for (const p of g.heroes()) {
     if (!p.connected || p.alive || p.reviving) continue;
@@ -219,7 +237,7 @@ export function coreTick(g, dt) {
     }
     if ((p.coreRespT -= dt) > 0) continue;
     p.coreRespT = null;
-    const a = Math.random() * Math.PI * 2, spot = g.freeSpot(Math.cos(a) * 4, Math.sin(a) * 4, 0, 0, 0.6, 0);
+    const a = Math.random() * Math.PI * 2, cp = corePos(g), spot = g.freeSpot(cp.x + Math.cos(a) * 4, cp.z + Math.sin(a) * 4, cp.x, cp.z, 0.6, 0);
     g.resetPlayer(p, spot);
     g.emit({ t: 'respawn', p: p.id, x: spot.x, y: spot.y, z: spot.z });
   }
@@ -240,6 +258,7 @@ export function coreAwardLeftovers(g) {
 export function coreDropCarry(g, p) {
   const c = p.carry; if (!c) return;
   p.carry = null;
+  if (c.kind === 'core') { coreSet(g, g.core); g.emit({ t: 'coreMoved', p: p.id }); return; }
   g.coreDrops.push({ id: g.nextId++, kind: c.kind, x: p.pos.x, z: p.pos.z, y: Math.max(0.6, p.pos.y + 1), landed: false });
 }
 
@@ -337,11 +356,50 @@ export function coreUse(g, p) {
   }
   g.emit({ t: 'corePick', p: p.id, kind: p.carry.kind });
 }
+// v1.2.23 moving the core. A use press right by the core waits: let go quickly and it's a normal pick up (coreUse),
+// hold it CORE.move.hold seconds and you lift the core instead. While carried the core floats ahead of you and you're slowed.
+export function coreUseInput(g, p, pressed, held, dt) {
+  const M = CORE.move, c = g.core;
+  if (pressed) {
+    if (p.carry) { p.carry.armed = true; return; }
+    const near = c && c.alive && Math.hypot(c.pos.x - p.pos.x, c.pos.z - p.pos.z) < M.reach && (g.phase === 'play' || g.phase === 'countdown');
+    if (near && p.alive && !g.heroes().some(q => q !== p && q.carry && q.carry.kind === 'core')) { p.coreHold = { t: 0 }; return; }
+    coreUse(g, p); return;
+  }
+  if (p.coreHold) {
+    if (!held || !p.alive) { p.coreHold = null; coreUse(g, p); return; }   // a quick tap: pick up a block as usual
+    p.coreHold.t += dt;
+    if (p.coreHold.t >= M.hold) { p.coreHold = null; p.carry = { kind: 'core', hp: 1 }; p.coreUseT = g.time + CORE.useLock; g.emit({ t: 'corePick', p: p.id, kind: 'core' }); }
+    return;
+  }
+  if (p.carry && p.carry.armed && !held) { if (g.phase === 'play' || g.phase === 'countdown') corePlace(g, p); else p.carry.armed = false; }
+}
+function coreCarrySpot(g, p) {
+  const M = CORE.move, ax = p.aim.x, az = p.aim.z, l = Math.hypot(ax, az) || 1, r = M.ahead + 0.5 * (p.size || 1);
+  return g.clampArena(p.pos.x + ax / l * r, p.pos.z + az / l * r, M.edge);
+}
+function coreCarryTick(g) {
+  const c = g.core;
+  for (const p of g.heroes()) {
+    if (!p.carry || p.carry.kind !== 'core') continue;
+    if (!c || !c.alive || !p.alive) { p.carry = null; continue; }
+    const q = coreCarrySpot(g, p);
+    c.pos.x = q.x; c.pos.z = q.z; c.pos.y = Math.max(0, p.pos.y) + 0.6; c.vel.x = c.vel.y = c.vel.z = 0;
+  }
+}
+// Sets the core down on the ground where it is (never inside a wall), and remembers the spot for the next waves.
+function coreSet(g, c) {
+  if (!c) return;
+  const q = g.clampArena(c.pos.x, c.pos.z, CORE.move.edge), spot = g.freeSpot(q.x, q.z, 0, 0, 0.5 * CORE.size + 0.3, 0);
+  c.pos.x = spot.x; c.pos.z = spot.z; c.pos.y = 0; c.vel.x = c.vel.y = c.vel.z = 0;
+  g.corePos = { x: c.pos.x, z: c.pos.z }; g.coreFlow = null;
+}
+export const coreCarrySlow = p => (p.carry && p.carry.kind === 'core' ? CORE.move.slow : 1);
 // Where the carried thing would go (the hologram shows this). It goes where you aim, within reach, snapped to a
 // small grid and 45 degree turns. v28: aim at a prop and it lines up on top of it (same spot and turn), so
 // towers of three or four blocks go up straight; otherwise it rests on whatever its footprint touches.
 export function corePlan(g, p) {
-  const c = p.carry; if (!c) return null;
+  const c = p.carry; if (!c || c.kind === 'core') return null;
   const ax = p.aim.x, az = p.aim.z, l = Math.hypot(ax, az) || 1, fx = ax / l, fz = az / l, ap = p.aimPoint;
   let dist = CORE.place;
   const aimOk = ap && isFinite(ap.x);
@@ -362,13 +420,23 @@ export function corePlan(g, p) {
   }
   if (on && Math.hypot(on.x - p.pos.x, on.z - p.pos.z) <= CORE.placeMax + 1.2) { x = on.x; z = on.z; if (!turret && CORE[c.kind].th < CORE[c.kind].len) ang = on.ang; }
   if (!turret) ang += turn;
-  const cd = Math.hypot(x, z), keep = CORE.size * 0.5 + 1.2;   // never on top of the core
-  if (cd < keep) { const k = keep / (cd || 1); x = (cd ? x : 1) * k; z = (cd ? z : 0) * k; }
+  const cp = corePos(g), cd = Math.hypot(x - cp.x, z - cp.z), keep = CORE.size * 0.5 + 1.2;   // never on top of the core
+  if (cd < keep) { const k = keep / (cd || 1); x = cp.x + (cd ? x - cp.x : 1) * k; z = cp.z + (cd ? z - cp.z : 0) * k; }
   if (g.mountNudge) ({ x, z } = g.mountNudge(x, z, D.len / 2, D.th / 2, ang));   // v1.2.8: never onto a Gun Nest turret
-  const y0 = propSupport(g, { x, z, ang, len: D.len, th: D.th }, lim);
+  let y0 = propSupport(g, { x, z, ang, len: D.len, th: D.th }, lim);
+  // v1.2.23: not aimed at a prop but just clipping one: slide off it (a short way) and sit on the ground instead of perching
+  if (!on && y0 > 0.05) {
+    let bestN = null, bn = Infinity;
+    for (let k = 0; k < 16; k++) {
+      const a = k * Math.PI / 8, r = CORE.nudge * (k < 8 ? 0.5 : 1), nx = x + Math.cos(a) * r, nz = z + Math.sin(a) * r;
+      if (propSupport(g, { x: nx, z: nz, ang, len: D.len, th: D.th }, lim) <= 0.05 && r < bn) { bn = r; bestN = { x: nx, z: nz }; }
+    }
+    if (bestN) { x = bestN.x; z = bestN.z; y0 = 0; }
+  }
   return { x, z, y0, ang };
 }
 export function corePlace(g, p) {
+  if (p.carry && p.carry.kind === 'core') { p.carry = null; p.coreUseT = g.time + CORE.useLock; coreSet(g, g.core); g.emit({ t: 'coreMoved', p: p.id }); return; }
   const c = p.carry, pl = corePlan(g, p);
   if (!pl || !p.alive || p.reviving || p.hp <= 0) return;
   const { x, z } = pl;
@@ -419,7 +487,8 @@ function buildFlow(g) {
     }
     hk[i] = lk; hv[i] = lv;
   };
-  const ci = cellOf(0); for (const di of [-1, 0, 1]) for (const dj of [-1, 0, 1]) { const k = (ci + di) * n + ci + dj; dist[k] = 0; push(k, 0); }
+  const cp = corePos(g), ci = cellOf(cp.x), cj = cellOf(cp.z);
+  for (const di of [-1, 0, 1]) for (const dj of [-1, 0, 1]) { const a = ci + di, b = cj + dj; if (a < 0 || b < 0 || a >= n || b >= n) continue; const k = a * n + b; dist[k] = 0; push(k, 0); }
   const DI = [1, -1, 0, 0, 1, 1, -1, -1], DJ = [0, 0, 1, -1, 1, -1, 1, -1], DW = [1, 1, 1, 1, 1.414, 1.414, 1.414, 1.414], top = [0, 0];
   while (hn > 0 && hn < hk.length - 8) {
     popTo(top); const d = top[0], k = top[1]; if (d > dist[k]) continue;
@@ -431,14 +500,15 @@ function buildFlow(g) {
   }
   return { n, C, H, dist, cost, cellOf };
 }
-function flowSig(g) { let s = g.barricades.length; for (const b of g.barricades) s = (s * 31 + Math.round(b.x * 3) * 7 + Math.round(b.z * 3) * 13 + Math.round(b.y0 * 2) + Math.round(b.hp / 60)) | 0; return s; }
+function flowSig(g) { const cp = corePos(g); let s = g.barricades.length * 7 + Math.round(cp.x) * 131 + Math.round(cp.z) * 197; for (const b of g.barricades) s = (s * 31 + Math.round(b.x * 3) * 7 + Math.round(b.z * 3) * 13 + Math.round(b.y0 * 2) + Math.round(b.hp / 60)) | 0; return s; }
 // Which way a melee raider should walk to reach the core (null = just go straight).
 export function coreFlowDir(g, p) {
   const sig = flowSig(g);
   // (v1.0.1: rebuilt at most once a second; abs: the clock restarts each wave)
   if (!g.coreFlow || (g.coreFlow.sig !== sig && Math.abs(g.time - g.coreFlow.t) > 1)) { g.coreFlow = buildFlow(g); g.coreFlow.sig = sig; g.coreFlow.t = g.time; }
   const F = g.coreFlow, i = F.cellOf(p.pos.x), j = F.cellOf(p.pos.z), here = F.dist[i * F.n + j];
-  if (Math.hypot(p.pos.x, p.pos.z) < 3.5 || !isFinite(here)) return null;
+  const cp = corePos(g);
+  if (Math.hypot(p.pos.x - cp.x, p.pos.z - cp.z) < 3.5 || !isFinite(here)) return null;
   let bi = i, bj = j, bd = here;
   for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
     const a = i + di, b = j + dj; if ((!di && !dj) || a < 0 || b < 0 || a >= F.n || b >= F.n) continue;
@@ -478,7 +548,8 @@ export function coreRows(g) {
   const r2 = v => Math.round(v * 100) / 100, K = k => CORE.kinds.indexOf(k);
   return {
     dr: (g.coreDrops || []).map(d => [d.id, K(d.kind), r2(d.x), r2(d.y), r2(d.z), d.landed ? 1 : 0]),
-    cr: g.heroes().filter(p => p.carry && p.alive).map(p => { const pl = corePlan(g, p) || { x: 0, y0: 0, z: 0, ang: 0 }; return [p.id, K(p.carry.kind), r2(p.carry.hp), r2(pl.x), r2(pl.y0), r2(pl.z), r2(pl.ang), p.carry.armed ? 1 : 0]; }),
+    cc: g.heroes().filter(p => p.alive && ((p.carry && p.carry.kind === 'core') || p.coreHold)).map(p => [p.id, p.coreHold ? Math.round(Math.min(1, p.coreHold.t / CORE.move.hold) * 100) / 100 : 1]),   // v1.2.23 [id, 1 carrying the core / lift progress]
+    cr: g.heroes().filter(p => p.carry && p.alive && p.carry.kind !== 'core').map(p => { const pl = corePlan(g, p) || { x: 0, y0: 0, z: 0, ang: 0 }; return [p.id, K(p.carry.kind), r2(p.carry.hp), r2(pl.x), r2(pl.y0), r2(pl.z), r2(pl.ang), p.carry.armed ? 1 : 0]; }),
     rs: g.heroes().filter(p => p.coreRespT != null && !p.alive).map(p => [p.id, Math.ceil(p.coreRespT)]),
     rd: g.phase === 'countdown' ? g.heroes().filter(p => p.coreReady).map(p => p.id) : [],
   };

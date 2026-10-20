@@ -1089,8 +1089,21 @@ export class Renderer {
       } else if (d.kind === 'crusher') {   // v1.2.15: a steel slab with a hazard band that slams down (origin on its bottom face)
         const geo = new THREE.BoxGeometry(d.w, d.h, d.d); geo.translate(0, d.h / 2, 0);
         const steel = new THREE.MeshStandardMaterial({ color: 0x4a4f5a, metalness: 0.6, roughness: 0.45 }), stripe = new THREE.MeshStandardMaterial({ map: this.stripeTex(), roughness: 0.6 });
-        mesh = new THREE.Mesh(geo, [stripe, stripe, steel, new THREE.MeshStandardMaterial({ color: 0x24262c, metalness: 0.7, roughness: 0.4 }), stripe, stripe]);
+        // v1.2.22 (Devin): see-through, so you can still see yourself under it from the top-down view
+        const glass = m => { m.transparent = true; m.opacity = 0.42; m.depthWrite = false; return m; };
+        glass(steel); glass(stripe);
+        mesh = new THREE.Mesh(geo, [stripe, stripe, steel, glass(new THREE.MeshStandardMaterial({ color: 0x24262c, metalness: 0.7, roughness: 0.4 })), stripe, stripe]);
+        mesh.renderOrder = 3; mesh.userData.seeThrough = true;
         const piston = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 8, 10), steel); piston.position.y = d.h + 4; mesh.add(piston);
+      } else if (d.kind === 'pinch') {   // v1.2.22 pinch piston jaw: a steel block with a hazard-striped face and a rod out the back
+        const geo = new THREE.BoxGeometry(d.w, d.h, d.d); geo.translate(0, d.h / 2, 0);
+        const steel = new THREE.MeshStandardMaterial({ color: 0x5a4f4a, metalness: 0.55, roughness: 0.45 }), stripe = new THREE.MeshStandardMaterial({ map: this.stripeTex(), roughness: 0.6 });
+        const face = d.axis === 'x' ? (d.side > 0 ? 1 : 0) : (d.side > 0 ? 5 : 4);   // the face toward the middle
+        const mats = [steel, steel, steel, steel, steel, steel]; mats[face] = stripe; mats[d.axis === 'x' ? (d.side > 0 ? 0 : 1) : (d.side > 0 ? 4 : 5)] = stripe;
+        mesh = new THREE.Mesh(geo, mats);
+        const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 6, 10), steel);
+        if (d.axis === 'x') { rod.rotation.z = Math.PI / 2; rod.position.set(d.side * (d.w / 2 + 3), d.h / 2, 0); } else { rod.rotation.x = Math.PI / 2; rod.position.set(0, d.h / 2, d.side * (d.d / 2 + 3)); }
+        mesh.add(rod);
       } else if (d.kind === 'crate') {
         const geo = new THREE.BoxGeometry(d.w, d.h, d.d);
         mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: new THREE.Color(0xa8845a).lerp(new THREE.Color(theme.top), 0.2), map: this.crateTex(), roughness: 0.9 }));
@@ -1205,6 +1218,10 @@ export class Renderer {
   }
   buildTraps(level, G) {
     this.traps = [];
+    for (const d of level.dynamic || []) if (d.kind === 'pinch' && d.side > 0) {   // v1.2.22: the kill zone between pinch jaws
+      const ax = d.axis === 'x', L2 = d.gap * 2, mark = new THREE.Mesh(new THREE.PlaneGeometry(ax ? L2 : d.w, ax ? d.d : L2), new THREE.MeshBasicMaterial({ color: 0xff3030, transparent: true, opacity: 0.22, depthWrite: false }));
+      mark.rotation.x = -Math.PI / 2; mark.position.set(ax ? d.c : d.x, 0.025, ax ? d.z : d.c); G.add(mark);
+    }
     for (const d of level.dynamic || []) if (d.kind === 'crusher') {
       const mark = new THREE.Mesh(new THREE.PlaneGeometry(d.w, d.d), new THREE.MeshBasicMaterial({ color: 0xff3030, transparent: true, opacity: 0.2, depthWrite: false }));
       mark.rotation.x = -Math.PI / 2; mark.position.set(d.x, 0.025, d.z); G.add(mark);
@@ -2529,6 +2546,28 @@ export class Renderer {
     const m = new THREE.Mesh(this.moteGeo, this.moteMat.clone()); m.position.set(x, y, z); this.scene.add(m);
     this.fx.push({ m, life: 1.6, max: 1.6, update: (f, dt) => { f.m.position.y += dt * 0.9; f.m.position.x += Math.sin(f.life * 5) * dt * 0.2; f.m.material.opacity = Math.min(1, f.life) * 0.9; } });
   }
+  // v1.2.23 Brawl item boxes: a spinning crate in the power-up's colour with its icon floating over it; blinks before it vanishes.
+  syncBrawlItems(rows) {
+    this.bItemMeshes = this.bItemMeshes || new Map();
+    const seen = new Set(), now = performance.now() / 1000;
+    const COL = { heal: 0x5dff8f, power: 0xff5d5d, heavy: 0x9aa7b8, speed: 0xffd84a, jump: 0x6cc8ff };
+    for (const [id, k, x, y, t] of rows || []) {
+      seen.add(id);
+      let c = this.bItemMeshes.get(id);
+      if (!c) {
+        const root = new THREE.Group();
+        const mat = new THREE.MeshStandardMaterial({ color: COL[k] || 0xffffff, emissive: COL[k] || 0xffffff, emissiveIntensity: 0.45, roughness: 0.4, metalness: 0.2 });
+        const box = new THREE.Mesh(this.bItemGeo || (this.bItemGeo = new THREE.BoxGeometry(0.9, 0.9, 0.9)), mat);
+        const edge = new THREE.LineSegments(this.bItemEdge || (this.bItemEdge = new THREE.EdgesGeometry(this.bItemGeo)), new THREE.LineBasicMaterial({ color: 0xffffff }));
+        box.add(edge); root.add(box); this.scene.add(root);
+        c = { root, box, mat }; this.bItemMeshes.set(id, c);
+      }
+      c.root.position.set(x, y + 0.55 + Math.sin(now * 3 + id) * 0.12, 0);
+      c.box.rotation.set(0.35, now * 1.8, 0.2);
+      c.root.visible = t > 3 || Math.sin(now * 18) > -0.3;
+    }
+    for (const [id, c] of this.bItemMeshes) if (!seen.has(id)) { this.scene.remove(c.root); c.mat.dispose(); this.bItemMeshes.delete(id); }
+  }
   // Sacred Grove level 2: the healing cross falls from the sky, then glows with a soft halo of motes while it lasts.
   syncRelics(rows) {
     this.relicMeshes = this.relicMeshes || new Map();
@@ -2667,7 +2706,11 @@ export class Renderer {
 
   syncBullets(list) {
     const seen = new Set();
+    // v1.2.25: with lots of shots in the air, plain bullets (and their trails) draw as two instanced meshes instead of
+    // two draw calls each
+    const many = list.length > 80 && !this.settings.slop, inst = many ? [] : null;
     for (const b of list) {
+      if (many && !b.fx && !(b.ring > 0)) { inst.push(b); continue; }
       seen.add(b.id);
       let m = this.bullets.get(b.id);
       if (!m && b.fx && b.fx.startsWith('slash')) {
@@ -2717,7 +2760,11 @@ export class Renderer {
         if (m.userData.hunt !== hunt) { m.userData.hunt = hunt; m.material.color.set(hunt ? '#ff2e2e' : '#ffd23a'); }
       } else if (m.userData.fx === 'squid') {   // Squid: squashes and stretches with each stroke
         const v = b.vel, sp = v ? Math.hypot(v.x, v.y, v.z) : 0, k = Math.min(1, sp / 13);
-        m.scale.set(b.r * (1.5 - 0.5 * k), b.r * (1.5 - 0.5 * k), b.r * (1 + 1.2 * k)); if (v && sp > 0.1) m.lookAt(m.position.x + v.x, m.position.y + v.y, m.position.z + v.z);
+        m.scale.set(b.r * (1.5 - 0.5 * k), b.r * (1.5 - 0.5 * k), b.r * (1 + 1.2 * k));
+        const vic = b.latch && this.players.get(b.tgt);
+        if (vic && vic.root) m.lookAt(vic.root.position.x, m.position.y, vic.root.position.z);   // v1.2.22: latched: face the body it is chewing
+        else if (v && sp > 0.1) m.lookAt(m.position.x + v.x, m.position.y + v.y, m.position.z + v.z);
+        this.squidMouth(m, !!b.latch);
         if (m.userData.c !== b.color) { m.material.color.set(b.color); m.userData.c = b.color; }   // (a blocked squid changes owner)
         this.squidArms(m, k, b.id, b.color, b.r);
       }
@@ -2726,6 +2773,7 @@ export class Renderer {
         if (!m.userData.fx && this.settings.effects !== 'off') this.trail(m, b);
       }
     }
+    this.syncBulletInst(inst || []);
     for (const [id, m] of this.bullets) if (!seen.has(id)) { this.scene.remove(m); if (m.userData.ring) { this.scene.remove(m.userData.ring); this.ringSet && this.ringSet.delete(m.userData.ring); } this.bullets.delete(id); this.recycleBullet(m); }
     // v1.0.1: sweep any Saturn ring whose bullet is gone (a ring left behind used to hang in the air, even into later games)
     if (this.ringSet && this.ringSet.size > this.bullets.size) {
@@ -2735,6 +2783,30 @@ export class Renderer {
   }
 
   // v1.2.16 bee bullet: two dark stripes, a stinger and a pair of pale wings (shared geometry and materials: bees come in swarms)
+  // v1.2.22 (Devin): a little mouth at the front of each squid; it snaps open and shut while latched on (chomping),
+  // and slowly opens and closes as it swims
+  squidMouth(m, latched) {
+    let g = m.userData.mouth;
+    if (!g) {
+      const K = this.mouthKit || (this.mouthKit = (() => {
+        const jaw = new THREE.SphereGeometry(0.5, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2);
+        const tooth = new THREE.ConeGeometry(0.09, 0.22, 4);
+        return { jaw, tooth, jm: new THREE.MeshBasicMaterial({ color: '#3a0d2e' }), tm: new THREE.MeshBasicMaterial({ color: '#ffffff' }) };
+      })());
+      g = m.userData.mouth = new THREE.Group(); g.position.set(0, 0, 0.82);
+      const mk = up => {
+        const piv = new THREE.Group(), j = new THREE.Mesh(K.jaw, K.jm);
+        j.scale.set(0.9, 0.35, 0.7); j.rotation.x = up ? 0 : Math.PI; j.position.z = 0.2; piv.add(j);
+        for (let i = -1; i <= 1; i++) { const t = new THREE.Mesh(K.tooth, K.tm); t.position.set(i * 0.22, up ? -0.02 : 0.02, 0.45); t.rotation.x = up ? Math.PI : 0; piv.add(t); }
+        g.add(piv); return piv;
+      };
+      g.userData.up = mk(true); g.userData.dn = mk(false);
+      m.add(g);
+    }
+    const t = performance.now() / 1000;
+    const open = latched ? Math.max(0, Math.sin(t * 13)) * 0.75 : 0.12 + 0.12 * Math.sin(t * 3);
+    g.userData.up.rotation.x = -open; g.userData.dn.rotation.x = open;
+  }
   beeParts(m, age) {
     let p = m.userData.bee;
     if (!p) {
@@ -2753,6 +2825,42 @@ export class Renderer {
     }
     const flap = Math.sin(age * 60) * 0.7;
     p.userData.wings[0].rotation.z = 0.35 + flap; p.userData.wings[1].rotation.z = -0.35 - flap;
+  }
+  syncBulletInst(L) {
+    let I = this.bInst;
+    if (!I && !L.length) return;
+    if (!I || I.cap < L.length) {
+      const cap = Math.max(256, 1 << Math.ceil(Math.log2(L.length + 1)));
+      if (I) { this.scene.remove(I.core, I.trail); I.core.dispose(); I.trail.dispose(); }
+      const core = new THREE.InstancedMesh(this.bulletGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }), cap);
+      const trail = new THREE.InstancedMesh(this.trailGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false }), cap);
+      const c = new THREE.Color(1, 1, 1);
+      for (let i = 0; i < cap; i++) { core.setColorAt(i, c); trail.setColorAt(i, c); }
+      core.frustumCulled = trail.frustumCulled = false;
+      this.scene.add(core, trail);
+      I = this.bInst = { core, trail, cap, born: new Map(), M: new THREE.Matrix4(), q: new THREE.Quaternion(), p: new THREE.Vector3(), s: new THREE.Vector3(), v: new THREE.Vector3(), z: new THREE.Vector3(0, 0, 1), id: new THREE.Quaternion(), c: new THREE.Color() };
+    }
+    const now = performance.now(), fx = this.settings.effects !== 'off', born = I.born, live = new Set();
+    let nt = 0;
+    for (let i = 0; i < L.length; i++) {
+      const b = L[i], r = b.r || 0.1;
+      live.add(b.id); let t0 = born.get(b.id); if (t0 == null) born.set(b.id, t0 = now);
+      I.p.set(b.pos.x, b.pos.y, b.pos.z); I.s.set(r, r, r);
+      I.M.compose(I.p, I.id, I.s); I.core.setMatrixAt(i, I.M);
+      I.c.set(b.color || '#ffffff'); I.core.setColorAt(i, I.c);
+      const v = b.vel, sp = v ? Math.hypot(v.x, v.y, v.z) : 0;
+      if (fx && sp >= 0.5) {   // (same shape as trail(): grows out of the muzzle)
+        const len = clamp(sp * 0.045, 0.3, 2.4) / Math.max(0.05, r), age = (now - t0) / 1000;
+        I.q.setFromUnitVectors(I.z, I.v.set(v.x / sp, v.y / sp, v.z / sp));
+        I.s.set(r, r, r * len * Math.min(1, age * 12));
+        I.M.compose(I.p, I.q, I.s); I.trail.setMatrixAt(nt, I.M); I.trail.setColorAt(nt, I.c); nt++;
+      }
+    }
+    for (const id of born.keys()) if (!live.has(id)) born.delete(id);
+    I.core.count = L.length; I.trail.count = nt;
+    I.core.instanceMatrix.needsUpdate = I.trail.instanceMatrix.needsUpdate = true;
+    if (I.core.instanceColor) I.core.instanceColor.needsUpdate = true;
+    if (I.trail.instanceColor) I.trail.instanceColor.needsUpdate = true;
   }
   recycleBullet(m) {
     const u = m.userData;
@@ -2813,6 +2921,7 @@ export class Renderer {
 
   clearAll() {
     this.clearNapalm();
+    if (this.bInst) { this.bInst.core.count = this.bInst.trail.count = 0; this.bInst.born.clear(); }
     for (const id of [...this.players.keys()]) this.removePlayer(id);
     for (const [, m] of this.bullets) { this.scene.remove(m); if (m.userData.ring) this.scene.remove(m.userData.ring); }
     this.bullets.clear();
@@ -3258,6 +3367,7 @@ export class Renderer {
     this.syncRituals(view.rituals);
     this.coreMode = !!view.core; this.syncCore(view.core);
     this.syncRelics(view.relics);
+    this.syncBrawlItems(view.bitems);
     this.updateHazards(view.laser, dt);
     this.updateTraps(view.trapT);
     this.updateFx(dt);
@@ -3367,7 +3477,7 @@ export class Renderer {
       focus.x = clamp(focus.x, -L.hx + 7, L.hx - 7); focus.z = clamp(focus.z, -L.hz + 4, L.hz - 6);
       // v1.2.11: spectator pan and zoom (main.js spectating / specInput). Panning leaves the auto camera until Jump.
       const sc = this.spec || (this.spec = { x: 0, z: 0, zoom: 1, manual: false });
-      if (local && (local.alive || revHold)) sc.manual = false;
+      if (local && (local.alive || revHold) && !this.freeCam) sc.manual = false;   // (v1.2.26 freeCam: commander mode pans too)
       else {
         const si = this.specInput;
         if (si && si.follow) sc.manual = false;
@@ -3403,7 +3513,10 @@ export class Renderer {
     this.shakeT += dt;
     const off = this.camOff || (this.camOff = new THREE.Vector3());
     if (this.shake > 0) {
-      const a = this.shake * this.shake * 1.6, t = this.shakeT;
+      // v1.2.21 (Devin): a hard cap (Settings > General "Max screen shake") so a screen full of explosions stays playable
+      const cap = 0.75 * Math.sqrt(Math.max(0.05, Math.min(1, this.settings.shakeMax ?? 0.5))), tr = Math.min(this.shake, cap);
+      const a = tr * tr * 1.6, t = this.shakeT;
+      if (this.shake > cap + 0.25) this.shake = cap + 0.25;   // piled-up trauma can't keep it maxed for long
       off.x += a * (Math.sin(t * 47) * 0.6 + Math.sin(t * 83 + 1.3) * 0.4);
       off.y += a * (Math.sin(t * 59 + 2.1) * 0.6 + Math.sin(t * 97 + 0.4) * 0.4);
       off.z += a * 0.5 * Math.sin(t * 71 + 3.3);

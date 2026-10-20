@@ -1,9 +1,9 @@
 {
   "id": "squid",
   "name": "Squid",
-  "rarity": "legendary",
+  "rarity": "mod",
   "icon": "🦑",
-  "description": "Your bullets swim toward enemies in slow pulses, steering around walls. Each one hits softer. You can only own one, and not with Bees.",
+  "description": "Weapon mod: your bullets are squid that swim at enemies, latch on and gnaw them, healing you. Mash jump or block to shake them off.",
   "image": "art.png",
   "modifiers": [
     {
@@ -15,8 +15,13 @@
       "stat": "damage",
       "op": "mul",
       "value": 0.7
+    },
+    {
+      "stat": "lifesteal",
+      "op": "add",
+      "value": 0.1
     }
   ],
-  "details": "Each bullet re-picks the nearest enemy it can see a few times a second and swims at it with a quick stroke then a long glide, so it arrives in bursts. Top speed is capped (13 m/s in a stroke, far slower on average) so you can still run from them. Lives 6.5 s. No bullet drop. Blocking works on them: a blocked squid bullet turns around and hunts its shooter.",
-  "uniqueGroup": "swarm"
+  "details": "Each squid swims at the nearest enemy it can see in pulses (top speed 13 m/s, much slower on average, so you can outrun them). When it reaches someone it latches on and bites every 0.45 s for 24% of its damage (with all your bullet effects), for up to 3.6 s, healing you for 25% of each bite on top of your +10% lifesteal. The victim can block (1.2 s stun) or mash jump 4 times in 1.2 s (2.2 s stun for every squid on them) to knock them off; a stunned squid drifts, then hunts again. Squid can't bite through shields or a block, and a blocked squid turns on whoever blocked it.",
+  "weaponMod": "squid"
 }

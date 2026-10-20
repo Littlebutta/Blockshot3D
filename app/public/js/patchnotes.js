@@ -1,6 +1,103 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.26', date: 'Oct 20', notes: {
+    Added: [
+      'Tournament mode: deathmatch rules, but every round each player fights their own 1v1 in a separate arena (an odd player out makes one arena a 3-way). You only see and hear your own arena. Everyone has a set number of losses (default 4, 1 to 10 in the lobby); lose your arena and you lose one, at zero you\'re knocked out. Losers pick a card after each round. Last one standing wins.',
+      'Tournament teams: arenas pair players from different teams. Win your arena and you\'re sent to help an ally whose fight is still on. During the card pick, press 🎁 on a card to offer it to an ally who is picking too; they trade one card from their own hand for it (or decline). Works with Speed mode\'s extra picks.',
+      'Tournament HUD: your lives, how many arenas are still fighting and how many players are left. Out of the round, press Use (E) to watch another arena.',
+      'Three new map shapes: Pods (a round room per player around a middle room, joined by corridors), Hive (hexagon rooms with doorways) and Bowtie (two halves joined by a narrow waist). Pick one in the lobby or let Shaped / Mixed choose.',
+    ],
+    Changed: [
+      'Lobby redesign: modes are big icon tiles with one short line about the chosen mode, and the settings sit in three tabs (Match, Cards, Arena) as short rows. Right-click any mode or setting for a window that explains it.',
+      'Commander mode: pan and zoom the camera like when spectating (move keys or drag, scroll to zoom, Jump to follow the fight).',
+      'Wasp drones fly slower.',
+    ],
+    Fixed: [
+      'Players sometimes teleported back to their spawn: a big launch (Thrust, explosions) that took you above 40 m, or past the arena edge, triggered a safety reset. Now you hit an invisible ceiling or get pushed back inside instead.',
+      'With SCP, bees, squid and any other shot of yours that gets blocked back at you still count as yours: they can still go for you, but do no damage. Overpen fragments of a reflected shot keep the original shooter too.',
+      'A clone, twin, drone, turret or critter left standing wins the round for its owner. When only units of different players are left and nobody has dealt damage for 10 seconds (turrets that can\'t reach each other), the round is a draw.',
+    ],
+  } },
+  { v: '1.2.25', date: 'Oct 20', notes: {
+    Added: [
+      'Lobbies hold up to 100 players. The lobby has +10 and Clear bots buttons.',
+      'Shot budget: in big lobbies there is a cap on how many shots can be in the air at once, so the game stays playable (it aims for at least 10 fps and leaves plenty of room above that). It never deletes a shot that is already flying. When the cap gets close, the players with the most shots out (their turrets, clones and critters count too) can\'t fire new ones until some of theirs land. You see a "Can\'t shoot" notice when it stops you.',
+      'Shot budget bar at the top middle: shots in the air against the cap, with your own share as the bright line. Right-click it for an explanation. The cap adapts by itself, shrinking when the host\'s game or anyone\'s frame rate slows down and growing back when it\'s smooth. Turn it off in the lobby under Arena.',
+      'Right-click info popups: things marked with them show what they do when you right-click them.',
+    ],
+    Changed: [
+      'Four optimization passes for big lobbies. Game time per step: 50 players 12.4 ms to 4.4 ms, 100 players 63 ms to 14 ms (same bots, cards and map). Wall and box collision uses a grid on every map; sight lines only check the boxes they pass; bullets only check nearby players and shields; bots share their route searches and skip far-off options.',
+      'Plain bullets draw as one batch when there are lots of them, instead of two draw calls per bullet.',
+      'Big lobbies send fewer, fuller updates (30 a second up to 30 players, 20 up to 60, 15 above), which keeps each player\'s connection and the host\'s upload in check.',
+      'Big lobbies: the scoreboard shows the top 10 and you plus a count of the rest; the card pick screen\'s player columns scroll.',
+    ],
+  } },
+  { v: '1.2.24', date: 'Oct 20', notes: {
+    Added: [
+      'AMON commanders: before the first store everyone picks a commander, with no time limit (co-op and Versus; turn it off in the lobby). 36 to choose from: the leader of every enemy faction plus 18 new ones.',
+      'Every commander has a passive bonus for all your units, its own unit cards that only show up in your store (enemy troops fighting for you), and a power it uses on its own in every battle: air strikes, storms, heals, rallies, shield walls, freezes, reinforcements, turncoats, snipes, quakes and more.',
+      'AMON players panel (right side): everyone\'s commander, health (Versus) or army points and who is ready. Click a player to watch their field in battle, or their board in the store.',
+      'Knocked out of AMON Versus: you keep watching, the store view follows the players still in, and you can switch between their fields and boards.',
+    ],
+    Changed: [
+      'AMON card text audit: tactic cards say what they reach and what they give in short form ("Row + column: +80% damage, +3.6 m range"), and Holy / Cursed cards show their own numbers.',
+      'AMON hover tips are much shorter (what it is, its numbers, its points); the rest (combat details, board bonuses, squadmates, how to use it) moved to the right-click details.',
+    ],
+  } },
+  { v: '1.2.23', date: 'Oct 20', notes: {
+    Added: [
+      'Brawl item boxes drop onto the stage now and then: Bandage (-35%), Power Glove (hits launch farther), Anvil (heavier), Sneakers (faster) and Spring (higher jumps), 8 s each. Turn them off in the lobby (Item boxes).',
+      'Five new Brawl stages: Canopy, Island Hop, Clocktower, Conveyor and Ruins.',
+      'Core Defense: hold the use key next to the core to pick it up and carry it somewhere else (you move slower), press again to set it down. Raiders path to wherever it is.',
+    ],
+    Changed: [
+      'Brawl HUD redone: fighter cards with a badge, a big damage % that shakes when hit, stock pips, round wins and the active power-up; your own card shows whether your air jump and dash are ready. The sudden death clock sits at the top.',
+      'Brawl fighter builds rebalanced from hundreds of bot fights: Phantom Blade, Deep Diver, Bulwark and Overcharge lost a card each (they won 75-93% of fights); Fire Dancer, Star Caller, Rubber Ducky, Rushdown, Spore Lord and Bouncer got extra cards.',
+      'Brawl balance: weight is capped, so huge-health builds still get launched (and very light ones aren\'t launched quite as far).',
+      'Core Defense placing is more forgiving: longer reach to pick up and catch, place farther away, stack higher, and a piece that would just clip the edge of another slides off it onto the ground instead of perching on top.',
+      'Core Defense: enemies never spawn near the core, wherever it is (also when it sits in a corner).',
+    ],
+  } },
+  { v: '1.2.22', date: 'Oct 20', notes: {
+    Added: [
+      'Squid rework: squid now have little mouths, latch onto whoever they reach and gnaw on them (24% of their damage every 0.45 s for up to 3.6 s), healing you. Mash jump or block to knock them off; shaking them off stuns them before they hunt again. A warning shows when one is on you. They can\'t bite through shields, and a blocked squid turns on whoever blocked it.',
+      'Behemoth (legendary): +175 health and +14 regen a second; you grow to match.',
+      'Big Brother replaces Space King: charge for about 9 s (was 17) and a giant, slow copy of you with your gun and cards fights on your side.',
+      'Pinch Alley trap arena: horizontal pistons slam together and kill anyone caught between them.',
+      'Shaped arenas: Star (one leg per player), Cross, Ring, Flower and Wheel. Pick Star or Shaped arenas in the lobby\'s maps option; they also turn up now and then in Mixed.',
+    ],
+    Changed: [
+      'Bees and Squid are weapon mods now (you keep your normal gun model).',
+      'Stomping crushers are see-through, so you can see yourself underneath from the top-down view.',
+      'Pillar Shield: the pillar is taller, the shield only wraps the top where you stand, and its health scales much harder with Block size and Block duration (300 base).',
+      'Katana: a full charge fires the slash wave by itself and starts charging the next while you hold; holding only starts to count as charging after a short moment, so quick melee slashes are never turned into waves.',
+      'Big lobbies get bigger maps, and spawns stay further apart (extra rings of spawns inside very big maps).',
+    ],
+  } },
+  { v: '1.2.21', date: 'Oct 16', notes: {
+    Added: [
+      'Emote wheel is customizable: Shop & Customize > Emote wheel. Pick a slot, then an emote. 28 new emotes in the shop plus two new team pings.',
+      'Spectators can emote; their emotes show in the kill feed for everyone.',
+      'Max screen shake slider (Settings > General): the camera never shakes past it, however crazy the fight gets.',
+      'Card details: a highlighted "Boosted by" row at the top shows which stats make the card stronger.',
+      'Other players\' cards window: right-click a player (or the window) to keep it open until you click back into the game.',
+    ],
+    Changed: [
+      'Round modifier splash is bigger, easier to read and stays longer; the modifier tag at the top shows its full text for a while afterwards and whenever you hover it, dead or alive.',
+      'Emote wheel: Q by default (rebindable in Controls); middle mouse no longer opens it unless you bind it.',
+      'Death recap stays up until the round ends.',
+      'Bulwark is now uncommon and gives a smaller cooldown cut (x0.72, was x0.6).',
+      'Iron Lung: +65 health (was +40), reloads only x1.2 slower (was x1.4).',
+      'Seeker Chip turns much more gently (2 instead of 5) and now keeps 70% damage; stack it to lock on harder. Orbital strikes keep their homing.',
+      'Venom Rounds: bullets keep their damage and poison on top (poison share 22% of max health, was 40% with no bullet damage).',
+      'Match over: wins are in the damage/kills/deaths table (one table instead of two) and the table scrolls inside its box so the buttons stay visible.',
+      'Sentry Unit, Twin Protocol (now legendary) and Wasp Drones are in the normal card pool, not just Commander mode.',
+    ],
+    Fixed: [
+      'Other players\' cards window closing while the mouse was still on it.',
+    ],
+  } },
   { v: '1.2.20', date: 'Oct 15', notes: {
     Added: [
       'Gun Nest: whoever mans the turret gets a small shield. Hits on it damage the turret instead of you, until the turret is destroyed.',

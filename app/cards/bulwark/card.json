@@ -1,15 +1,15 @@
 {
   "id": "bulwark",
   "name": "Bulwark",
-  "rarity": "common",
+  "rarity": "uncommon",
   "icon": "🧱",
-  "description": "Block comes back sooner.",
+  "description": "Block comes back a bit sooner.",
   "image": "art.png",
   "modifiers": [
     {
       "stat": "blockCooldown",
       "op": "mul",
-      "value": 0.6
+      "value": 0.72
     }
   ]
 }

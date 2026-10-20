@@ -110,7 +110,7 @@ async function handle(m, sender) {
   switch (m.t) {
     case 'host': {
       leaveLobby();
-      relay.lobby = await client.matchmaking.createLobby(LOBBY_FRIENDS_ONLY, 20);
+      relay.lobby = await client.matchmaking.createLobby(LOBBY_FRIENDS_ONLY, 100);
       relay.isHost = true; relay.me = myId();
       relay.lobby.setData('name', String(m.name || ''));
       client.localplayer.setRichPresence('status', 'Hosting a match');
