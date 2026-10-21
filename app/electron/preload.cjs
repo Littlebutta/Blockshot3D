@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld('steamBridge', {
   updateState: () => ipcRenderer.invoke('app:updateState'),   // v1.2.10: automatic updates from GitHub
   updateCheck: () => ipcRenderer.send('app:updateCheck'),
   updateRestart: () => ipcRenderer.send('app:updateRestart'),
-  setZoom: k => webFrame.setZoomFactor(Math.max(0.5, Math.min(2, +k || 1))),   // v1.2.16 GUI scale
+  setZoom: k => webFrame.setZoomFactor(Math.max(0.5, Math.min(3, +k || 1))),   // v1.2.16 GUI scale
   suggest: s => ipcRenderer.invoke('app:suggest', s),   // v1.2.16
   addToSteam: () => ipcRenderer.invoke('app:addToSteam'),   // v1.2.17
   onRefocus: cb => ipcRenderer.on('app:refocus', () => cb()),   // v1.2.16

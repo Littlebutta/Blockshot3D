@@ -31,7 +31,7 @@ export const DEFAULT_SETTINGS = {
   screenShake: true,
   shakeMax: 0.5,        // v1.2.21: the most the camera may shake (0.1-1 of the old uncapped peak), however much is going on
   emoteSlots: null,     // v1.2.21: the 8 emotes on the wheel (main.js EMOTES keys); null = the defaults
-  rtsLock: true,        // v1.2.27: RTS in fullscreen keeps the mouse in the window (pointer lock + drawn cursor) so edge panning always works
+  rtsLock: true,        // v1.2.27: RTS keeps the mouse in the window (v1.2.28: windowed too, not only fullscreen) (pointer lock + drawn cursor) so edge panning always works
   killCam: true,        // v1.2.15: replay the round-winning kill from the killer's eyes
   feel: true,           // v1.2.0: hit-stop on kills and slow motion on the round-winning kill
   props: true,          // grass and pebbles

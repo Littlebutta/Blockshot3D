@@ -4,7 +4,7 @@
 // its cliffs, trees and rocks, crystal fields and vents, and the fog of war (a texture every material reads).
 // =====================================================================
 import * as THREE from '/vendor/three/build/three.module.js';
-import { CELL, LEVEL_H, STEP_MAX, hillAt, fbm, resCells } from './rtsmap.js';
+import { CELL, LEVEL_H, ROCK as ROCK_LV, hillAt, fbm, resCells } from './rtsmap.js';
 import { UNITS, BUILDINGS } from './rtsdata.js';
 
 // ---------------------------------------------------------------- fog of war (shared by every world material)
@@ -15,10 +15,10 @@ export function makeFow(M) {
   const tex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
   tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
   FOW.tex = tex; FOW.data = data; FOW.size = M.size; FOW.H = M.H; FOW.N = N;
-  FOW.uni.fowTex.value = tex; FOW.uni.fowH.value = M.H; FOW.uni.fowSize.value = M.size;
+  FOW.uni.fowTex.value = tex; FOW.uni.fowH.value = M.H; FOW.uni.fowSize.value = M.size; FOW.uni.fowTexel.value = 1 / N;
   return FOW;
 }
-FOW.uni = { fowTex: { value: null }, fowH: { value: 0 }, fowSize: { value: 1 }, fowOn: { value: 1 } };
+FOW.uni = { fowTex: { value: null }, fowH: { value: 0 }, fowSize: { value: 1 }, fowOn: { value: 1 }, fowTexel: { value: 1 / 128 } };
 // patch a material so it is darkened outside your vision (explored = dim, never seen = nearly black)
 export function fowMat(mat) {
   mat.onBeforeCompile = sh => {
@@ -30,8 +30,14 @@ export function fowMat(mat) {
       #endif
       fowWp = modelMatrix * fowWp;
       vFowUv = ( fowWp.xz + fowH ) / fowSize;`);
-    sh.fragmentShader = 'varying vec2 vFowUv;\nuniform sampler2D fowTex;\nuniform float fowOn;\n' + sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>
-      float fowK = mix( 1.0, texture2D( fowTex, vFowUv ).r, fowOn );
+    // v1.2.28 (Devin: less blocky): the fog is read through a soft 9-tap blur (about one 2 m cell each way) and eased,
+    // so its edge is a smooth round fade instead of the stepped outline of the vision cells
+    sh.fragmentShader = 'varying vec2 vFowUv;\nuniform sampler2D fowTex;\nuniform float fowOn;\nuniform float fowTexel;\n' + sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>
+      float fo = fowTexel * 0.85;
+      float fowS = texture2D( fowTex, vFowUv ).r * 0.25
+        + ( texture2D( fowTex, vFowUv + vec2( fo, 0.0 ) ).r + texture2D( fowTex, vFowUv - vec2( fo, 0.0 ) ).r + texture2D( fowTex, vFowUv + vec2( 0.0, fo ) ).r + texture2D( fowTex, vFowUv - vec2( 0.0, fo ) ).r ) * 0.125
+        + ( texture2D( fowTex, vFowUv + vec2( fo, fo ) ).r + texture2D( fowTex, vFowUv - vec2( fo, fo ) ).r + texture2D( fowTex, vFowUv + vec2( fo, -fo ) ).r + texture2D( fowTex, vFowUv - vec2( fo, -fo ) ).r ) * 0.0625;
+      float fowK = mix( 1.0, fowS, fowOn );
       gl_FragColor.rgb *= fowK;`);
   };
   mat.customProgramCacheKey = () => 'rtsfow';
@@ -157,91 +163,88 @@ export class Inst {
 }
 
 // ---------------------------------------------------------------- terrain
-// Every cell is a terrace at its own height (hill noise on top); between cells that are a cliff apart a straight rock
-// wall is drawn on the cell edge, so units walking along a cliff never sink into it. Ramps blend into their neighbors.
-const GRASS = [new THREE.Color('#4f7a34'), new THREE.Color('#6a8a3a'), new THREE.Color('#8a9446')], DIRT = new THREE.Color('#7a6142'), ROCK = new THREE.Color('#6e655a'), ROCK2 = new THREE.Color('#8a8070');
+// (v1.2.27 drew every cell as a flat terrace with straight rock walls on the cell edges; see makeSurface for 1.2.28)
+const DIRT = new THREE.Color('#7a6142'), ROCK = new THREE.Color('#6e655a'), ROCK2 = new THREE.Color('#8a8070');
 const SNOWCAP = new THREE.Color('#9a958c'), PATH = new THREE.Color('#8a7350'), DARKG = new THREE.Color('#3d6228'), FLOWER = new THREE.Color('#c8b84a');
-// corner heights per cell (shared by the mesh and by where units stand, so feet always meet the ground)
+// v1.2.28 (Devin: less blocky): the ground is one smooth height grid, a vertex every meter. Each vertex takes a soft
+// (gaussian) average of the cell heights around it and is then pulled back onto the nearest terrace, so plateaus stay
+// flat while cliff edges follow the smoothed outline: a diagonal cliff is a straight diagonal wall now, not a staircase
+// of 2 m cell steps, and corners are rounded. Ramps and the mountains keep the plain smooth average. The same grid
+// gives where units stand (y), so feet always meet the ground.
+const LV_GRASS = [new THREE.Color('#4f7a34'), new THREE.Color('#6a8a3a'), new THREE.Color('#8a9446'), new THREE.Color('#a39a58')];
+const sstep = (a, b, t) => { const x = clamp01((t - a) / (b - a)); return x * x * (3 - 2 * x); };
 export function makeSurface(M) {
-  const N = M.N, H = M.H, h = M.h, lv = M.lv;
+  const N = M.N, H = M.H, h = M.h, lv = M.lv, VN = 2 * N + 1;
   const TH = new Float32Array(N * N);
-  for (let k = 0; k < N * N; k++) TH[k] = lv[k] === 3 ? 3 * LEVEL_H + 1.2 + Math.max(0, fbm(M.hillSeed + 11, ((k % N) * CELL - H) / 14, (((k / N) | 0) * CELL - H) / 14, 2)) * 7 : h[k];
-  const near = (k, j) => lv[k] !== 3 && lv[j] !== 3 ? Math.abs(TH[k] - TH[j]) <= STEP_MAX : lv[k] === 3 && lv[j] === 3;
-  const CR = new Float32Array(N * N * 4);
-  for (let cz = 0; cz < N; cz++) for (let cx = 0; cx < N; cx++) {
-    const k = cz * N + cx;
-    for (let c = 0; c < 4; c++) {
-      const dx = c & 1, dz = c >> 1; let s = 0, n = 0;
-      for (let oz = -1; oz <= 0; oz++) for (let ox = -1; ox <= 0; ox++) {
-        const ex = cx + dx + ox, ez = cz + dz + oz; if (ex < 0 || ez < 0 || ex >= N || ez >= N) continue;
-        const j = ez * N + ex; if (j === k || near(k, j)) { s += TH[j]; n++; }
-      }
-      CR[k * 4 + c] = n ? s / n : TH[k];
+  for (let k = 0; k < N * N; k++) TH[k] = lv[k] === ROCK_LV ? ROCK_LV * LEVEL_H + 1.2 + Math.max(0, fbm(M.hillSeed + 11, ((k % N) * CELL - H) / 14, (((k / N) | 0) * CELL - H) / 14, 2)) * 7 : h[k];
+  const V = new Float32Array(VN * VN), kind = new Uint8Array(VN * VN);   // kind: 0 terrace, 1 ramp / blend, 2 mountain
+  const sig2 = 2 * 1.15 * 1.15;
+  for (let j = 0; j < VN; j++) for (let i = 0; i < VN; i++) {
+    const x = i, z = j;   // meters from the map corner (cell c spans [2c, 2c + 2])
+    let s = 0, w = 0, rampN = 0, rockN = 0;
+    const c0x = Math.floor(x / CELL - 1.5), c0z = Math.floor(z / CELL - 1.5);
+    for (let cz = c0z; cz <= c0z + 3; cz++) for (let cx = c0x; cx <= c0x + 3; cx++) {
+      const ccx = Math.max(0, Math.min(N - 1, cx)), ccz = Math.max(0, Math.min(N - 1, cz)), k = ccz * N + ccx;
+      const dx = (cx + 0.5) * CELL - x, dz = (cz + 0.5) * CELL - z, d2 = dx * dx + dz * dz;
+      if (d2 > 9) continue;
+      const wt = Math.exp(-d2 / sig2);
+      s += TH[k] * wt; w += wt;
+      if (d2 < 2.3) { if (M.ramp[k]) rampN++; if (lv[k] === ROCK_LV) rockN++; }
     }
+    let y = s / (w || 1);
+    if (rockN) kind[j * VN + i] = 2;
+    else if (rampN) kind[j * VN + i] = 1;
+    else { const L = y / LEVEL_H, b = Math.floor(L + 1e-4); y = (b + sstep(0.3, 0.7, L - b)) * LEVEL_H; }   // back onto the terraces
+    V[j * VN + i] = y;
   }
+  const hill = (x, z, i, j) => kind[j * VN + i] === 2 ? 0 : hillAt(M, x, z);
   const y = (x, z) => {
-    const fx = (x + H) / CELL, fz = (z + H) / CELL, cx = Math.max(0, Math.min(N - 1, Math.floor(fx))), cz = Math.max(0, Math.min(N - 1, Math.floor(fz))), k = cz * N + cx;
-    const tx = Math.max(0, Math.min(1, fx - cx)), tz = Math.max(0, Math.min(1, fz - cz)), o = k * 4;
-    return (CR[o] * (1 - tx) + CR[o + 1] * tx) * (1 - tz) + (CR[o + 2] * (1 - tx) + CR[o + 3] * tx) * tz + (lv[k] !== 3 ? hillAt(M, x, z) : 0);
+    const fx = Math.max(0, Math.min(VN - 1.001, x + H)), fz = Math.max(0, Math.min(VN - 1.001, z + H)), i = Math.floor(fx), j = Math.floor(fz), tx = fx - i, tz = fz - j;
+    const a = V[j * VN + i], b = V[j * VN + i + 1], c = V[(j + 1) * VN + i], d = V[(j + 1) * VN + i + 1];
+    const rock = kind[j * VN + i] === 2 && kind[(j + 1) * VN + i + 1] === 2;
+    return (a * (1 - tx) + b * tx) * (1 - tz) + (c * (1 - tx) + d * tx) * tz + (rock ? 0 : hillAt(M, x, z));
   };
-  return { TH, CR, near, y };
+  return { TH, V, VN, kind, hill, y };
 }
 export function buildTerrain(M, bases, SF = makeSurface(M)) {
   const N = M.N, H = M.H, lv = M.lv, group = new THREE.Group();
   const mat = fowMat(new THREE.MeshLambertMaterial({ vertexColors: true }));
-  const { TH, CR, near } = SF;
-  const corner = (cx, cz, dx, dz) => CR[(cz * N + cx) * 4 + dx + dz * 2];
+  const { V, VN, kind } = SF;
   const baseD = (x, z) => { let d = 1e9; for (const b of bases) d = Math.min(d, Math.hypot(b.x - x, b.z - z)); return d; };
-  const colorAt = (x, z, k, out) => {
-    const L = lv[k];
-    if (L === 3) { out.copy(ROCK).lerp(SNOWCAP, clamp01(0.5 + fbm(M.hillSeed + 5, x / 9, z / 9, 2))); return out; }
+  const Y = new Float32Array(VN * VN);
+  for (let j = 0; j < VN; j++) for (let i = 0; i < VN; i++) Y[j * VN + i] = V[j * VN + i] + SF.hill(i - H, j - H, i, j);
+  const colorAt = (i, j, out) => {
+    const x = i - H, z = j - H, v = j * VN + i, k = Math.min(N - 1, Math.floor(j / CELL)) * N + Math.min(N - 1, Math.floor(i / CELL));
+    if (kind[v] === 2) { out.copy(ROCK).lerp(SNOWCAP, clamp01(0.5 + fbm(M.hillSeed + 5, x / 9, z / 9, 2))); return out; }
+    // steepness: the biggest height step to a neighboring vertex (cliff faces get the rock strata)
+    let st = 0; const y0 = V[v];
+    if (i > 0) st = Math.max(st, Math.abs(V[v - 1] - y0)); if (i < VN - 1) st = Math.max(st, Math.abs(V[v + 1] - y0));
+    if (j > 0) st = Math.max(st, Math.abs(V[v - VN] - y0)); if (j < VN - 1) st = Math.max(st, Math.abs(V[v + VN] - y0));
+    const L = Math.max(0, Math.min(3, Math.round(y0 / LEVEL_H)));
     const n1 = fbm(M.hillSeed + 21, x / 16, z / 16, 3), n2 = fbm(M.hillSeed + 33, x / 4.5, z / 4.5, 2);
-    out.copy(GRASS[Math.min(2, L)]);
+    out.copy(LV_GRASS[L]);
     out.lerp(DARKG, clamp01(n1 * 0.9 + 0.2) * 0.55);
     if (n2 > 0.55) out.lerp(FLOWER, (n2 - 0.55) * 1.2);
     const dirt = clamp01((fbm(M.hillSeed + 44, x / 22, z / 22, 3) - 0.25) * 2.2);
     out.lerp(DIRT, dirt * 0.7);
-    if (M.ramp[k]) out.lerp(PATH, 0.65);
+    if (M.ramp[k] && kind[v] === 1) out.lerp(PATH, 0.65);
     const bd = baseD(x, z); if (bd < 13) out.lerp(PATH, clamp01((13 - bd) / 6) * 0.45);
     out.multiplyScalar(0.92 + n2 * 0.08);
+    const cliff = clamp01((st - 0.55) / 0.9);
+    if (cliff > 0 && !(M.ramp[k])) out.lerp(c2.copy(ROCK).lerp(ROCK2, clamp01(0.5 + 0.5 * Math.sin(y0 * 2.3 + fbm(M.hillSeed + 7, x / 5, z / 5, 1) * 3))).multiplyScalar(0.85), cliff);
     return out;
   };
-  const CH = 16;   // cells per chunk side
-  const c = new THREE.Color();
-  for (let z0 = 0; z0 < N; z0 += CH) for (let x0 = 0; x0 < N; x0 += CH) {
+  const c2 = new THREE.Color(), c = new THREE.Color();
+  const CH = 32;   // vertices per chunk side (16 cells)
+  for (let j0 = 0; j0 < VN - 1; j0 += CH) for (let i0 = 0; i0 < VN - 1; i0 += CH) {
+    const i1 = Math.min(VN - 1, i0 + CH), j1 = Math.min(VN - 1, j0 + CH), w = i1 - i0 + 1;
     const pos = [], col = [], idx = [];
-    let vi = 0;
-    const vtx = (x, y, z, cc) => { pos.push(x, y, z); col.push(cc.r, cc.g, cc.b); return vi++; };
-    for (let cz = z0; cz < Math.min(N, z0 + CH); cz++) for (let cx = x0; cx < Math.min(N, x0 + CH); cx++) {
-      const k = cz * N + cx, wx = cx * CELL - H, wz = cz * CELL - H;
-      // top: 3x3 vertices (1 m apart), corners from the smooth corner heights, the hills on top
-      const c00 = corner(cx, cz, 0, 0), c10 = corner(cx, cz, 1, 0), c01 = corner(cx, cz, 0, 1), c11 = corner(cx, cz, 1, 1);
-      const ids = [];
-      for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) {
-        const tx = i / 2, tz = j / 2, x = wx + i, z = wz + j;
-        let y = (c00 * (1 - tx) + c10 * tx) * (1 - tz) + (c01 * (1 - tx) + c11 * tx) * tz;
-        if (lv[k] !== 3) y += hillAt(M, x, z);
-        ids.push(vtx(x, y, z, colorAt(x, z, k, c)));
-      }
-      for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) { const a = ids[j * 3 + i], b = ids[j * 3 + i + 1], d = ids[(j + 1) * 3 + i], e = ids[(j + 1) * 3 + i + 1]; idx.push(a, d, b, b, d, e); }
-      // walls toward lower neighbors (+x, -x, +z, -z)
-      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const ex = cx + dx, ez = cz + dz; if (ex < 0 || ez < 0 || ex >= N || ez >= N) continue;
-        const j = ez * N + ex; if (near(k, j) || TH[j] >= TH[k]) continue;
-        // the shared edge, top from this cell, bottom from the neighbor, in 2 segments
-        const pts = dx === 1 ? [[wx + 2, wz], [wx + 2, wz + 1], [wx + 2, wz + 2]] : dx === -1 ? [[wx, wz + 2], [wx, wz + 1], [wx, wz]] : dz === 1 ? [[wx + 2, wz + 2], [wx + 1, wz + 2], [wx, wz + 2]] : [[wx, wz], [wx + 1, wz], [wx + 2, wz]];
-        const hTop = (x, z) => { const tx = (x - wx) / 2, tz = (z - wz) / 2; return (c00 * (1 - tx) + c10 * tx) * (1 - tz) + (c01 * (1 - tx) + c11 * tx) * tz + (lv[k] !== 3 ? hillAt(M, x, z) : 0); };
-        const ecx = ex, ecz = ez, nwx = ecx * CELL - H, nwz = ecz * CELL - H;
-        const n00 = corner(ecx, ecz, 0, 0), n10 = corner(ecx, ecz, 1, 0), n01 = corner(ecx, ecz, 0, 1), n11 = corner(ecx, ecz, 1, 1);
-        const hBot = (x, z) => { const tx = clamp01((x - nwx) / 2), tz = clamp01((z - nwz) / 2); return (n00 * (1 - tx) + n10 * tx) * (1 - tz) + (n01 * (1 - tx) + n11 * tx) * tz + (lv[j] !== 3 ? hillAt(M, x, z) : 0) - 0.05; };
-        for (let s = 0; s < 2; s++) {
-          const [ax, az] = pts[s], [bx, bz] = pts[s + 1];
-          const ta = hTop(ax, az), tb = hTop(bx, bz), ba = hBot(ax, az), bb = hBot(bx, bz);
-          const strata = (y) => c.copy(ROCK).lerp(ROCK2, clamp01(0.5 + 0.5 * Math.sin(y * 2.3 + fbm(M.hillSeed + 7, ax / 5, az / 5, 1) * 3))).multiplyScalar(0.85);
-          const i0 = vtx(ax, ta, az, strata(ta)), i1 = vtx(bx, tb, bz, strata(tb)), i2 = vtx(ax, ba, az, strata(ba).multiplyScalar(0.7)), i3 = vtx(bx, bb, bz, strata(bb).multiplyScalar(0.7));
-          idx.push(i0, i1, i2, i1, i3, i2);   // (outward: toward the lower cell)
-        }
-      }
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { pos.push(i - H, Y[j * VN + i], j - H); colorAt(i, j, c); col.push(c.r, c.g, c.b); }
+    for (let j = 0; j < j1 - j0; j++) for (let i = 0; i < i1 - i0; i++) {
+      const a = j * w + i, b = a + 1, d = a + w, e = d + 1;
+      // split each quad along the diagonal that follows the slope (a cliff edge running diagonally stays straight)
+      const ya = pos[a * 3 + 1], yb = pos[b * 3 + 1], yd = pos[d * 3 + 1], ye = pos[e * 3 + 1];
+      if (Math.abs(ya - ye) <= Math.abs(yb - yd)) idx.push(a, d, e, a, e, b); else idx.push(a, d, b, b, d, e);
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -249,7 +252,7 @@ export function buildTerrain(M, bases, SF = makeSurface(M)) {
     const mesh = new THREE.Mesh(g, mat); mesh.receiveShadow = true; mesh.castShadow = true;
     group.add(mesh);
   }
-  // a dark floor under everything, so a crack between a cliff wall and the ground never shows the sky
+  // a dark floor under everything, so a gap at the map's edge never shows the sky
   const under = new THREE.Mesh(new THREE.PlaneGeometry(M.size + 40, M.size + 40).rotateX(-Math.PI / 2), fowMat(new THREE.MeshLambertMaterial({ color: '#2e2c26' })));
   under.position.y = -1.2; group.add(under);
   return group;
