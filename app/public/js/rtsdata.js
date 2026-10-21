@@ -14,7 +14,7 @@ export const RTS = {
   derrickCapture: 3,          // seconds an infantry unit stands next to a derrick to take it
   towerSight: 22, towerReach: 3.5,
   flare: { cost: 50, cd: 40, r: 14, dur: 12 },
-  pull: { c: 100, f: 75, step: 25, max: 6, time: 20, offer: 3, hand: 6 },   // card research at the Archive
+  pull: { c: 100, f: 75, step: 25, max: 6, time: 20, offer: 3, hand: 6, perUnit: 4 },   // card research at the Archive (v1.2.28: at most 4 cards per unit type, workers any number)
   queueMax: 5,
   dropRange: 1.2,             // meters from a building's edge to drop off cargo / build
 };
@@ -57,6 +57,8 @@ export const UNITS = {
     weapons: [W(9, 0.6, 6, 'g', { fx: 'bullet' })] },
 };
 export const UNIT_IDS = Object.keys(UNITS);
+// v1.2.28 (Devin): how many cards a unit type can hold (workers: no limit)
+export const cardCap = type => UNITS[type] && UNITS[type].worker ? Infinity : RTS.pull.perUnit;
 
 // Buildings: s = footprint in cells (2 m each). gives = supply. trains = units. Production and research use a queue.
 export const BUILDINGS = {
@@ -69,7 +71,7 @@ export const BUILDINGS = {
   barracks: { name: 'Barracks', icon: '🏢', desc: 'Trains infantry.', cost: [150, 0], time: 46, hp: 1000, armor: 1, s: 3, sight: 9, needs: ['depot'], trains: ['trooper', 'lancer', 'medic', 'vaulter'] },
   sentry: { name: 'Sentry Tower', icon: '🗼', desc: 'Defense tower. Shoots ground and air.', cost: [100, 0], time: 25, hp: 350, armor: 1, s: 1, sight: 11, needs: ['barracks'],
     weapons: [W(12, 0.85, 8, 'ga', { fx: 'laser' })] },
-  archive: { name: 'Archive', icon: '📚', desc: 'Research: pull a card and fit it to a unit type. Every card works on every unit.', cost: [125, 100], time: 36, hp: 750, armor: 1, s: 3, sight: 9, needs: ['barracks'], research: true },
+  archive: { name: 'Archive', icon: '📚', desc: 'Research: pull a card and fit it to a unit type. Every card works on every unit. Each unit type holds up to 4 cards (Riggers any number); take a card off in the research panel (F3) to move it to another unit.', cost: [125, 100], time: 36, hp: 750, armor: 1, s: 3, sight: 9, needs: ['barracks'], research: true },
   factory: { name: 'Factory', icon: '🏭', desc: 'Builds vehicles.', cost: [150, 100], time: 43, hp: 1250, armor: 1, s: 3, sight: 9, needs: ['barracks'], trains: ['strider', 'crawler'] },
   airfield: { name: 'Airfield', icon: '🛫', desc: 'Builds aircraft.', cost: [150, 100], time: 36, hp: 1300, armor: 1, s: 3, sight: 9, needs: ['factory'], trains: ['spotter', 'hornet', 'gunship'] },
 };

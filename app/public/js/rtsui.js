@@ -3,8 +3,8 @@
 // the camera, mouse and keyboard controls, and the network glue. The HUD (minimap, selection, command card,
 // research, end screen) is in rtshud.js. The host also runs RtsGame (rts.js) through this.
 //
-// Mouse lock: in fullscreen (F11) the real cursor is captured (pointer lock) and a drawn cursor takes its place, held
-// inside the window like a fullscreen game, so pushing against the screen edge always pans the camera.
+// Mouse lock: the real cursor is captured (pointer lock) and a drawn cursor takes its place, held inside the window like
+// a fullscreen game, so pushing against the screen edge always pans the camera (v1.2.28: windowed too, not only F11).
 // =====================================================================
 import * as THREE from '/vendor/three/build/three.module.js';
 import { RTS, UNITS, BUILDINGS } from './rtsdata.js';
@@ -74,7 +74,7 @@ export class RtsClient {
   // ---------------------------------------------------------------- frame
   frame(dt, paused, simDt = dt) {
     if (this.isHost) this.hostTick(Math.min(0.25, simDt), paused);
-    if (this.locked() && !this.wantLock()) document.exitPointerLock();   // a menu opened or the window left fullscreen
+    if (this.locked() && !this.wantLock()) document.exitPointerLock();   // a menu opened or the window lost focus
     if (!this.M) { this.renderer.updateFx(dt); return; }
     this.fpsTick(dt);
     this.updateCamera(dt);
@@ -186,6 +186,14 @@ export class RtsClient {
     this.M = M; this.SF = makeSurface(M);
     makeFow(M);
     this.vis = new Uint8Array(M.N * M.N); this.explored = new Uint8Array(M.N * M.N); this.fowCur = new Float32Array(M.N * M.N).fill(18);
+    // v1.2.28 (Devin): every base spot (its crystal line and vents) starts out as explored ground, so the places to
+    // expand to show through the fog (dimmed, like ground you've seen) on the field and the minimap from the start
+    for (const b of M.bases) {
+      const R = 15, c0x = Math.floor((b.x - R + M.H) / CELL), c1x = Math.floor((b.x + R + M.H) / CELL), c0z = Math.floor((b.z - R + M.H) / CELL), c1z = Math.floor((b.z + R + M.H) / CELL);
+      for (let cz = Math.max(0, c0z); cz <= Math.min(M.N - 1, c1z); cz++) for (let cx = Math.max(0, c0x); cx <= Math.min(M.N - 1, c1x); cx++) {
+        if (Math.hypot(cx * CELL - M.H + CELL / 2 - b.x, cz * CELL - M.H + CELL / 2 - b.z) <= R) this.explored[cz * M.N + cx] = 1;
+      }
+    }
     for (const r of M.res) this.res.set(r.id, { ...r, seen: false });
     this.der = M.derricks.map(d => ({ ...d, own: -2, cap: 0, capPct: 0 }));
     this.terrain = buildTerrain(M, M.bases, this.SF); this.root.add(this.terrain);
@@ -708,7 +716,11 @@ export class RtsClient {
     removeEventListener('wheel', this.onWheel); removeEventListener('keydown', this.onKey, true); removeEventListener('keyup', this.onKeyUp, true);
     removeEventListener('contextmenu', this.onCtx); document.removeEventListener('pointerlockchange', this.onLockCh); removeEventListener('resize', this.onResize);
   }
-  wantLock() { return this.fullscreen() && !(this.settings && this.settings.rtsLock === false) && !this.hud.menuOpen(); }
+  // v1.2.28 (Devin: the mouse still left the window, even in fullscreen): the lock no longer waits for fullscreen. That
+  // test compared the window with the screen size, which never matched once the GUI scale zoomed the page (or in a
+  // maximized window), so it never locked. Now any click into the battlefield captures the mouse, windowed or not
+  // (Esc or Alt+Tab lets it go; the next click takes it again). Settings > General can still turn it off.
+  wantLock() { return !(this.settings && this.settings.rtsLock === false) && !this.hud.menuOpen() && document.hasFocus(); }
   pointerMove() {
     this.mouseGround = this.M ? this.ground(this.mx, this.my2) : null;
     const h = this.M && !this.drag ? this.pick(this.mx, this.my2) : null;

@@ -1,6 +1,29 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.28', date: 'Oct 21', notes: {
+    Added: [
+      'The GUI now scales itself to your screen resolution and aspect ratio (from 16:9 up to 32:9 ultrawide). The GUI scale slider in Settings works on top of that.',
+      'Tournament: before each new matchup, a 15 second intro shows your opponent\'s model on the left and their cards on the right (Enter: ready). In team tournaments you skip it when you join an ally\'s match after yours is over.',
+      'RTS: every expansion site is revealed on the map from the start, so you can see where to expand.',
+      'RTS: cards can be taken off a unit type again (the ✕ next to each upgrade in Research) so you can move upgrades around.',
+    ],
+    Changed: [
+      'Tournament pips now count losses: red pips under your name, and your current opponents are listed right under you.',
+      'Team colors now follow the players\' own colors as closely as possible when teams are set up.',
+      'Lobby: the bot buttons and the rest of the lobby no longer move when players are added or removed.',
+      '100 player matches: fighters far from the camera are drawn as light stand-ins, and the shot budget kicks in sooner, so big lobbies hold their frame rate. Players and bots now spawn spread evenly over the whole map.',
+      'Bots find their way around shaped maps much better (a walking map of the floor), and get stuck less in big lobbies.',
+      'RTS: the mouse stays inside the game window in windowed mode too, not only in fullscreen (Settings can turn this off).',
+      'RTS: bigger bases and maps (232 m for 2 players up to 384 m for 8), four height levels instead of three.',
+      'RTS: each unit type can carry up to 4 cards (Riggers any number); the Archive and Research panel say so.',
+      'RTS: smoother terrain (rounded cliffs and slopes) and soft fog of war edges.',
+    ],
+    Fixed: [
+      'Moving the music or any other volume slider no longer changes the size of the GUI (your saved GUI scale is now applied at start).',
+      'RTS: units no longer get stuck on ramps when the target is to the side of the ramp.',
+    ],
+  } },
   { v: '1.2.27', date: 'Oct 20', notes: {
     Added: [
       'RTS mode (experimental; new mode tile in the lobby): real-time strategy for 2 to 8 players and bots, in the spirit of StarCraft, C&C Generals and Battle for Middle-earth. Build a base, mine, train an army and destroy every enemy building.',

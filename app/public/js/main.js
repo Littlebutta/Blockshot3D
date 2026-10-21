@@ -678,6 +678,7 @@ function pressAction(code, e) {
     const side = S.matchSettings.side;   // (2D: up also jumps; down + jump drops through instead)
     if ((bound('jump', code) && !(side && held('down'))) || (side && !S.matchSettings.brawl && bound('up', code))) I.jumpSeq++;   // (v1.2.13: not in Brawl)
     if (bound('shoot', code) && (settings.view !== 'first' || locked())) I.shotSeq++;
+    if ((code === 'Enter' || code === 'NumpadEnter') && TI) { I.ready = I.ready === TI.round ? 0 : TI.round; sound.play('ui'); }   // v1.2.28 tournament matchup screen
     // v28 Core Defense: Enter readies you for the next wave (press again to unready)
     if ((code === 'Enter' || code === 'NumpadEnter') && S.matchSettings.core && S.view && S.view.phase === 'countdown') {
       I.ready = I.ready === S.view.round ? 0 : S.view.round;
@@ -1054,7 +1055,9 @@ const isHostSide = () => S && S.role !== 'peer';
 function leastTeam() {
   const c = ART.teamNames.map(() => 0);
   for (const p of S.lobby.players) { const t = p.team || 0; if (t < c.length) c[t]++; }
-  let best = 0; for (let i = 1; i < c.length; i++) if (c[i] < c[best]) best = i;
+  // v1.2.28: once two or more teams are set up, newcomers fill those (the team colors can be any of the 8 now)
+  const inUse = c.map((n, i) => n ? i : -1).filter(i => i >= 0), pool = inUse.length >= 2 ? inUse : c.map((n, i) => i);
+  let best = pool[0]; for (const i of pool) if (c[i] < c[best]) best = i;
   return best;
 }
 function lobbyChanged() {
@@ -1232,7 +1235,28 @@ function setMyColor(c) {
   else S.net.send({ t: 'toHost', msg: { k: 'setColor', color: c } });
 }
 // turning teams on with everyone on one team: split them into two teams to start
-function splitTeams() { const L = S.lobby; if ((teamPlay(L.settings) || (L.settings.mode === 'rts' && L.settings.rtsTeams)) && new Set(L.players.map(p => p.team || 0)).size < 2) L.players.forEach((p, i) => { p.team = i % 2; }); }
+function splitTeams() {
+  const L = S.lobby; if (!(teamPlay(L.settings) || (L.settings.mode === 'rts' && L.settings.rtsTeams))) return;
+  if (new Set(L.players.map(p => p.team || 0)).size < 2) L.players.forEach((p, i) => { p.team = i % 2; });
+  colorTeams();
+}
+// v1.2.28 (Devin): set-up teams take the team color closest to their players' own colors (people count 4x a bot), so
+// a player who likes violet tends to end up on the Violet team. Only the team colors move: who is with whom stays.
+function colorTeams() {
+  const L = S.lobby, own = assignColors(L.players, 'ffa'), rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const groups = new Map();
+  L.players.forEach((p, i) => { const t = p.team || 0; if (!groups.has(t)) groups.set(t, []); groups.get(t).push([p, rgb(own[i] || '#ffffff')]); });
+  const pairs = [];
+  for (const [t, G] of groups) ART.teamColors.forEach((c, s) => {
+    const tc = rgb(c); let cost = 0, w = 0;
+    for (const [p, col] of G) { const k = p.isBot ? 1 : 4; cost += k * Math.hypot(col[0] - tc[0], col[1] - tc[1], col[2] - tc[2]); w += k; }
+    pairs.push([cost / (w || 1), t, s]);
+  });
+  pairs.sort((a, b) => a[0] - b[0]);
+  const to = new Map(), used = new Set();
+  for (const [, t, s] of pairs) if (!to.has(t) && !used.has(s)) { to.set(t, s); used.add(s); }
+  for (const p of L.players) p.team = to.get(p.team || 0) ?? (p.team || 0);
+}
 function bindLobby() {
   $('playerList').addEventListener('change', e => {
     const t = e.target;
@@ -1319,6 +1343,7 @@ function bindLobby() {
     const ps = S.lobby.players.slice().sort(() => Math.random() - 0.5);
     const n = Math.max(2, new Set(S.lobby.players.map(p => p.team || 0)).size);
     ps.forEach((p, i) => { p.team = i % n; });
+    colorTeams();
     sound.play('ui'); lobbyChanged();
   };
   $('playerList').addEventListener('click', e => { const b = e.target.closest('[data-color]'); if (b) { e.stopPropagation(); openColorPop(b); } });
@@ -1751,7 +1776,7 @@ function setModeTip(ms) {
   let h = '';
   if (!ms) h = '';
   else if (ms.mode === 'amon') h = `<b>AMON</b>: drag cards from the store onto storage or the board to buy; drop a card on another copy to upgrade; drag onto the money bag to sell. Scroll zooms, hold middle mouse to rotate, ${k('up')}${k('left')}${k('down')}${k('right')} pans, Q / E switch fields, Tab leaderboard. In battle, click one of your units and press Space to take control of it (left button attacks, right button blocks if it can).`;
-  else if (ms.mode === 'rts') h = `<b>RTS</b>: drag a box or click to select, right-click to move, attack or mine. A then click attack-moves, Shift queues orders, Ctrl+number saves a group, double-tap the number to jump to it. Riggers build (B). F1 idle worker, F2 army, F3 research, Space last alert. Arrow keys, screen edges or the minimap move the camera; the wheel zooms. Press F11 for fullscreen: the mouse stays inside the window.`;
+  else if (ms.mode === 'rts') h = `<b>RTS</b>: drag a box or click to select, right-click to move, attack or mine. A then click attack-moves, Shift queues orders, Ctrl+number saves a group, double-tap the number to jump to it. Riggers build (B). F1 idle worker, F2 army, F3 research, Space last alert. Arrow keys, screen edges or the minimap move the camera; the wheel zooms. The mouse stays inside the game window (Settings can turn this off).`;
   else if (ms.brawl) h = `<b>Brawl</b>: ${k('jump')} again in the air for a second jump. In the air, hold ${k('dash')} to charge a dash toward the mouse and let go to dash (once per jump). Near a ledge you hang on: ${k('jump')} climbs up. While respawning, ${k('jump')} drops in early. ${k('down')} + ${k('jump')} drops through platforms.`;
   else if (ms.side) h = `<b>2D</b>: ${k('left')} / ${k('right')} move, ${k('up')} or ${k('jump')} jumps, ${k('down')} + ${k('jump')} drops through a platform. The mouse aims anywhere. Block as you touch the red wall to bounce off it.`;
   else if (ms.core) h = `<b>Core defense</b>: tap ${k('use')} to pick up a block, plank, slab, steel or spikes (or catch one as it falls). Hold ${k('use')} to show the hologram of where it goes (aim at a block to stack on top), scroll the mouse wheel to turn it, and let go to place it. Stack up to four high. No shooting while carrying; unsupported blocks fall. Hold ${k('use')} next to the core to pick it up and move it (press again to set it down). <b>Enter</b> readies you for the wave.`;
@@ -2715,8 +2740,10 @@ function handleEvent0(e) {
       TS.stop = TS.slow = 0; hideSplash(); S.kcWait = null; kcEnd(false);
       setRmodTag(e.rmod); if (e.rmod) setTimeout(() => modSplash(e.wave || e.n, e.rmod), 450);
       { const w = $('wipe'); w.classList.remove('hidden', 'go'); void w.offsetWidth; w.classList.add('go'); sound.play('whoosh', 0.6); clearTimeout(w._t); w._t = setTimeout(() => w.classList.add('hidden'), 700); }   // v1.2.0: wipe the new arena in
+      if (e.tA) setTimeout(() => { if (S && S.inGame) tournIntro(e); }, 120);   // v1.2.28 tournament matchup screen
       break;
-    case 'fight': if ((S.view.round || 1) <= 1) { const lg = $('legend'); lg.classList.remove('brief'); void lg.offsetWidth; lg.classList.add('brief'); }   // the height legend fades 10 s into the first round
+    case 'tGo': tournIntroEnd(); break;
+    case 'fight': tournIntroEnd(); if ((S.view.round || 1) <= 1) { const lg = $('legend'); lg.classList.remove('brief'); void lg.offsetWidth; lg.classList.add('brief'); }   // the height legend fades 10 s into the first round
       banner(t('Fight!'), 'var(--accent)', 0.8); sound.play('fight'); if (S.betOpen) { S.betOpen = false; renderBets(true); } break;
     case 'modBroken': { const c = cardById.get(e.card); toast(e.p === me ? `${c ? c.name : 'Mod'} scrapped` : `${rosterOf(e.p).name} scrapped ${c ? c.name : 'a mod'}`); break; }
     case 'shoot': {
@@ -3530,11 +3557,34 @@ function renderChips() {
     shown.map(id => `<span>${esc((cardById.get(id) || { name: id }).name)}</span>`).join('');
 }
 // Top-left: one row per player (free-for-all) or team, colored, with win pips. Hover shows cards.
-function renderScoreboard(sc) {
-  const mk = myKey(), goal = S.matchSettings.roundsToWin, tdm = teamPlay();
-  const cardsHtml = r => r.cards.length
+function scCardsHtml(r) {
+  return r.cards.length
     ? `<div class="cl">${r.cards.map(id => { const c = cardById.get(id) || { name: id, rarity: 'common' }; return `<span style="--r:${RARITY[rarityOf(c)].color}">${esc(c.name)}</span>`; }).join('')}</div>`
     : '<div class="none">No cards yet</div>';
+}
+// v1.2.28 tournament: the pips count losses (red) instead of wins. You first, then whoever is in your arena right now
+// ("vs"), then the rest by losses left. Hover still shows cards.
+function renderTournBoard() {
+  const T = S.tn, L = T.L, mine = tnArenaOf(S.localId), me = S.localId;
+  const rowOf = id => T.p.find(r => r[0] === id);
+  const lost = r => Math.max(0, L - r[2]);
+  const foes = T.p.filter(r => r[0] !== me && mine != null && mine >= 0 && r[1] === mine && !r[3]);
+  const others = T.p.filter(r => r[0] !== me && !foes.includes(r)).sort((a, b) => a[3] - b[3] || b[2] - a[2]);
+  const shown = others.slice(0, Math.max(0, 10 - foes.length)), rest = others.length - shown.length;
+  const line = (r, tag) => {
+    const ro = rosterOf(r[0]), nm = r[0] === me ? 'You' : ro.name;
+    const pips = L <= 10 ? Array.from({ length: L }, (_, i) => `<span class="${i < lost(r) ? 'loss' : ''}"></span>`).join('') : `<b class="lossN">${lost(r)}</b>`;
+    return `<div class="sc${r[0] === me ? ' me' : ''}${tag ? ' vs' : ''}${r[3] ? ' ko' : ''}" style="--c:${ro.color || '#8a93a8'}"><i></i><span>${tag ? '<em>vs</em> ' : ''}${esc(nm)}${r[3] ? ' <small>out</small>' : ''}</span><span class="wins tl" title="${esc(t('Losses'))}">${pips}</span><div class="pop"><div class="pm" data-peek="${esc(r[0])}"><div class="who" style="color:${ro.color}">${esc(nm)}</div>${scCardsHtml(ro)}</div></div></div>`;
+  };
+  const mr = rowOf(me);
+  $('scoreboard').classList.toggle('many', T.p.length > 10);
+  $('scoreboard').innerHTML = (mr ? line(mr) : '') + foes.map(r => line(r, true)).join('') + (foes.length && shown.length ? '<div class="scgap"></div>' : '') + shown.map(r => line(r)).join('') +
+    (rest ? `<div class="sc scmore" style="--c:#8a93a8"><i></i><span>+${rest} more</span></div>` : '');
+}
+function renderScoreboard(sc) {
+  if (S.tn && S.matchSettings.mode === 'tourn') { renderTournBoard(); return; }
+  const mk = myKey(), goal = S.matchSettings.roundsToWin, tdm = teamPlay();
+  const cardsHtml = scCardsHtml;
   $('scoreboard').classList.toggle('many', Object.keys(sc).length > 10);
   // v1.2.25: big lobbies show the top 10 and you, plus a count of the rest (100 rows filled the screen)
   let keys = Object.keys(sc).sort((a, b) => sc[b] - sc[a]), rest = 0;
@@ -3692,9 +3742,83 @@ function tournView(v) {
   const A = viewArena(), ok = id => { const a = tnArenaOf(id); return a == null || a < 0 ? id == null : a === A; };
   const okP = p => { const a = tnArenaOf(p.id); return a == null ? true : a === A; };
   if (tvCache && tvCache.v === v && tvCache.n === v.players.length && tvCache.A === A && tvCache.b === v.bullets) return tvCache.out;
-  const out = { ...v, players: v.players.filter(okP), bullets: (v.bullets || []).filter(b => ok(b.o)), shields: (v.shields || []).filter(x => ok(x.o)), mines: (v.mines || []).filter(x => ok(x.o)), barricades: (v.barricades || []).filter(x => ok(x.o)) };
+  // v1.2.28: red loss pips under each name (v.tl = [losses, lives])
+  const tl = new Map(S.tn.p.map(r => [r[0], [Math.max(0, S.tn.L - r[2]), S.tn.L]]));
+  const out = { ...v, players: v.players.filter(okP).map(p => tl.has(p.id) ? { ...p, tl: tl.get(p.id) } : p), bullets: (v.bullets || []).filter(b => ok(b.o)), shields: (v.shields || []).filter(x => ok(x.o)), mines: (v.mines || []).filter(x => ok(x.o)), barricades: (v.barricades || []).filter(x => ok(x.o)) };
   tvCache = { v, n: v.players.length, A, b: v.bullets, out };
   return out;
+}
+// v1.2.28 matchup screen before each tournament round: your opponent's model turns on the left, their cards deal in on
+// the right, for TOURN.intro seconds (the host's countdown waits; Enter readies you, and once every player is ready the
+// round starts early). Only at the round start: a team player sent to help an ally mid-round ('tMove') never sees it.
+let TI = null;
+function tournIntro(e) {
+  tournIntroEnd();
+  const ids = (e.tA || []).find(A => A.includes(S.localId));
+  if (!ids || !(e.ti > 0)) return;
+  const mk = myKey(), keyOfId = id => teamPlay() ? 't' + rosterOf(id).team : id, foes = ids.filter(id => id !== S.localId && keyOfId(id) !== mk).map(id => rosterOf(id));
+  if (!foes.length) return;
+  let el = $('tIntro');
+  if (!el) { el = document.createElement('div'); el.id = 'tIntro'; document.body.appendChild(el); }
+  const row = id => S.tn && S.tn.p.find(r => r[0] === id), L = S.tn ? S.tn.L : 4;
+  const pips = id => { const r = row(id), lost = r ? Math.max(0, L - r[2]) : 0; return L <= 10 ? Array.from({ length: L }, (_, i) => `<span class="${i < lost ? 'loss' : ''}"></span>`).join('') : `<b>${lost}</b>`; };
+  const cardsOf = r => (r.cards || []).map(id => cardById.get(id)).filter(Boolean);
+  el.innerHTML = `<div class="tiL"><canvas id="tiModel" width="460" height="560"></canvas>
+    <div class="tiName">${foes.map(r => `<div style="color:${r.color}">${esc(r.name)}<div class="tiPips">${pips(r.id)}</div></div>`).join('')}</div></div>
+    <div class="tiMid"><div class="tiVs">VS</div><div class="tiMe" style="color:${rosterOf(S.localId).color}">${esc(t('You'))}<div class="tiPips">${pips(S.localId)}</div></div></div>
+    <div class="tiR">${foes.map(r => { const cs = cardsOf(r); return `<h3 style="color:${r.color}">${esc(r.name)}${t("'s cards")} <small>${cs.length}</small></h3><div class="tiCards${cs.length > 8 ? ' many' : ''}"></div>`; }).join('')}</div>
+    <div class="tiBar"><i></i><span></span></div>`;
+  el.querySelectorAll('.tiCards').forEach((box, k) => {
+    const cs = cardsOf(foes[k]);
+    if (!cs.length) { box.innerHTML = `<div class="tiNone">${esc(t('No cards yet'))}</div>`; return; }
+    cs.forEach((c, i) => { const ce = cardEl(c); ce.style.animationDelay = (0.5 + i * 0.12) + 's'; box.appendChild(ce); });
+  });
+  el.classList.remove('hidden', 'out'); void el.offsetWidth; el.classList.add('go');
+  I.ready = 0;
+  TI = { el, end: performance.now() + e.ti * 1000, dur: e.ti * 1000, round: S.view.round || e.n, foes };
+  // the model view: its own small renderer (freed when the screen closes), opponents side by side
+  {
+    try {
+      const canvas = $('tiModel'), r = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      r.setPixelRatio(Math.min(devicePixelRatio, 2)); r.setSize(460, 560, false);
+      const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(30, 460 / 560, 0.1, 60);
+      cam.position.set(0, 1.5, 5.2); cam.lookAt(0, 1.0, 0);
+      scene.add(new THREE.HemisphereLight(0xdfe6ff, 0x3a4256, 1.1));
+      const sun = new THREE.DirectionalLight(0xffffff, 0.9); sun.position.set(2, 4, 3); scene.add(sun);
+      const holder = new THREE.Group(); scene.add(holder);
+      TI.gl = { r, scene, cam, holder, models: [] };
+      foes.slice(0, 3).forEach((f, i, a) => {
+        const c = f.cosmetics || {}, m = buildPlayerModel(f.color || '#ffffff', c.gun, c.model);
+        attachCosmetics(m, c);
+        m.root.position.x = (i - (a.length - 1) / 2) * 1.5; if (a.length > 1) m.root.scale.setScalar(0.8);
+        holder.add(m.root); TI.gl.models.push(m);
+      });
+    } catch (err) { console.warn('[tournament intro] model view unavailable', err); TI.gl = null; }
+  }
+  const t0 = performance.now(), me = TI;
+  const tick = () => {
+    if (TI !== me) return;
+    const now = performance.now(), left = Math.max(0, me.end - now);
+    const bar = me.el.querySelector('.tiBar i'); if (bar) bar.style.width = (left / me.dur * 100) + '%';
+    const txt = me.el.querySelector('.tiBar span'), sec = Math.ceil(left / 1000);
+    if (txt) { const s2 = I.ready === me.round ? t('Ready! Waiting for the others · {n}', { n: sec }) : t('Match starts in {n} · Enter: ready', { n: sec }); if (txt.textContent !== s2) txt.textContent = s2; }
+    if (me.gl) {
+      const k = Math.min(1, (now - t0) / 700), ease = 1 - Math.pow(1 - k, 3);
+      me.gl.holder.position.x = -3 * (1 - ease); me.gl.holder.rotation.y = -0.6 + (now - t0) / 1000 * 0.5;
+      for (const m of me.gl.models) if (m.animate) m.animate(now / 1000, 0);
+      me.gl.r.render(me.gl.scene, me.gl.cam);
+    }
+    if (left <= 0 || !S || !S.inGame) { tournIntroEnd(); return; }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+function tournIntroEnd() {
+  if (!TI) return;
+  const me = TI; TI = null;
+  me.el.classList.add('out');
+  // (model geometry is shared through geocache: only the renderer is freed)
+  setTimeout(() => { if (me.gl) { me.gl.r.dispose(); try { me.gl.r.forceContextLoss(); } catch { /* gone */ } } if (TI) return; me.el.classList.add('hidden'); me.el.innerHTML = ''; }, 450);
 }
 // lives, arenas still fighting, what you're watching (top middle, under the shot bar)
 function updateTournHud() {
@@ -3790,7 +3914,7 @@ function updateHud() {
     if (mh) { mh.classList.toggle('hidden', !txt); if (txt && mh.textContent !== txt) mh.textContent = txt; }
   }
   const sc = v.scores || {};
-  const key = JSON.stringify(sc) + S.matchSettings.roundsToWin + [...S.roster.values()].map(r => r.cards.length).join(',');
+  const key = JSON.stringify(sc) + S.matchSettings.roundsToWin + [...S.roster.values()].map(r => r.cards.length).join(',') + (S.tn ? JSON.stringify(S.tn.p) : '');
   if (key !== scoreKeyCache) { scoreKeyCache = key; renderScoreboard(sc); }
   if (me) {
     $('myHp').style.width = Math.max(0, me.hp / (me.maxHp || 1) * 100) + '%';
@@ -3939,15 +4063,30 @@ function updateOwHud(v, me) {
 // ---------------------------------------------------------------- settings UI
 // v1.2.16 GUI scale (Settings > Graphics): the desktop app zooms the page (the 3D view keeps its resolution: the
 // renderer follows the device pixel ratio); a browser scales the page with CSS zoom
-function applyUiScale() {
-  const k = Math.max(0.7, Math.min(1.5, +settings.uiScale || 1));
-  if (window.steamBridge && window.steamBridge.setZoom) window.steamBridge.setZoom(k);
-  else document.documentElement.style.setProperty('--uiz', String(k));   // (style.css: everything but the 3D canvas)
-  if (applyUiScale.k !== k) { applyUiScale.k = k; setTimeout(() => renderer.resize(), 0); }
+// v1.2.28: the GUI also fits the screen on its own: menus and HUD are laid out for 1920x1080 and grow or shrink with
+// the window (the smaller of width/1920 and height/1080, so a 32:9 screen scales by its height like a 16:9 one of the
+// same height). The slider is now a multiplier on top. It is applied at start (before, a saved GUI scale only took
+// effect once any slider moved: the menus jumped in size while setting the music volume) and only when it changes.
+function uiFit() {
+  const z = window.steamBridge && window.steamBridge.setZoom ? (applyUiScale.z || 1) : 1;   // desktop zoom shrinks innerWidth
+  const w = innerWidth * z, h = innerHeight * z;
+  return Math.max(0.6, Math.min(2.5, Math.min(w / 1920, h / 1080)));
 }
-function applySettings() {
+function applyUiScale() {
+  const user = Math.max(0.7, Math.min(1.5, +settings.uiScale || 1));
+  const k = Math.round(Math.max(0.5, Math.min(3, user * uiFit())) * 100) / 100;
+  if (applyUiScale.k === k) return;
+  applyUiScale.k = k;
+  if (window.steamBridge && window.steamBridge.setZoom) { applyUiScale.z = k; window.steamBridge.setZoom(k); }
+  else document.documentElement.style.setProperty('--uiz', String(k));   // (style.css: everything but the 3D canvas)
+  setTimeout(() => renderer.resize(), 0);
+}
+addEventListener('resize', () => { clearTimeout(applyUiScale.t); applyUiScale.t = setTimeout(() => { if (renderer) applyUiScale(); }, 150); });
+const AUDIO_KEYS = new Set(['master', 'music', 'sfx']);
+function applySettings(key) {
   saveSettings(settings);
-  applyUiScale();
+  if (!key || key === 'uiScale') applyUiScale();
+  if (AUDIO_KEYS.has(key)) { sound.setVolumes(settings); return; }   // volume sliders touch nothing but the sound
   setSlop(settings.slop);
   renderer.applySettings(S && S.inGame && (S.matchSettings.commander || S.amon || S.rts) ? { ...settings, view: 'third' } : settings);
   if (S && S.amon && document.pointerLockElement) document.exitPointerLock();
@@ -3999,7 +4138,7 @@ function bindSettings() {
       if (key === 'view' && document.pointerLockElement) document.exitPointerLock();
       if (GFX.has(key)) { settings.gfxPreset = 'custom'; $('sPreset').value = 'custom'; }
       if (key === 'vsync') { sendGfxToApp(); if (window.steamBridge) toast('V-sync changes after restarting the game'); }
-      applySettings();
+      applySettings(key);
       if (key === 'colorBlind') applyAccess();
     });
   }
@@ -4428,6 +4567,7 @@ async function boot() {
   renderer.setLevel(prepareLevel(generateLevel(4, 'mixed', (Math.random() * 1e9) | 0)));
   bindUI();
   slopInit(); setSlop(settings.slop);
+  applyUiScale();
   applyAccess();
   setLanguage(settings.language || 'en');
   show('title');

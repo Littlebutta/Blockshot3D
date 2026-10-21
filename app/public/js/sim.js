@@ -2,7 +2,7 @@
 import { RULES, DEFAULT_STATS, DEFAULT_LOBBY_SETTINGS, sizeFor, speedFor, UNITS, bulletGravityFor, ROUND_MODS } from './config.js';
 import { applyCard, finishStats, weightedOffer, VARIANT_CHANCE, variantBase } from './cards.js';
 import { generateLevel, spawnPoints, clearSpawns, mulberry32, edgeDistance, boundaryPoint } from './levelgen.js';
-import { tournOn, tournStart, tournCheck, tournAfter, tournRows } from './tourn.js';
+import { tournOn, tournStart, tournCheck, tournAfter, tournRows, tournIntroInfo, TOURN } from './tourn.js';
 import { BUDGET, budgetTick, budgetAllow, budgetAdd, budgetRoom, budgetRow } from './budget.js';
 import { prepareLevel, movePlayer, moveBody, accel, pointInSolid, rayExit, groundBelow, segBlocked, clampToArena, wallSegments, buildGrid, PA } from './physics.js';
 import { planWave, splitWave, unitSpec, spawnBoss, spawnAllyBoss, bossThink, portalThink, coopTick, bossDown, telegraphRows, shockRows, bossRow, gmBudget, coopDiff, UNIT_COSTS, UNIT_NAMES, isBossWave, addBlotch, CORE_TWISTS } from './coop.js';
@@ -486,7 +486,7 @@ export class Game {
     const pp = this.prePick; this.prePick = null;
     for (const p of this.heroes()) { p.picked = true; p.offer = null; if (p.alive) { p.size = p.fixedSize || sizeFor(this.maxHp(p)); p.hp = this.maxHp(p); p.ammo = Math.round(p.stats.ammo); } }
     this.phase = 'countdown'; this.phaseT = pp.t; this.lastCount = null; this.fightSent = false;
-    this.emit({ t: 'round', n: this.round, map: this.level.name, wave: this.isWaves() ? this.round : 0, final: this.isFinalRound(), rmod: this.rmod, start: 1 });
+    this.emit({ t: 'round', n: this.round, map: this.level.name, wave: this.isWaves() ? this.round : 0, final: this.isFinalRound(), rmod: this.rmod, start: 1, ...tournIntroInfo(this), ...(this.tourn ? { ti: Math.max(0, this.phaseT - (RULES.countdown || 3)) } : null) });
   }
   afterPicks() { if (this.prePick) this.endPrePick(); else this.startRound(); }
 
@@ -568,8 +568,8 @@ export class Game {
     level.hazard = this.hazard ? this.hazardForNet() : null;
     this.refreshSolids();
     this.unitsChanged();
-    this.phase = 'countdown'; this.phaseT = this.settings.core ? CORE.prep : (RULES.countdown || 3) + (this.isWaves() ? WAVE_PREP.extra : 0) + (open ? 2 : 0); this.fightSent = false; this.roundWinner = null;
-    this.emit({ t: 'round', n: this.round, map: level.name, hazard: this.hazard && this.hazard.type, wave: this.isWaves() ? this.round : 0, boss: plan && plan.boss && this.boss ? this.boss.name : null, final: this.isFinalRound(), rmod: this.rmod, gm: this.gm ? this.gmSummary(plan) : null });
+    this.phase = 'countdown'; this.phaseT = this.settings.core ? CORE.prep : (RULES.countdown || 3) + (this.isWaves() ? WAVE_PREP.extra : 0) + (open ? 2 : 0) + (this.tourn ? TOURN.intro : 0); this.fightSent = false; this.roundWinner = null;
+    this.emit({ t: 'round', n: this.round, map: level.name, hazard: this.hazard && this.hazard.type, wave: this.isWaves() ? this.round : 0, boss: plan && plan.boss && this.boss ? this.boss.name : null, final: this.isFinalRound(), rmod: this.rmod, gm: this.gm ? this.gmSummary(plan) : null, ...tournIntroInfo(this) });
     if (this.gm) for (const u of this.players) if (u.kind === 'elite' && u.alive) this.announceElite(u);
   }
 
@@ -1602,6 +1602,10 @@ export class Game {
       this.updateDynamics(dt); this.refreshSolids();
       if (this.ow) owTick(this, dt);
       if (this.settings.core) coreTick(this, dt);   // build phase: drops keep falling, you can carry and place
+      if (this.tourn && this.phaseT > 3.2) {   // v1.2.28 tournament matchup screen: ends early once every player is ready
+        const humans = this.heroes().filter(p => p.connected && !p.isBot && !p.tko);
+        if (humans.length && humans.every(p => p.input.ready === this.round)) { this.phaseT = 3.2; this.emit({ t: 'tGo' }); }
+      }
       if (this.settings.core && this.phaseT > 3.2) {   // v28: once every player is ready (Enter; again to unready) the wave comes early
         const humans = this.heroes().filter(p => p.connected && !p.isBot);
         for (const p of this.heroes()) p.coreReady = p.connected && (p.isBot || p.input.ready === this.round);

@@ -3,14 +3,16 @@
 // the host simulation (rts.js) and the client (rtsui.js) both use it, so a map is rebuilt the same way on every PC
 // from its seed and player count.
 //
-// The map is a square of N x N cells, CELL meters each. Every cell has a cliff level (0 low ground, 1, 2 high ground,
-// 3 = the impassable mountains around the edge) like StarCraft's. Ramps join neighboring levels. On top of the levels
+// The map is a square of N x N cells, CELL meters each. Every cell has a cliff level (0 low ground, 1, 2, 3 high ground,
+// ROCK = the impassable mountains around the edge) like StarCraft's. Ramps join neighboring levels. On top of the levels
 // a gentle hill noise gives the ground its texture (looks only: walking and vision go by level).
 // =====================================================================
 export const CELL = 2;          // meters per walk / vision cell
 export const LEVEL_H = 3.2;     // height of one cliff level
 export const STEP_MAX = 1.7;    // the most two neighboring cells may differ in height and still be walked between (ramps step ~0.8)
 export const THEME = 'highlands';
+export const ROCK = 4;          // v1.2.28: the mountain rim (was level 3; 3 is now a fourth walkable height, Devin wanted more variation)
+export const TOP_LV = 3;        // highest walkable level
 
 export function mulberry(seed) { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 // Value noise (smooth, seeded). n2(x, z) is about -1..1.
@@ -25,7 +27,7 @@ export function fbm(seed, x, z, oct = 4) { let s = 0, a = 1, f = 1, n = 0; for (
 
 // Map side in meters for a player count (StarCraft-sized: the arenas are 60-90 m, these are 3-4x that)
 export function mapSize(n, opt = 'normal') {
-  const base = n <= 2 ? 208 : n <= 4 ? 256 : n <= 6 ? 304 : 344;
+  const base = n <= 2 ? 232 : n <= 4 ? 288 : n <= 6 ? 336 : 384;   // v1.2.28: ~12% bigger (was 208 / 256 / 304 / 344) for the bigger bases
   return Math.round(base * (opt === 'small' ? 0.82 : opt === 'large' ? 1.22 : 1) / 8) * 8;
 }
 
@@ -49,9 +51,9 @@ function tryMap(n, seed, sizeOpt, force = false) {
   const s1 = (seed % 100000) + 17;
   for (let cz = 0; cz < N; cz++) for (let cx = 0; cx < N; cx++) {
     const x = wOf(cx), z = wOf(cz), d = Math.hypot(x, z) / H;
-    let f = fbm(s1, x / 58, z / 58, 4) * 1.15 + fbm(s1 + 9, x / 23, z / 23, 2) * 0.18;
+    let f = fbm(s1, x / 58, z / 58, 4) * 1.15 + fbm(s1 + 9, x / 23, z / 23, 2) * 0.3;
     f += (d - 0.6) * 0.38;
-    lv[idx(cx, cz)] = f < -0.12 ? 0 : f < 0.36 ? 1 : 2;
+    lv[idx(cx, cz)] = f < -0.16 ? 0 : f < 0.14 ? 1 : f < 0.4 ? 2 : 3;   // v1.2.28: four heights (was three)
   }
   // 2) bases: every player gets a high-ground main (one ramp down), a natural below it and a third base out on the map
   const starts = [], bases = [], a0 = rnd() * Math.PI * 2, R = H * (n <= 2 ? 0.66 : 0.7);
@@ -64,7 +66,7 @@ function tryMap(n, seed, sizeOpt, force = false) {
     const c0x = cOf(x - r), c1x = cOf(x + r), c0z = cOf(z - r), c1z = cOf(z + r);
     for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++) if (inB(cx, cz) && Math.hypot(wOf(cx) - x, wOf(cz) - z) <= r) { const k = idx(cx, cz); lv[k] = L; if (mark) forced[k] = Math.max(forced[k], mark); }
   };
-  const MAIN_R = 17, NAT_R = 13, BASE_R = 12;
+  const MAIN_R = 22, NAT_R = 15, BASE_R = 13;   // v1.2.28 (Devin: more room to build): mains were 17, naturals 13, others 12
   // the center: wide open low ground
   set(0, 0, H * 0.2, 0, 1);
   for (const s of starts) {
@@ -91,25 +93,29 @@ function tryMap(n, seed, sizeOpt, force = false) {
   }
   for (const t of thirds) { const k = idx(cOf(t.x), cOf(t.z)); const L = Math.min(1, Math.max(0, lv[k])); t.lv = L; set(t.x, t.z, BASE_R + 2, L, 1); }
   // 3) the edge: a 2-cell mountain rim nobody walks on
-  for (let cz = 0; cz < N; cz++) for (let cx = 0; cx < N; cx++) if (cx < 2 || cz < 2 || cx >= N - 2 || cz >= N - 2) { lv[idx(cx, cz)] = 3; forced[idx(cx, cz)] = 3; }
+  for (let cz = 0; cz < N; cz++) for (let cx = 0; cx < N; cx++) if (cx < 2 || cz < 2 || cx >= N - 2 || cz >= N - 2) { lv[idx(cx, cz)] = ROCK; forced[idx(cx, cz)] = 3; }
   // 4) smooth the noise (majority of the 3x3 block) and fold tiny pockets into their surroundings
   for (let pass = 0; pass < 3; pass++) {
     const nx = lv.slice();
     for (let cz = 1; cz < N - 1; cz++) for (let cx = 1; cx < N - 1; cx++) {
       const k = idx(cx, cz); if (forced[k]) continue;
-      const cnt = [0, 0, 0, 0];
+      const cnt = [0, 0, 0, 0, 0];
       for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) cnt[lv[idx(cx + dx, cz + dz)]]++;
-      let best = lv[k]; for (let L = 0; L < 3; L++) if (cnt[L] > cnt[best]) best = L;
+      let best = lv[k]; for (let L = 0; L <= TOP_LV; L++) if (cnt[L] > cnt[best]) best = L;
       if (cnt[lv[k]] <= 3) nx[k] = best;
     }
     lv.set(nx);
   }
-  // levels may only step by one between neighbors (a 0 next to a 2 becomes a 1), except at the mountains
-  for (let pass = 0; pass < 4; pass++) {
+  // levels may only step by one between neighbors (a 0 next to a 2 becomes a 1), except at the mountains. The lower cell
+  // comes up, unless it's part of a base's layout: then the higher one comes down.
+  for (let pass = 0; pass < 8; pass++) {
     let ch = 0;
     for (let cz = 1; cz < N - 1; cz++) for (let cx = 1; cx < N - 1; cx++) {
-      const k = idx(cx, cz); if (lv[k] !== 0 || forced[k] >= 2) continue;
-      for (let d = 0; d < 4; d++) { const j = idx(cx + DX4[d], cz + DZ4[d]); if (lv[j] === 2) { lv[k] = 1; ch++; break; } }
+      const k = idx(cx, cz); if (lv[k] === ROCK) continue;
+      for (let d = 0; d < 4; d++) {
+        const j = idx(cx + DX4[d], cz + DZ4[d]); if (lv[j] === ROCK || lv[j] - lv[k] <= 1) continue;
+        if (!forced[k]) { lv[k] = lv[j] - 1; ch++; } else if (!forced[j]) { lv[j] = lv[k] + 1; ch++; }
+      }
     }
     if (!ch) break;
   }
@@ -132,7 +138,7 @@ function tryMap(n, seed, sizeOpt, force = false) {
     // its ends must land on the two levels it joins
     const endHi = idx(cOf(hx - ux * (len / 2 + CELL)), cOf(hz - uz * (len / 2 + CELL))), endLo = idx(cOf(hx + ux * (len / 2 + CELL)), cOf(hz + uz * (len / 2 + CELL)));
     if (lv[endHi] !== hi || lv[endLo] !== lo) return false;
-    if (cells.some(([k]) => lv[k] === 3 || ramp[k] || (lv[k] !== hi && lv[k] !== lo))) return false;
+    if (cells.some(([k]) => lv[k] === ROCK || ramp[k] || (lv[k] !== hi && lv[k] !== lo))) return false;
     for (const [k, along] of cells) {
       const t = Math.max(0, Math.min(1, (along + len / 2) / len));
       h[k] = (hi + (lo - hi) * t) * LEVEL_H; lv[k] = lo; ramp[k] = 1;
@@ -150,9 +156,9 @@ function tryMap(n, seed, sizeOpt, force = false) {
   // boundaries between regions
   const pairs = new Map();
   for (let cz = 2; cz < N - 2; cz++) for (let cx = 2; cx < N - 2; cx++) {
-    const k = idx(cx, cz); if (ramp[k] || lv[k] === 3) continue;
+    const k = idx(cx, cz); if (ramp[k] || lv[k] === ROCK) continue;
     for (let d = 0; d < 4; d++) {
-      const j = idx(cx + DX4[d], cz + DZ4[d]); if (ramp[j] || lv[j] === 3 || lv[j] !== lv[k] - 1) continue;
+      const j = idx(cx + DX4[d], cz + DZ4[d]); if (ramp[j] || lv[j] === ROCK || lv[j] !== lv[k] - 1) continue;
       const ra = reg.id[k], rb = reg.id[j], key = ra + ':' + rb;
       if (forced[k] === 2 || forced[j] === 2) continue;   // never into a main
       (pairs.get(key) || pairs.set(key, []).get(key)).push([cx, cz, DX4[d], DZ4[d], lv[k], lv[j]]);
@@ -169,8 +175,8 @@ function tryMap(n, seed, sizeOpt, force = false) {
       if (addRamp(bx, bz, dx, dz, 7 + Math.floor(rnd() * 3) * 2, 9, hi, lo)) picked.push([cx, cz]);
     }
   }
-  // 6) walkable (level 3 never)
-  for (let k = 0; k < NN; k++) walk[k] = lv[k] === 3 ? 0 : 1;
+  // 6) walkable (the mountains never)
+  for (let k = 0; k < NN; k++) walk[k] = lv[k] === ROCK ? 0 : 1;
   // connect anything left unreachable: lower an unreachable region one step toward a reached neighbor, or add a ramp
   for (let guard = 0; guard < 30; guard++) {
     const seen = flood(walk, h, N, idx(cOf(starts[0].x), cOf(starts[0].z)));
@@ -210,9 +216,10 @@ function tryMap(n, seed, sizeOpt, force = false) {
     if (ramp[k]) { if (!force) return null; }
     b.lv = lv[k]; b.y = h[k];
     // flatten the base (hub + mineral line) to its level, never over a ramp
-    for (let cz = cOf(b.z - 15); cz <= cOf(b.z + 15); cz++) for (let cx = cOf(b.x - 15); cx <= cOf(b.x + 15); cx++) {
+    const fr = b.main != null ? MAIN_R - 2 : 15;   // (v1.2.28: was 13 for every base)
+    for (let cz = cOf(b.z - fr - 2); cz <= cOf(b.z + fr + 2); cz++) for (let cx = cOf(b.x - fr - 2); cx <= cOf(b.x + fr + 2); cx++) {
       if (!inB(cx, cz)) continue; const j = idx(cx, cz);
-      if (Math.hypot(wOf(cx) - b.x, wOf(cz) - b.z) <= 13 && !ramp[j] && lv[j] !== 3) { lv[j] = b.lv; h[j] = b.lv * LEVEL_H; }
+      if (Math.hypot(wOf(cx) - b.x, wOf(cz) - b.z) <= fr && !ramp[j] && lv[j] !== ROCK) { lv[j] = b.lv; h[j] = b.lv * LEVEL_H; }
     }
     const ol = Math.hypot(b.out[0], b.out[1]) || 1, ox = b.out[0] / ol, oz = b.out[1] / ol;
     const back = Math.atan2(-oz, -ox);
@@ -231,11 +238,11 @@ function tryMap(n, seed, sizeOpt, force = false) {
       res.push(R0); b.vents.push(R0.id);
     }
   }
-  for (const r of res) for (const k of resCells(r, N, H)) { if (k < 0 || ramp[k] || lv[k] === 3) { if (!force) return null; } else blocked[k] = 1; }
+  for (const r of res) for (const k of resCells(r, N, H)) { if (k < 0 || ramp[k] || lv[k] === ROCK) { if (!force) return null; } else blocked[k] = 1; }
   // 8) derricks (infinite income, captured by standing next to them) and watchtowers (vision while you hold them)
   const pois = [];
   const farFromAll = (x, z, d) => all.every(b => Math.hypot(b.x - x, b.z - z) > d) && pois.every(p => Math.hypot(p.x - x, p.z - z) > d * 0.8) && ramps.every(r => Math.hypot(r.x - x, r.z - z) > 8);
-  const okSpot = (x, z) => { const cx = cOf(x), cz = cOf(z); for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) { const j = idx(cx + dx, cz + dz); if (!inB(cx + dx, cz + dz) || lv[j] === 3 || ramp[j] || blocked[j] || lv[j] !== lv[idx(cx, cz)]) return false; } return true; };
+  const okSpot = (x, z) => { const cx = cOf(x), cz = cOf(z); for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) { const j = idx(cx + dx, cz + dz); if (!inB(cx + dx, cz + dz) || lv[j] === ROCK || ramp[j] || blocked[j] || lv[j] !== lv[idx(cx, cz)]) return false; } return true; };
   const derricks = [], towers = [];
   const nT = n <= 2 ? 1 : n <= 5 ? 2 : 3;
   for (let i = 0; i < nT; i++) {
@@ -259,7 +266,7 @@ function tryMap(n, seed, sizeOpt, force = false) {
   // 9) doodads: tree groves and rock piles on noise peaks, away from bases, ramps and points of interest
   const doodads = [], s2 = s1 + 333;
   for (let cz = 3; cz < N - 3; cz++) for (let cx = 3; cx < N - 3; cx++) {
-    const k = idx(cx, cz); if (lv[k] === 3 || ramp[k] || blocked[k]) continue;
+    const k = idx(cx, cz); if (lv[k] === ROCK || ramp[k] || blocked[k]) continue;
     const x = wOf(cx), z = wOf(cz);
     const g = fbm(s2, x / 30, z / 30, 3);
     if (g < 0.38) continue;
@@ -273,12 +280,12 @@ function tryMap(n, seed, sizeOpt, force = false) {
     doodads.push({ k: tree ? 't' : 'r', x: x + (rnd() - 0.5) * 0.8, z: z + (rnd() - 0.5) * 0.8, s: 0.8 + rnd() * 0.5, r: rnd() * Math.PI * 2, c: k });
   }
   // the whole map must stay connected: drop doodads that cut anything off
-  for (let k = 0; k < NN; k++) walk[k] = lv[k] === 3 || blocked[k] ? 0 : 1;
+  for (let k = 0; k < NN; k++) walk[k] = lv[k] === ROCK || blocked[k] ? 0 : 1;
   {
     const seen = flood(walk, h, N, idx(cOf(starts[0].x), cOf(starts[0].z)));
     const need = [...all.map(b => [b.x + b.out[0] / (Math.hypot(b.out[0], b.out[1]) || 1) * 5, b.z + b.out[1] / (Math.hypot(b.out[0], b.out[1]) || 1) * 5]), ...pois.map(p => [p.x + 3, p.z])];
     if (need.some(([x, z]) => !seen[idx(cOf(x), cOf(z))])) {
-      for (const d of doodads) { blocked[d.c] = 0; walk[d.c] = lv[d.c] === 3 ? 0 : 1; }
+      for (const d of doodads) { blocked[d.c] = 0; walk[d.c] = lv[d.c] === ROCK ? 0 : 1; }
       doodads.length = 0;
       const s2b = flood(walk, h, N, idx(cOf(starts[0].x), cOf(starts[0].z)));
       if (need.some(([x, z]) => !s2b[idx(cOf(x), cOf(z))]) && !force) return null;
@@ -331,9 +338,9 @@ function labelRegions(lv, N) {
 function mergeSmall(lv, reg, N, forced, min) {
   for (let k = 0; k < N * N; k++) {
     if (forced[k] || reg.size[reg.id[k]] >= min) continue;
-    const cx = k % N, cz = (k / N) | 0, cnt = [0, 0, 0, 0];
+    const cx = k % N, cz = (k / N) | 0, cnt = [0, 0, 0, 0, 0];
     for (let d = 0; d < 4; d++) { const ex = cx + DX4[d], ez = cz + DZ4[d]; if (ex < 0 || ez < 0 || ex >= N || ez >= N) continue; const j = ez * N + ex; if (lv[j] !== lv[k]) cnt[lv[j]]++; }
-    let best = -1; for (let L = 0; L < 3; L++) if (cnt[L] && (best < 0 || cnt[L] > cnt[best])) best = L;
+    let best = -1; for (let L = 0; L <= TOP_LV; L++) if (cnt[L] && (best < 0 || cnt[L] > cnt[best])) best = L;
     if (best >= 0) lv[k] = best;
   }
 }
@@ -374,9 +381,9 @@ export function groundAt(M, x, z) {
     const A = ok(a) ? a : base, B = ok(b) ? b : base, Cc = ok(c) ? c : base, D = ok(d) ? d : base;
     base = (A * (1 - tx) + B * tx) * (1 - tz) + (Cc * (1 - tx) + D * tx) * tz;
   }
-  return base + hillAt(M, x, z) * (M.lv[k] === 3 ? 0 : 1);
+  return base + hillAt(M, x, z) * (M.lv[k] === ROCK ? 0 : 1);
 }
-export const levelAt = (M, x, z) => { const k = cellOf(M, x, z); return k < 0 ? 3 : M.lv[k]; };
+export const levelAt = (M, x, z) => { const k = cellOf(M, x, z); return k < 0 ? ROCK : M.lv[k]; };
 
 // ---------------------------------------------------------------- vision (StarCraft rules)
 // A ground unit sees cells within its sight radius whose level is not above its own (it can't see up a cliff);
@@ -389,7 +396,7 @@ export function stampVision(M, vis, x, z, r, level, air) {
       if (dx * dx + dz * dz > rc2) continue;
       const ex = cx + dx; if (ex < 0 || ex >= N) continue;
       const k = ez * N + ex;
-      if (air || M.lv[k] <= level || M.lv[k] === 3) vis[k] = 2;
+      if (air || M.lv[k] <= level || M.lv[k] === ROCK) vis[k] = 2;
     }
   }
 }

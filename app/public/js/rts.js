@@ -8,8 +8,8 @@
 // Vision: per team, StarCraft rules (stampVision): fog of war, explored ground, can't see up cliffs, air sees all.
 // Each player is only sent what their team sees (viewFor) through its own AckEncoder stream (rtsui.js sendViews).
 // =====================================================================
-import { RTS, UNITS, BUILDINGS, UNIT_IDS, BUILDING_IDS, ABILITIES, supplyCap, researchCards, sumUps, pullCost, PULL_ODDS } from './rtsdata.js';
-import { generateRtsMap, CELL, LEVEL_H, STEP_MAX, cellOf, cellX, cellZ, groundAt, stampVision, resCells, mulberry } from './rtsmap.js';
+import { RTS, UNITS, BUILDINGS, UNIT_IDS, BUILDING_IDS, ABILITIES, supplyCap, researchCards, sumUps, pullCost, PULL_ODDS, cardCap } from './rtsdata.js';
+import { generateRtsMap, CELL, LEVEL_H, STEP_MAX, ROCK, cellOf, cellX, cellZ, groundAt, stampVision, resCells, mulberry } from './rtsmap.js';
 import { rtsBot } from './rtsai.js';
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -257,17 +257,33 @@ export class RtsGame {
       case 'pick': {   // { i }: take one of the cards a pull offered
         const off = p.offers[0]; if (!off) break;
         const id = off[a.i | 0]; if (!id) break;
+        if (a.u && UNITS[a.u] && !this.roomFor(p, a.u)) { if (!a.keep || p.hand.length >= RTS.pull.hand) break; a = { ...a, u: null }; }   // (full: v1.2.28)
+        if (!a.u && p.hand.length >= RTS.pull.hand) { const t = UNIT_IDS.find(u => this.roomFor(p, u, true)); if (!t) break; a = { ...a, u: t }; }
         p.offers.shift();
-        if (a.u && UNITS[a.u]) this.fitCard(p, id, a.u); else if (p.hand.length < RTS.pull.hand) p.hand.push(id); else this.fitCard(p, id, a.u || 'trooper');
+        if (a.u && UNITS[a.u]) this.fitCard(p, id, a.u); else p.hand.push(id);
         this.dirty = true;
         break;
       }
       case 'fit': {   // { c, u }: put a card from your hand on a unit type
-        const i = p.hand.indexOf(a.c); if (i < 0 || !UNITS[a.u]) break;
+        const i = p.hand.indexOf(a.c); if (i < 0 || !UNITS[a.u] || !this.roomFor(p, a.u)) break;
         p.hand.splice(i, 1); this.fitCard(p, a.c, a.u); break;
+      }
+      case 'unfit': {   // v1.2.28 { c, u }: take a card off a unit type, back into your hand (to fit it somewhere else)
+        const L = p.ups[a.u], i = L ? L.indexOf(a.c) : -1; if (i < 0) break;
+        if (p.hand.length >= RTS.pull.hand) { this.alert(p, 'hand', 0, 0, 'Your hand is full. Fit or discard a card first.', 1); break; }
+        L.splice(i, 1); if (!L.length) delete p.ups[a.u];
+        p.hand.push(a.c);
+        for (const u of this.units) if (u.owner === p.id && u.type === a.u) this.applyUps(u);
+        this.dirty = true; break;
       }
       case 'discard': { const i = p.hand.indexOf(a.c); if (i >= 0) p.hand.splice(i, 1); this.dirty = true; break; }
     }
+  }
+  // v1.2.28 (Devin): each unit type holds up to RTS.pull.perUnit cards (workers any number)
+  roomFor(p, type, quiet) {
+    if ((p.ups[type] || []).length < cardCap(type)) return true;
+    if (!quiet) this.alert(p, 'full', 0, 0, `${UNITS[type].name}s already have ${RTS.pull.perUnit} cards. Take one off in research (F3) to fit another.`, 1);
+    return false;
   }
   fitCard(p, id, type) {
     (p.ups[type] ||= []).push(id); p.stats.cards++;
@@ -1001,6 +1017,8 @@ export class RtsGame {
     if (ok(nx, nz) && ok(nx + mx / L * pr, nz + mz / L * pr)) { u.x = nx; u.z = nz; return; }
     if (mx && ok(u.x + mx, u.z) && ok(u.x + mx + Math.sign(mx) * pr, u.z)) { u.x += mx; return; }
     if (mz && ok(u.x, u.z + mz) && ok(u.x, u.z + mz + Math.sign(mz) * pr)) { u.z += mz; return; }
+    // v1.2.28: blocked both ways: slide off at 45 degrees to either side (pressed into a cliff corner beside a ramp)
+    for (const a of [0.785, -0.785]) { const c = Math.cos(a), sn = Math.sin(a), rx = mx * c - mz * sn, rz = mx * sn + mz * c; if (ok(u.x + rx, u.z + rz) && ok(u.x + rx + rx / L * pr, u.z + rz + rz / L * pr)) { u.x += rx; u.z += rz; return; } }
     // stuck inside something (a building went up on top of it): step out
     if (!this.passable(k0) && !u.inside) { const b = this.ents.get(this.occ[k0]); const s = b && b.kind === 'b' ? this.freeSpotNear(b, u.x, u.z) : null; if (s) { u.x = s.x; u.z = s.z; } }
   }
@@ -1014,15 +1032,27 @@ export class RtsGame {
       if (ax !== bx && az !== bz) { if (!this.passable(az * N + bx) && !this.passable(bz * N + ax)) return false; }
       return true;
     }
-    return !!u.def.cliff && dh <= LEVEL_H * 1.25 && this.M.lv[b] !== 3;
+    return !!u.def.cliff && dh <= LEVEL_H * 1.25 && this.M.lv[b] !== ROCK;
   }
   // a point the unit can walk to in a straight line, as far along its path as possible
+  // v1.2.28 (Devin: units got stuck at ramps when the goal was off to the side of one): the straight-line test is now
+  // "fat" (the unit's width, not just its center line), so a shortcut never grazes a cliff edge beside a ramp; and a
+  // unit that stops making progress follows the flow field one cell at a time until it is moving again.
+  clearFat(x0, z0, x1, z1, cliff, r = 0.55) {
+    if (!this.clearLine(x0, z0, x1, z1, cliff)) return false;
+    const dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz); if (L < 0.5) return true;
+    const px = -dz / L * r, pz = dx / L * r;
+    const own = (x, z) => this.passable(cellOf(this.M, x, z));   // (an offset start can sit in a neighbor cell: only test it when open)
+    for (const s of [1, -1]) { const ax = x0 + px * s, az = z0 + pz * s; if (own(ax, az) && !this.clearLine(ax, az, x1 + px * s, z1 + pz * s, cliff)) return false; }
+    return true;
+  }
   waypoint(u, tx, tz, g) {
     const M = this.M, k0 = cellOf(M, u.x, u.z), cliff = !!u.def.cliff;
-    if (this.clearLine(u.x, u.z, tx, tz, cliff) && Math.hypot(tx - u.x, tz - u.z) < 90) return { x: tx, z: tz };
+    const careful = u.stuckT > 0.9;   // not getting anywhere: cell by cell down the field
+    if (!careful && this.clearFat(u.x, u.z, tx, tz, cliff) && Math.hypot(tx - u.x, tz - u.z) < 90) return { x: tx, z: tz };
     const f = this.field(g, tx, tz, cliff);
     if (!f) return { x: tx, z: tz };
-    let c = k0, best = null; const N = M.N;
+    let c = k0, best = null, first = null; const N = M.N;
     if (c < 0) return { x: tx, z: tz };
     for (let i = 0; i < 14; i++) {
       let nb = -1, nd = f[c];
@@ -1035,10 +1065,11 @@ export class RtsGame {
         nd = f[j]; nb = j;
       }
       if (nb < 0 || !this.passable(nb)) break;
-      c = nb;
-      if (this.clearLine(u.x, u.z, cellX(M, c), cellZ(M, c), cliff)) best = c; else if (best !== null) break;
+      c = nb; if (first === null) first = c;
+      if (careful) { best = c; break; }
+      if (this.clearFat(u.x, u.z, cellX(M, c), cellZ(M, c), cliff)) best = c; else if (best !== null) break;
     }
-    if (best === null) best = c;
+    if (best === null) best = first ?? c;   // (v1.2.28: was the last cell looked at, often round a cliff corner: units walked into the cliff)
     if (best === k0 || best < 0) return { x: tx, z: tz };
     return { x: cellX(M, best), z: cellZ(M, best) };
   }
@@ -1124,7 +1155,7 @@ export class RtsGame {
         if (!this.passable(j)) continue;
         if (open) {
           const dh = Math.abs(h[j] - h[c]);
-          if (dh > STEP_MAX && !(cliff && dh <= LEVEL_H * 1.25 && M.lv[j] !== 3)) continue;
+          if (dh > STEP_MAX && !(cliff && dh <= LEVEL_H * 1.25 && M.lv[j] !== ROCK)) continue;
           if (i >= 4 && (!this.passable(cz * N + ex) || !this.passable(ez * N + cx))) continue;
         }
         const nd = dc + D8C[i];

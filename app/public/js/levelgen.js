@@ -540,6 +540,9 @@ export function spawnPoints(level, groupSizes, opts = {}) {
       return pts;
     });
   }
+  // v1.2.28 (Devin): big lobbies (12+ sides, e.g. 100-player deathmatch) spawn all over the map, evenly apart, instead of
+  // packed rings along the walls: open ground clear of blocks, picked farthest-first, so everyone gets room to breathe.
+  if (G >= 12 && !opts.noSpread) { const S = spreadSpawns(level, groupSizes); if (S) return S; }
   // v1.2.22 (Devin): keep spawns apart in big lobbies. When the perimeter can't fit every group SPAWN_GAP apart, the
   // extra groups go on inner rings (each RING_STEP further in), spread round evenly and offset from the ring outside.
   const E = level.edges || arenaEdges(level), per = E.reduce((a, e) => a + e.len, 0);
@@ -576,6 +579,38 @@ export function spawnPoints(level, groupSizes, opts = {}) {
         for (let t = L0; t > 0; t -= 0.8) { const x = Math.cos(a) * t, z = Math.sin(a) * t; if (level.insideFn(x, z, 1.2)) { p.x = x; p.z = z; break; } }
       }
       pts.push(p);
+    }
+    return pts;
+  });
+}
+
+// v1.2.28: farthest-point spawns over the whole floor (see spawnPoints). Groups of more than one stand together around
+// their point. Null when the map has too little open ground (then the wall rings are used).
+export function spreadSpawns(level, groupSizes) {
+  const G = groupSizes.length, step = Math.max(1.5, Math.sqrt(4 * level.hx * level.hz / 6000)), cands = [];   // (about 6000 spots at most)
+  const foot = [...level.boxes.filter(b => !b.wall && (b.y0 || 0) < 2.2), ...(level.dynamic || []).map(o => ({ x: o.x, z: o.z, w: o.w + 2 * (o.amp || 0), d: o.d + 2 * (o.amp || 0) })), ...(level.traps || [])];
+  const free = (x, z) => {
+    if (level.insideFn && !level.insideFn(x, z, 1.4)) return false;
+    for (const b of foot) if (Math.abs(x - b.x) < b.w / 2 + 1.2 && Math.abs(z - b.z) < b.d / 2 + 1.2) return false;
+    return true;
+  };
+  for (let x = -level.hx + 2; x <= level.hx - 2; x += step) for (let z = -level.hz + 2; z <= level.hz - 2; z += step) if (free(x, z)) cands.push([x, z]);
+  const need = groupSizes.reduce((a, b) => a + b, 0);
+  if (cands.length < need * 3) return null;
+  const dist = new Float64Array(cands.length).fill(Infinity), taken = new Uint8Array(cands.length), centers = [];
+  // start at the open spot nearest the west wall's middle (deterministic per map), then always take the farthest
+  let first = 0; for (let i = 1; i < cands.length; i++) if (cands[i][0] < cands[first][0] - 1e-6 || (Math.abs(cands[i][0] - cands[first][0]) < 1e-6 && Math.abs(cands[i][1]) < Math.abs(cands[first][1]))) first = i;
+  const take = i => { taken[i] = 1; const [x, z] = cands[i]; for (let j = 0; j < cands.length; j++) { const d = (cands[j][0] - x) ** 2 + (cands[j][1] - z) ** 2; if (d < dist[j]) dist[j] = d; } };
+  for (let g = 0, i = first; g < G; g++) {
+    if (g > 0) { i = -1; let bd = -1; for (let j = 0; j < cands.length; j++) if (!taken[j] && dist[j] > bd) { bd = dist[j]; i = j; } if (i < 0) return null; }
+    centers.push(i); take(i);
+  }
+  return groupSizes.map((m, g) => {
+    const [cx, cz] = cands[centers[g]], pts = [{ x: cx, z: cz }];
+    if (m > 1) {   // teammates: the nearest free spots around their point
+      const near = cands.map((c, j) => [j, (c[0] - cx) ** 2 + (c[1] - cz) ** 2]).filter(([j, d]) => !taken[j] && d > 1.5).sort((a, b) => a[1] - b[1]);
+      for (let k = 0; k < near.length && pts.length < m; k++) { const j = near[k][0]; if (pts.every(p => (p.x - cands[j][0]) ** 2 + (p.z - cands[j][1]) ** 2 > 2.2)) { taken[j] = 1; pts.push({ x: cands[j][0], z: cands[j][1] }); } }
+      while (pts.length < m) pts.push({ x: cx + (pts.length % 2 ? 1 : -1) * 0.9, z: cz });
     }
     return pts;
   });

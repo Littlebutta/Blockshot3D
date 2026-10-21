@@ -243,6 +243,108 @@ function followNav(g, p, A, dt) {
   return { mx, mz, jump, nav: true };
 }
 
+// ---------------------------------------------------------------- v1.2.28 floor navigation
+// Bots used to walk straight at a target and only turn when a wall was right in front of them, so on shaped arenas
+// (stars, wheels, hives: concave outlines) and around long walls they paced into corners. Now the floor is a grid
+// (cells about 1 m, coarser on huge maps) and each target cell gets one distance field (a breadth-first search from
+// it), shared by every bot hunting that target and kept for a second. A bot without a clear line walks down the field,
+// heading for the farthest cell along it that it can walk to in a straight line (so the path is smooth, not stepped).
+// New fields are capped per sim step, so a 100-player match stays cheap.
+const GN = { fieldsPerStep: 3, keep: 1.0 };
+function inPoly(V, x, z) {
+  let c = false;
+  for (let i = 0, j = V.length - 1; i < V.length; j = i++) {
+    const [xi, zi] = V[i], [xj, zj] = V[j];
+    if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c;
+  }
+  return c;
+}
+export function groundGrid(g) {
+  const L = g.level;
+  if (g._gnav && g._gnav.level === L && g._gnav.v === g.levelVersion) return g._gnav;
+  const cs = Math.max(1, Math.sqrt(4 * L.hx * L.hz / 5000)), nx = Math.ceil(2 * L.hx / cs), nz = Math.ceil(2 * L.hz / cs);
+  const walk = new Uint8Array(nx * nz), r = 0.45;
+  for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+    const x = -L.hx + (i + 0.5) * cs, z = -L.hz + (j + 0.5) * cs;
+    if (Math.abs(x) > L.hx - r || Math.abs(z) > L.hz - r) continue;
+    if (L.insideFn ? !L.insideFn(x, z, r) : L.poly && !inPoly(L.poly, x, z)) continue;
+    const h = cs / 2 - 0.1;
+    if (solidsNear(L.solids, x - h, z - h, x + h, z + h).some(s => !s.noPlayer && !s.oneWay && s.min.y < 0.6 && s.max.y > 0.6 && x + h > s.min.x && x - h < s.max.x && z + h > s.min.z && z - h < s.max.z)) continue;
+    walk[i * nz + j] = 1;
+  }
+  return (g._gnav = { level: L, v: g.levelVersion, cs, nx, nz, walk, fields: new Map(), step: -1, made: 0 });
+}
+const cellOf = (N, x, z) => { const i = Math.floor((x + N.level.hx) / N.cs), j = Math.floor((z + N.level.hz) / N.cs); return i < 0 || j < 0 || i >= N.nx || j >= N.nz ? -1 : i * N.nz + j; };
+// nearest walkable cell (a target standing on a block or against a wall is still reachable from beside it)
+function walkCell(N, x, z) {
+  const c = cellOf(N, x, z); if (c >= 0 && N.walk[c]) return c;
+  const i0 = Math.floor((x + N.level.hx) / N.cs), j0 = Math.floor((z + N.level.hz) / N.cs);
+  for (let rr = 1; rr <= 4; rr++) for (let di = -rr; di <= rr; di++) for (let dj = -rr; dj <= rr; dj++) {
+    if (Math.max(Math.abs(di), Math.abs(dj)) !== rr) continue;
+    const i = i0 + di, j = j0 + dj; if (i < 0 || j < 0 || i >= N.nx || j >= N.nz) continue;
+    if (N.walk[i * N.nz + j]) return i * N.nz + j;
+  }
+  return -1;
+}
+function fieldTo(g, N, goal) {
+  const F = N.fields.get(goal);
+  if (F && g.time - F.t < GN.keep && F.t <= g.time) return F.d;
+  if (N.step !== g.stepN) { N.step = g.stepN; N.made = 0; }
+  if (N.made >= GN.fieldsPerStep) return F ? F.d : null;   // over this step's budget: the old one (or none) for now
+  N.made++;
+  const n = N.nx * N.nz, d = F ? F.d : new Uint16Array(n), q = new Int32Array(n);
+  d.fill(65535); d[goal] = 0; q[0] = goal;
+  for (let h = 0, tl = 1; h < tl; h++) {
+    const c = q[h], i = (c / N.nz) | 0, j = c - i * N.nz, nd = d[c] + 1;
+    if (i > 0 && N.walk[c - N.nz] && d[c - N.nz] > nd) { d[c - N.nz] = nd; q[tl++] = c - N.nz; }
+    if (i < N.nx - 1 && N.walk[c + N.nz] && d[c + N.nz] > nd) { d[c + N.nz] = nd; q[tl++] = c + N.nz; }
+    if (j > 0 && N.walk[c - 1] && d[c - 1] > nd) { d[c - 1] = nd; q[tl++] = c - 1; }
+    if (j < N.nz - 1 && N.walk[c + 1] && d[c + 1] > nd) { d[c + 1] = nd; q[tl++] = c + 1; }
+  }
+  N.fields.set(goal, { d, t: g.time });
+  if (N.fields.size > 160) for (const [k, v] of N.fields) if (g.time - v.t > GN.keep * 3) N.fields.delete(k);
+  return d;
+}
+function lineWalk(N, a, b) {   // every cell on the straight line from cell a to cell b is walkable
+  let i0 = (a / N.nz) | 0, j0 = a - i0 * N.nz; const i1 = (b / N.nz) | 0, j1 = b - i1 * N.nz;
+  const di = Math.abs(i1 - i0), dj = Math.abs(j1 - j0), si = i0 < i1 ? 1 : -1, sj = j0 < j1 ? 1 : -1;
+  let err = di - dj;
+  for (let k = 0; k < 64; k++) {
+    if (!N.walk[i0 * N.nz + j0]) return false;
+    if (i0 === i1 && j0 === j1) return true;
+    const e2 = 2 * err;
+    if (e2 > -dj) { err -= dj; i0 += si; }
+    if (e2 < di) { err += di; j0 += sj; }
+    if (e2 > -dj && e2 < di && !N.walk[i0 * N.nz + j0 - sj] && !N.walk[(i0 - si) * N.nz + j0]) return false;   // (no squeezing through a diagonal gap)
+  }
+  return false;
+}
+// Direction to walk toward (tx, tz) around walls, or null (already in the open / unreachable / no field yet).
+export function floorSteer(g, p, tx, tz) {
+  if (g.level.lava || g.level.side || g.level.open || p.flying || p.pos.y > 0.6) return null;
+  const N = groundGrid(g), me = walkCell(N, p.pos.x, p.pos.z), goal = walkCell(N, tx, tz);
+  if (me < 0 || goal < 0 || me === goal) return null;
+  const d = fieldTo(g, N, goal);
+  if (!d || d[me] === 65535) return null;
+  let c = me, best = me;
+  for (let k = 0; k < 12; k++) {   // walk down the field, remembering the farthest cell still in a straight line
+    const i = (c / N.nz) | 0, j = c - i * N.nz;
+    let nb = -1, nd = d[c];
+    for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const ii = i + a, jj = j + b; if (ii < 0 || jj < 0 || ii >= N.nx || jj >= N.nz) continue;
+      const cc = ii * N.nz + jj; if (d[cc] < nd) { nd = d[cc]; nb = cc; }
+    }
+    if (nb < 0) break;
+    c = nb;
+    if (lineWalk(N, me, c)) best = c; else if (k > 2) break;
+    if (c === goal) break;
+  }
+  if (best === me) best = c;
+  const bi = (best / N.nz) | 0, bj = best - bi * N.nz;
+  const wx = -g.level.hx + (bi + 0.5) * N.cs - p.pos.x, wz = -g.level.hz + (bj + 0.5) * N.cs - p.pos.z, l = Math.hypot(wx, wz) || 1;
+  return { x: wx / l, z: wz / l, steps: d[me] * N.cs };   // (steps: route length in meters, roughly)
+}
+
 export function botThink(g, p, dt) {
   const D = DIFFICULTY[p.difficulty] || DIFFICULTY.normal;
   const A = p.ai, inp = p.input, S = g.level.solids;
@@ -360,14 +462,23 @@ export function botThink(g, p, dt) {
   let fwd = dist > A.want + 1.5 ? 1 : dist < A.want - 1.5 ? -1 : 0;
   // No line of sight: approach, but if that hasn't worked for a while, flank around the cover.
   A.noLos = los ? 0 : (A.noLos || 0) + dt;
+  // v1.2.28: no line of sight (or far away): walk the floor route around walls toward the target (floorSteer)
+  let route = null;
+  if ((!los || dist > A.want + 6) && !p.flying) {
+    A.routeT = (A.routeT || 0) - dt;
+    if (A.routeT <= 0 || !A.route) { A.routeT = 0.25 + Math.random() * 0.15; A.route = floorSteer(g, p, t.pos.x, t.pos.z); }
+    route = A.route;
+  } else A.route = null;
+  let ux = fx, uz = fz;
+  if (route && (!los || route.steps * 1.2 > dist + 3)) { ux = route.x; uz = route.z; }   // (in sight and the route is straight: just go)
   if (!los) {
     fwd = 1;
-    if (A.noLos > 1.5) {
+    if (!route && A.noLos > 1.5) {
       if (!A.flankDir || A.noLos > (A.flankFlip || 0)) { A.flankDir = A.flankDir ? -A.flankDir : (Math.random() < 0.5 ? -1 : 1); A.flankFlip = A.noLos + 3.5; }
       A.strafe = A.flankDir; fwd = 0.35;
-    }
+    } else if (route) A.strafe *= 0.5;
   }
-  let mx = fx * fwd - fz * A.strafe * 0.8, mz = fz * fwd + fx * A.strafe * 0.8;
+  let mx = ux * fwd - uz * A.strafe * 0.8, mz = uz * fwd + ux * A.strafe * 0.8;
   const stationary = p.stats.moveSpeed <= 0.01;
   // keep away from walls and teammates
   { const e = edgePush(g.level, p.pos.x, p.pos.z, 2.8); mx += e.x * 1.2; mz += e.z * 1.2; }   // rectangles and polygon arenas
@@ -432,6 +543,8 @@ export function botThink(g, p, dt) {
     const dd = Math.hypot(mx, mz);
     if (dd < 0.6 && dd > 0.01) { mx *= 0.6 / dd; mz *= 0.6 / dd; }   // small perches: still a gentle shuffle
   }
+  // v1.2.28: off a platform route, steer around a wall in the way too (pressing into it made bots hop in place)
+  if (!nav && !lava && !stationary && !g.level.side && (mx || mz)) [mx, mz] = detour(g, p, A, mx, mz);
   // Co-op boss: step out of telegraphed attacks that are about to land, hop shockwaves.
   const dodge = g.boss && g.boss.alive && !stationary ? dodgeFor(g, p) : null;
   if (dodge && dodge.move) { mx = dodge.x; mz = dodge.z; A.path = null; }

@@ -1,6 +1,6 @@
 {
- "version": "1.2.27",
- "built": "2026-10-20T19:25:35.051Z",
+ "version": "1.2.28",
+ "built": "2026-10-21T03:22:10.742Z",
  "files": {
   ".gitignore": [
    "0068ba7ed54e738118cfb5244ca651fe18f44c4ef3e5236241677de513dfaa9d",
@@ -1575,7 +1575,7 @@
    5942
   ],
   "electron/preload.cjs": [
-   "1ef9ec71eb58d4581928183c15e724026c9a95310b0f788294a43013d5cc6ab5",
+   "7c16fbfad527328e4c6b4c159d7814a1844e2da7e10a0335e250098ef5f3a163",
    1845
   ],
   "electron/snapdict.txt": [
@@ -2119,24 +2119,24 @@
    554
   ],
   "package.json": [
-   "626163789f53e0955355fb0e9db3099cb1f19e223e2ffd81bf86bb1563c9f884",
+   "bfb761b70b5011ae6b5d241c8d918b957a394f34300b0cf7a46a96340fc18ee0",
    749
   ],
   "public/css/style.css": [
-   "10281644f0057ca7b04b3153560da3fb757536f205abb61d41cb58f80feebf77",
-   89223
+   "a7d61b682f12068c300c3ef6a60ab8004574dffef36927620b2664b6b4ba7b79",
+   92449
   ],
   "public/index.html": [
-   "e86bba91066c557c03a47946a8d21d1b50a37ed1f2e504f1a5e35e50fc09869e",
-   43713
+   "90ed64b07f8607df8e3ad8b44bc1fdcc25dc2917c0c1842a4990148f64ee956a",
+   43762
   ],
   "public/js/a11y.js": [
    "01493123a592d8868fe91a15be7a72b6c8687f8deac62c1aff7898c1aca4b8c3",
    2575
   ],
   "public/js/ai.js": [
-   "49c1897b4a28c3feccb33b32cfe66fca3a18f031fea01c2ac4f78f8fc787cda5",
-   30949
+   "e22063f17b88d3efcdbbfd8d145f8d8c51389ea7b826d1b86932422428560570",
+   37834
   ],
   "public/js/amon.js": [
    "5314db52104b5f04677f31ca57cffecc5cfeab3530308e630a0afcd955fadc5c",
@@ -2171,8 +2171,8 @@
    22535
   ],
   "public/js/budget.js": [
-   "dc4689536a88a8b497b9deb0996d0336604fbd5e2251c018a5d512c6ecc05062",
-   6536
+   "e363868fe35fc0889422c7ff14b8c25593c6900e778cd2ceecac94f304d5721a",
+   6596
   ],
   "public/js/cardinfo.js": [
    "6c40ba0d38aed9466502f7763afeb7c954de8954d3c2de00825473d7051dcc44",
@@ -2223,12 +2223,12 @@
    11605
   ],
   "public/js/levelgen.js": [
-   "58b7c92b10512abb4258c52dc7d492caa24f80d43ba5b0b4fff73835d512df55",
-   40313
+   "c4bd2701e9f28f8ee1e9bc4fd226bb6a0f0660ee7c4c779b33c8c29e109b278f",
+   43307
   ],
   "public/js/main.js": [
-   "26612f47f07bdc2ac14db5448582a5e5804d6e06765216f6e7f9cbeda4d02399",
-   334999
+   "a9641009a72a58938549aa815c7eb3d3225df8e76c2682151a4c8c30934cb891",
+   345190
   ],
   "public/js/net.js": [
    "d415f683a93c1c3320d56977ba98fe00506efc8dacc6d989f8826a6d8c86a2de",
@@ -2251,8 +2251,8 @@
    27697
   ],
   "public/js/patchnotes.js": [
-   "aaa46a635f8005de011b67ef6dc033878d4406edf12475a8b1ac0ed05dd04d5b",
-   20270
+   "127bf26a4edecfa5935df833419117c9b60eb0cdbd164a96994a2b465ef91224",
+   22377
   ],
   "public/js/physics.js": [
    "349c6151380f842e12e4a1aae299634bce6d4a913dc0af8eb47914864e5d8086",
@@ -2263,48 +2263,48 @@
    18006
   ],
   "public/js/render.js": [
-   "d55512a16ea52639b609f84078c929f9862e6e8fd989c7fbfd3b06b705da1c4b",
-   270849
+   "9deeedc79eb16d841c2e54fd437d076ae8fb4395cf425a36fad92b79fc87b8d5",
+   275237
   ],
   "public/js/rt.js": [
    "68f0d19eb699b5354e1e85708e3623fe01797c728db60d260b3e644b35cb9741",
    10124
   ],
   "public/js/rts.js": [
-   "1bff10096be00d684c209f930fd565993d031f18a3b17087d1254db44c695d16",
-   83513
+   "52eb46bff639ea85001b6f473e86e14a94aa8c4463c46fabaed7cd4342a97bf2",
+   86272
   ],
   "public/js/rtsai.js": [
-   "3b506e2e9ea93fff8e4efd91005d0b03846026a9bf391e9130ff187d277860ae",
-   16894
+   "bd30d8eaf49d4c1da4c78102e5327c41c62bffd0ca56b7ccba3c26d46d2b5713",
+   17191
   ],
   "public/js/rtsart.js": [
-   "d3454385fa17a551fb032062c959ea4de894622014d5946b910ad60bbe11c620",
-   24474
+   "4cb443f17d143babec6da44a62234e34a9c0ff06cbcb5e0c5f1bf1bd68def8a7",
+   25031
   ],
   "public/js/rtsdata.js": [
-   "0d2d5ce6c3c3b6d0c431d354aecfe9acba0f0d21ec13d12da5fcdf4791c1255a",
-   14548
+   "0aa2d454274ffb6b8c4474275a9c3573e82017870abdedb574459a688e7d4868",
+   14921
   ],
   "public/js/rtshud.js": [
-   "775f582025ce8b4faf33c658d60b0770ca249cd79f4d7e318e14f45abd7c42e8",
-   53741
+   "bbf335b917b0069bc52f4a622518924d1bd1dafcaded55fd2befcbab719bbfb2",
+   54815
   ],
   "public/js/rtsmap.js": [
-   "0fad57d97162a2d0a0a54cf869aa4b4879624154638c392e6f528f6a5ab6278d",
-   24189
+   "ac5eab2e4a098dd3703b794200b5306f5d7c9c37264466c94c8c3ba5713e50b2",
+   24977
   ],
   "public/js/rtsui.js": [
-   "736e152cea3e2e6e7e8a5390373dc4a69b655b03593d1cb91e1ae89d0369a649",
-   60076
+   "58f9848758d4db4c5479b48d2fa3cbdf393fe31400a883dd33c2a9fcc2d264d2",
+   61291
   ],
   "public/js/scenery.js": [
    "14b0030fd9ea016b658179f9d5b43f770af21d249268300b5b39264435e3ff6c",
    30454
   ],
   "public/js/settings.js": [
-   "c3e561da5e22ec28ed495219412fcb58eb12b8d56d487e2f180ca7446330dfff",
-   9383
+   "e9034e7a4fbcdd3476c5622d0629172b795cf078ee388dcd5018bad95d0423d8",
+   9414
   ],
   "public/js/side.js": [
    "b9a3915b6085365e0ffadc8a589603a70ade68d62383e425f04b9695afeac523",
@@ -2315,8 +2315,8 @@
    17528
   ],
   "public/js/sim.js": [
-   "3709612d8410577a3926f0ad30f28b1e4ef3209b0676a077933171e59fc62d56",
-   284353
+   "b869c112fc702906d53a26c8465ba68f353104c3b5e9e0a0899a7c3c1ec4415c",
+   284885
   ],
   "public/js/slop.js": [
    "9dc85c181fa4b81008b22eeb11ad788a5774e5e7f4526200377d6ec34d6f9932",
@@ -2327,8 +2327,8 @@
    4439
   ],
   "public/js/tourn.js": [
-   "8268e8372f9d1cff170e3bf429075ff6555c933efe9a9c43df26c7cdc48d6c25",
-   10652
+   "1ab98997d54cfd543549126c1c56ca316e3dd4ae5c38ef822291d20d0562997c",
+   10950
   ],
   "public/js/traps.js": [
    "41cc1065c17c9f01bdb4ea5fc0d90bb4de466fd7c2767b8a760eac58e4c0fb96",

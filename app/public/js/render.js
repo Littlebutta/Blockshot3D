@@ -2165,7 +2165,7 @@ export class Renderer {
     else if (frac < (e.ghLast ?? frac)) e.ghT = now;
     else if (now - (e.ghT || 0) > 0.3) e.gh = Math.max(frac, e.gh - (now - (e.ghTick || now)) * 1.1);
     e.ghLast = frac; e.ghTick = now;
-    const key = `${hp}|${v.maxHp}|${v.name}|${isLocal}|${dot}|${v.pct}|${e.gh > frac ? Math.round(e.gh * 40) : -1}`;   // v1.2.6: the draining ghost repaints in 40 steps (was every frame)
+    const key = `${hp}|${v.maxHp}|${v.name}|${isLocal}|${dot}|${v.pct}|${e.gh > frac ? Math.round(e.gh * 40) : -1}|${v.tl || ''}`;   // v1.2.6: the draining ghost repaints in 40 steps (was every frame)
     if (key === e.barKey) return;
     e.barKey = key;
     const g = e.barCanvas.getContext('2d');
@@ -2188,15 +2188,75 @@ export class Renderer {
       const cols = [dot & 1 ? '#ff8a2a' : null, dot & 2 ? '#7ee36b' : null].filter(Boolean);
       cols.forEach((c, i) => { g.strokeStyle = c; g.beginPath(); const x0 = 15 + i * 113, w = cols.length > 1 ? 113 : 226; g.rect(x0, 37, w, 24); g.stroke(); });
     }
+    if (v.tl && v.tl[1] <= 10) {   // v1.2.28 tournament: losses as red pips under the bar
+      const n = v.tl[1], pw = 14, gap = 4, x0 = 128 - (n * pw + (n - 1) * gap) / 2;
+      for (let i = 0; i < n; i++) { g.fillStyle = i < v.tl[0] ? '#ff3b3b' : 'rgba(0,0,0,.5)'; g.fillRect(x0 + i * (pw + gap), 63, pw, 8); g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = 1; g.strokeRect(x0 + i * (pw + gap), 63, pw, 8); }
+    }
     e.barTex.needsUpdate = true;
   }
 
+  // v1.2.28 crowd level of detail (Devin: 100 players ran at ~17 fps; each fighter is ~50 meshes, a bar and a shadow, so a
+  // full lobby was 2000+ draw calls a frame, which the shot budget can't help with). Only the fighters nearest the camera
+  // get their full model; the rest are drawn as simple blocky figures in their color, all of them in 3 instanced draw
+  // calls, with no bar. How many get full models adapts to the frame rate (crowd.k: 16 to start, 6 to 32, fewer while under 30 fps).
+  crowdPlan(list, localId) {
+    const now = performance.now(), C = this.crowd || (this.crowd = { k: 16, ema: 16.7, last: now, slowT: 0, goodT: 0, full: new Set() });
+    const ms = Math.min(100, now - C.last); C.last = now;
+    C.ema += (ms - C.ema) * 0.08;
+    if (C.ema > 33) { C.slowT += ms; C.goodT = 0; } else if (C.ema < 22) { C.goodT += ms; C.slowT = 0; } else C.slowT = C.goodT = 0;
+    if (C.slowT > 1000 && C.k > 6) { C.k = Math.max(6, Math.floor(C.k * 0.75)); C.slowT = 0; }
+    if (C.goodT > 4000 && C.k < 32) { C.k = Math.min(32, C.k + 2); C.goodT = 0; }
+    const heroish = v => (!v.kind || v.kind === 'hero') && v.alive && !((v.flags || 0) & 1);
+    let n = 0; for (const v of list) if (heroish(v)) n++;
+    if (n <= C.k + 4 || (this.level && this.level.side) || this.noCrowd) { C.full = null; return null; }
+    const cam = this.camera.position, rank = [];
+    for (const v of list) {
+      if (!heroish(v) || v.id === localId) continue;
+      const d = (v.pos.x - cam.x) ** 2 + (v.pos.y - cam.y) ** 2 + (v.pos.z - cam.z) ** 2;
+      rank.push([C.full && C.full.has(v.id) ? d * 0.6 : d, v.id]);   // (the ones already full keep it a bit longer: no flicker at the edge)
+    }
+    rank.sort((a, b) => a[0] - b[0]);
+    const full = new Set([localId]);
+    for (let i = 0; i < rank.length && i < C.k; i++) full.add(rank[i][1]);
+    C.full = full;
+    return { full, heroish };
+  }
+  crowdMesh() {
+    if (this.crowdM) return this.crowdM;
+    const MAX = 256, mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const mk = (geo) => { const m = new THREE.InstancedMesh(geo, mat, MAX); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.count = 0; m.castShadow = true; m.frustumCulled = false; m.setColorAt(0, new THREE.Color()); this.scene.add(m); return m; };
+    const body = new THREE.BoxGeometry(0.72, 0.95, 0.5); body.translate(0, 0.62, 0);
+    const head = new THREE.BoxGeometry(0.56, 0.5, 0.52); head.translate(0, 1.38, 0);
+    const gun = new THREE.BoxGeometry(0.16, 0.16, 0.7); gun.translate(0.32, 0.85, 0.42);
+    this.crowdM = { parts: [mk(body), mk(head), mk(gun)], MAX, o: new THREE.Object3D(), c: new THREE.Color() };
+    this.crowdM.parts[2].material = new THREE.MeshLambertMaterial({ color: 0x2a2f3a });
+    return this.crowdM;
+  }
+  crowdSet(i, v) {
+    const M = this.crowdMesh(); if (i >= M.MAX) return;
+    const o = M.o, size = v.size || 1;
+    o.position.set(v.pos.x, v.pos.y, v.pos.z); o.rotation.set(0, Math.atan2(v.aim.x, v.aim.z), 0); o.scale.setScalar(size); o.updateMatrix();
+    M.c.set(v.color || '#ffffff');
+    for (const m of M.parts) m.setMatrixAt(i, o.matrix);
+    M.parts[0].setColorAt(i, M.c); M.parts[1].setColorAt(i, M.c.offsetHSL(0, -0.05, 0.12));
+  }
+  crowdDone(n) {
+    if (!this.crowdM && !n) return;
+    const M = this.crowdMesh(); n = Math.min(n, M.MAX);
+    for (const m of M.parts) { m.count = n; m.visible = n > 0; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+  }
   syncPlayers(list, localId) {
     const fp = this.settings.view === 'first', seen = new Set();
-    let built = 0;
+    let built = 0, crowdN = 0;
+    const plan = this.crowdPlan(list, localId);
     for (const v of list) {
       seen.add(v.id);
       let e = this.players.get(v.id);
+      if (plan && !plan.full.has(v.id) && plan.heroish(v)) {   // v1.2.28: far fighter: a crowd figure (no model is built for it)
+        if (e) { e.root.visible = false; e.bar.visible = false; e.shadow.visible = false; e.glow.visible = false; e.healFx.visible = false; if (e.dot) this.updateDot(e, 0, true); }
+        this.crowdSet(crowdN++, v);
+        continue;
+      }
       if (e && (e.color !== v.color || e.gun !== this.gunOf(v) || (e.body && e.body !== this.bodyOf(v)) || e.tank !== !!((v.flags || 0) & 1) || e.raider !== !!v.raider || e.kind !== (v.kind || '') || e.am !== (v.am || '') || e.hairMod !== ((v.hairFrac ?? -1) >= 0))) { this.removePlayer(v.id); e = null; }
       else if (!e && built >= 3 && v.id !== localId) continue;   // v1.2.6: at most 3 new models a frame (a wave spawning at once was one long hitch); the rest appear over the next frames
       if (!e) { built++; e = this.makePlayer(v); }
@@ -2330,6 +2390,7 @@ export class Renderer {
       }
     }
     for (const id of [...this.players.keys()]) if (!seen.has(id)) this.removePlayer(id);
+    this.crowdDone(crowdN);
     if (!list.some(v => v.id === localId)) { this.marker.visible = false; this.skyMarker.visible = false; }
   }
 

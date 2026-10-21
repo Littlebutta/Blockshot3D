@@ -7,7 +7,10 @@
 export const TOURN = {
   lives: 4,          // default losses before you're out (lobby: 1-10)
   quiet: 10,         // an arena where nobody has dealt damage for this long (only units left) is a draw
+  intro: 15,         // v1.2.28: seconds of matchup screen (opponent's model + cards) before each round's 3-2-1
 };
+// v1.2.28: what the 'round' event carries for the matchup screen
+export const tournIntroInfo = g => tournOn(g) && g.tArenas ? { ti: TOURN.intro, tA: g.tArenas.map(A => A.ids) } : null;
 
 export const tournOn = g => !!g && g.settings.mode === 'tourn';
 export const tournTeams = g => tournOn(g) && !!g.settings.tTeams;
