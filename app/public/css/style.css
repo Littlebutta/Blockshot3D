@@ -1089,3 +1089,10 @@ body:not([data-screen=title]) #steamAddBtn,body:not([data-screen=title]) #steamA
    it hangs from the top, and the player list keeps one height (it scrolls once it is full) */
 #lobby{justify-content:flex-start;padding-top:max(20px,5vh)}
 #playerList{height:min(52vh,560px);max-height:none}
+/* v1.2.29 tournament: the matchup screen steps aside while a menu (pause, settings) is open, so what you see is the
+   menu the game thinks is open; Ready button on its timer bar; red loss pips on the pick screen / pause menu tiles */
+body:not([data-screen="none"]) #tIntro{visibility:hidden}
+#tIntro .tiBar .tiReady{position:absolute;right:3px;top:3px;bottom:3px;padding:0 14px;line-height:1;pointer-events:auto}
+#tIntro .tiBar .tiReady.on{background:#2f9a5a;border-color:#6aff9a}
+.peektile .tally.tl span.loss{background:#ff4a4a;border-color:#ff8a8a;box-shadow:0 0 6px #ff4a4a88}
+.peektile .tally.tl b{color:#ff8a8a}

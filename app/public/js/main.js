@@ -7,18 +7,20 @@ import { recommend, PAIRS, cardEffects } from './synergy.js';
 import { slopify, slopVerb, slopCardName, slopBadge, slopTypos, slopInit, setSlop, slopTick, slopOn } from './slop.js';
 import * as THREE from '/vendor/three/build/three.module.js';
 import { buildPlayerModel, attachCosmetics } from './art.js';
-import { FIGHTERS, FIGHTER_IDS, fighterOf, BRAWL, BITEM_INFO, bItemRows } from './brawl.js';
-import { coreRows } from './core.js';
+import { FIGHTERS, FIGHTER_IDS, fighterOf, BRAWL, BITEM_INFO } from './brawl.js';
 import { loadCards, cardLines, hasDownside, validateCard, rarityOf, cardWeight } from './cards.js';
-import { Game, CRITTER_MAX, MOUNT } from './sim.js';
+import { CRITTER_MAX, MOUNT } from './sim.js';
 import { AmonGame } from './amon.js';
 import { AmonClient } from './amonui.js';
 import { RtsGame } from './rts.js';
+import { threadCount, coreCount } from './threads.js';
+import { SimLink } from './simlink.js';
+import { extFields, isRaider } from './hostsim.js';
 import { RtsClient } from './rtsui.js';
 import { openGallery } from './gallery.js';
-import { telegraphRows, shockRows, bossRow, COOP_DIFFICULTY, coopDiffKey, UNIT_NAMES, CORE_TWISTS } from './coop.js';
+import { COOP_DIFFICULTY, coopDiffKey, UNIT_NAMES, CORE_TWISTS } from './coop.js';
 import { prepareLevel, accel, movePlayer, groundBelow, wallSegments, seedThru, unstick } from './physics.js';
-import { AckEncoder, AckDecoder } from './netcodec.js';
+import { AckDecoder } from './netcodec.js';
 import { PeerNetStats, HostNetStats, pingClass, RateMeter, Worst } from './netstats.js';
 const NR = { frame: new RateMeter(), sim: new RateMeter(), send: new RateMeter() };
 // v1.2.9: hitch readout (network window): worst frame over the last 5 s with its [game, draw] ms, slowest snapshot handling, longest gap between sends (host)
@@ -27,7 +29,7 @@ import { gpuInfo, GFX_TIERS, TIER_LABEL } from './gfxdetect.js';
 import { generateLevel } from './levelgen.js';
 import { Renderer } from './render.js';
 import { owTake, owStateOf } from './owrender.js';
-import { owView, VEH_KINDS, owLootPick, LOOT_DISCARD } from './openworld.js';
+import { VEH_KINDS, LOOT_DISCARD } from './openworld.js';
 import { Sound } from './audio.js';
 import { Net, SteamNet } from './net.js';
 import { loadSettings, saveSettings, settingsFileText, parseSettingsFile, GFX_PRESETS, DEFAULT_BINDS, BIND_LABELS, bindsOf, codeLabel } from './settings.js';
@@ -35,8 +37,8 @@ import { tipFor, TYPE_NOTES, STAT_AMP, MOD_AMP, BOOSTED_BY } from './cardinfo.js
 import { PRICES, BET, priceOf, owns, initEconomy, buy, matchPay, fmtCash } from './economy.js';
 import { loadArtAssets } from './art.js';
 import { openInfo, closeInfo, infoOpen } from './infopop.js';
-import { budgetRow, budgetView, budgetEstimate } from './budget.js';
-import { tournRows, giftOffer, giftAccept, giftDecline } from './tourn.js';
+import { budgetView, budgetEstimate } from './budget.js';
+
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -662,6 +664,7 @@ const spectating = () => {
 
 // Actions that fire once per press (keyboard or mouse button), using the player's bindings.
 function pressAction(code, e) {
+  if ((code === 'Enter' || code === 'NumpadEnter') && TI && S && S.inGame) { tournReady(); return; }   // v1.2.28 tournament matchup screen (v1.2.29: works from any menu)
   if (bound('netstats', code) && S && S.inGame && S.role !== 'solo') { netWinOpen = !netWinOpen; renderNetHud(true); }
   if (bound('netlog', code)) { if (e) e.preventDefault(); toggleNetLog(); }   // v1.2.10: record network logs to a file
   if (S && S.rts) return;   // v1.2.27: the RTS has its own keys (rtsui.js)
@@ -678,7 +681,6 @@ function pressAction(code, e) {
     const side = S.matchSettings.side;   // (2D: up also jumps; down + jump drops through instead)
     if ((bound('jump', code) && !(side && held('down'))) || (side && !S.matchSettings.brawl && bound('up', code))) I.jumpSeq++;   // (v1.2.13: not in Brawl)
     if (bound('shoot', code) && (settings.view !== 'first' || locked())) I.shotSeq++;
-    if ((code === 'Enter' || code === 'NumpadEnter') && TI) { I.ready = I.ready === TI.round ? 0 : TI.round; sound.play('ui'); }   // v1.2.28 tournament matchup screen
     // v28 Core Defense: Enter readies you for the next wave (press again to unready)
     if ((code === 'Enter' || code === 'NumpadEnter') && S.matchSettings.core && S.view && S.view.phase === 'countdown') {
       I.ready = I.ready === S.view.round ? 0 : S.view.round;
@@ -789,7 +791,7 @@ function emoteFrom(from, msg) {
   S.emoteT ||= new Map(); const now = performance.now(); if (now - (S.emoteT.get(from) || 0) < 600) return; S.emoteT.set(from, now);
   const ev = { t: 'emote', p: from, e: m.k };
   if (m.ping) { if (![msg.x, msg.y, msg.z].every(Number.isFinite)) return; ev.x = msg.x; ev.y = msg.y; ev.z = msg.z; }
-  if (S.role === 'host') S.outEvents.push(ev);
+  if (S.role === 'host') hostEv(ev);
   handleEvent(ev);
 }
 function emoteEvent(e) {
@@ -1417,32 +1419,25 @@ function lateJoin(id, name, token) {
     toast(`${name} joined`); sendMeta();
     return;
   }
+  // v1.2.30: the match may be on its own thread: read what's needed from its mirror; it seats them (hostsim.js join)
   const g = S.game;
   const tokenTaken = token && S.lobby.players.some(p => p.token === token && p.id !== id);
   const back = !tokenTaken && token && S.departed && S.departed.get(token);
   const old = g.player(id);
   let team = back ? back.team : leastTeam();
-  if (g.isWaves()) team = 0;
-  if (g.seatsTaken() >= RULES.maxPlayers && !(old && !old.connected)) g.retireBot();
+  if (S.lobby.settings.mode === 'waves') team = 0;
   const lp = { id, name, team, isBot: false, token, cosmetics: back ? back.cosmetics : null, prefColor: back ? back.prefColor : null };
   S.lobby.players = S.lobby.players.filter(p => p.id !== id); S.lobby.players.push(lp);
   const colors = assignColors(S.lobby.players, teamPlay(S.lobby.settings) ? 'tdm' : S.lobby.settings.mode);
   const r = { id, name, team, isBot: false, difficulty: 'normal', color: old ? old.color : colors[colors.length - 1], cosmetics: lp.cosmetics, kind: 'hero' };
-  // tell the newcomer about the match first, then everyone else about the newcomer
+  // tell the newcomer about the match first, then (from the match) the level, everyone's cards and everyone else about the newcomer
   const roster = [...S.roster.values()].filter(x => !x.transient && x.id !== id).map(x => ({ id: x.id, name: x.name, team: x.team, isBot: x.isBot, color: x.color, cosmetics: x.cosmetics, kind: 'hero' }));
   roster.push(r);
   S.net.send({ t: 'toPeer', id, msg: { k: 'start', roster, settings: S.matchSettings, late: true } });
-  S.net.send({ t: 'toPeer', id, msg: { k: 'level', level: g.levelForNet() } });
-  S.net.send({ t: 'toPeer', id, msg: { k: 'cardsAll', list: g.heroes().filter(p => p.id !== id).map(p => ({ p: p.id, cards: p.cards.slice(), s: g.statSummary(p) })) } });
-  S.net.send({ t: 'toAll', msg: { k: 'rosterAdd', r } });
-  if (S.acks) S.acks.delete(id);   // v1.2.3: the newcomer starts from a full snapshot
+  g.cmd({ t: 'join', id, name, r, back: back ? { cards: back.cards, tally: back.tally, rerollsLeft: back.rerollsLeft, oldKey: back.oldKey, score: back.score } : null });
   S.roster.set(id, { ...r, cards: [] });
-  if (old && !old.connected) { g.reconnect(id); old.name = name; }
-  else g.addPlayer(r, back ? { cards: g.isOpen() ? [] : back.cards, tally: back.tally, rerollsLeft: back.rerollsLeft, oldKey: back.oldKey, score: back.score } : null);
   if (back) S.departed.delete(token);
-  const p = g.player(id);
   toast(back || old ? `${name} is back with their cards` : `${name} joined — they'll catch up at the next pick`);
-  if (p && p.picksOwed > 0) S.net.send({ t: 'toPeer', id, msg: { k: 'note', text: `You'll get ${p.picksOwed} catch-up pick${p.picksOwed === 1 ? '' : 's'} at the next card screen, with 50% more time.` } });
   sendMeta();
 }
 function onPeerLeave(m, forced) {
@@ -1453,11 +1448,9 @@ function onPeerLeave(m, forced) {
   if (S.pausers) { S.pausers.delete(m.id); S.paused = S.pausers.size > 0; }
   const p = S.lobby.players.find(q => q.id === m.id);
   S.lobby.players = S.lobby.players.filter(q => q.id !== m.id);
-  if (S.game) {
-    const gp = S.game.player(m.id);
-    // remember their build so a reconnect picks up where they left off
-    if (gp && p && p.token && S.departed) S.departed.set(p.token, { cards: gp.cards.slice(), tally: { ...gp.tally }, rerollsLeft: gp.rerollsLeft, team: gp.team, oldKey: S.game.scoreKey(gp), score: S.game.scores[S.game.scoreKey(gp)] || 0, cosmetics: p.cosmetics, prefColor: p.prefColor });
-    S.game.removePlayer(m.id);
+  if (S.game) {   // (their build comes back as 'departed' to remember for a reconnect: simDeparted)
+    if (p && p.token && S.departed) (S.departedCos ||= new Map()).set(p.token, { cosmetics: p.cosmetics, prefColor: p.prefColor });
+    S.game.cmd({ t: 'leave', id: m.id, token: p && p.token && S.departed ? p.token : null });
   }
   if (S.amonGame) S.amonGame.removePlayer(m.id);   // their board keeps fighting; the store runs itself
   if (S.rtsGame) S.rtsGame.setConnected(m.id, false);   // v1.2.27 RTS: a bot runs their base until they come back
@@ -1476,34 +1469,28 @@ function onHostMsg(m) {
       else S.net.send({ t: 'toPeer', id: from, msg: { k: 'helloOk', v: mine } });
       break;
     }
-    case 'input': {   // v1.2.3: inputs travel unreliably and can arrive out of order: only the newest counts
-      const i = msg.i || {}, a = S.acks && S.acks.get(from);
-      if (a && i.q != null) { if (a.inQ && i.q <= a.inQ && !(i.t > 0 && i.q > (a.appQ || 0))) break; if (!(i.q <= a.inQ)) a.inQ = i.q; }   // (v1.2.9: one that overtook another is still slotted in while it's held back)
-      const pe = S.peerE ||= new Map(); if (Array.isArray(i.a)) pe.set(from, i.a[0]);   // v1.2.9: [match id, seq], or just seq for the match id last given
-      const aq = Array.isArray(i.a) ? i.a[1] : typeof i.a === 'number' ? i.a : 0;
-      if (a && aq && S.enc && pe.get(from) === S.enc.e && aq > a.q && aq <= S.enc.n) a.q = aq;
-      const ak = Array.isArray(i.a) && i.a.length > 2 ? i.a[2] : i.ak;   // v1.2.12: the newest event batch it applied in order (netcodec.js encodeFor ek)
-      if (a && ak > (a.k || 0) && S.enc && pe.get(from) === S.enc.e && ak <= S.enc.n) a.k = ak;
-      if (S.game) { if (a) queueInput(S.game, a, from, i, performance.now()); else S.game.setInput(from, i); } if (S.hostNet) S.hostNet.onInput(from); break;
+    case 'input': {   // v1.2.3: newest-only, acks and the jitter hold-back are worked out with the match (hostsim.js input)
+      const i = msg.i || {};
+      if (S.game) S.game.cmd({ t: 'input', from, i, now: performance.now() }); if (S.hostNet) S.hostNet.onInput(from); break;
     }
     case 'ping': (S.hostNet ||= new HostNetStats()).onPing(from, msg, r => S.net.send({ t: 'toPeer', id: from, msg: r })); break;
     case 'amon': if (S.amonGame) S.amonGame.action(from, msg.a); break;
     case 'rts': if (S.rtsGame) S.rtsGame.action(from, msg.a); break;
-    case 'pick': if (S.game) S.game.pick(from, msg.card); break;
-    case 'giftOffer': if (S.game) giftOffer(S.game, from, msg.to, msg.card); break;   // v1.2.26 tournament card trades
-    case 'giftAccept': if (S.game) giftAccept(S.game, from, msg.card); break;
-    case 'giftDecline': if (S.game) giftDecline(S.game, from); break;
-    case 'lootPick': if (S.game && S.game.ow) owLootPick(S.game, from, msg.card); break;
-    case 'reroll': if (S.game) S.game.reroll(from); break;
-    case 'comboChoice': if (S.game) S.game.comboChoice(from, !!msg.accept); break;
-    case 'breakChoice': if (S.game) S.game.breakChoice(from, msg.card || null); break;
+    case 'pick': if (S.game) S.game.cmd({ t: 'pick', from, card: msg.card }); break;
+    case 'giftOffer': if (S.game) S.game.cmd({ t: 'giftOffer', from, to: msg.to, card: msg.card }); break;   // v1.2.26 tournament card trades
+    case 'giftAccept': if (S.game) S.game.cmd({ t: 'giftAccept', from, card: msg.card }); break;
+    case 'giftDecline': if (S.game) S.game.cmd({ t: 'giftDecline', from }); break;
+    case 'lootPick': if (S.game) S.game.cmd({ t: 'loot', from, card: msg.card }); break;
+    case 'reroll': if (S.game) S.game.cmd({ t: 'reroll', from }); break;
+    case 'comboChoice': if (S.game) S.game.cmd({ t: 'combo', from, accept: !!msg.accept }); break;
+    case 'breakChoice': if (S.game) S.game.cmd({ t: 'break', from, card: msg.card || null }); break;
     case 'pause': if (S.inGame && canPauseAll()) { if (msg.on) S.pausers.add(from); else S.pausers.delete(from); S.paused = S.pausers.size > 0; } break;
     case 'setTeam': if (!S.inGame) { const p = S.lobby.players.find(q => q.id === from); if (p) { p.team = Math.max(0, Math.min(ART.teamNames.length - 1, msg.team | 0)); lobbyChanged(); } } break;
     case 'setCos': if (!S.hello || !S.hello.has(from)) { if (!(S.dropped && S.dropped.has(from))) dropPeer(from, `The host has ${appVersion()} and your game is older. Everyone needs the same version to play together.`); break; }
       if (!S.inGame) { const p = S.lobby.players.find(q => q.id === from); if (p) { p.cosmetics = cleanCos(msg.cos); lobbyChanged(); } } break;
     case 'setName': if (!S.inGame) { const p = S.lobby.players.find(q => q.id === from); if (p) { p.name = cleanName(msg.name); lobbyChanged(); } } break;
     case 'emote': if (S.inGame) emoteFrom(from, msg); break;
-    case 'bet': if (S.inGame && +msg.a > 0) { const ev = { t: 'bet', p: from, a: Math.floor(+msg.a) }; S.outEvents.push(ev); handleEvent(ev); } break;
+    case 'bet': if (S.inGame && +msg.a > 0) { const ev = { t: 'bet', p: from, a: Math.floor(+msg.a) }; hostEv(ev); handleEvent(ev); } break;
     case 'fsel': fselAction(from, msg); break;
     case 'setColor': if (!S.inGame) { const p = S.lobby.players.find(q => q.id === from); if (p && ART.ffaColors.includes(msg.color)) claimColor(from, msg.color); } break;
   }
@@ -1641,7 +1628,7 @@ function startMatch() {
     roster = roster.map(r => r.isBot && !fp[r.id] ? { ...r, cosmetics: { ...(r.cosmetics || {}), model: free.length ? free.pop() : FIGHTER_IDS[Math.floor(Math.random() * FIGHTER_IDS.length)] } } : r);
   }
   if (S.lobby.settings.mode === 'rts') {   // v1.2.27 RTS (rts.js): its own simulation, no shooter Game
-    S.game = null; S.rtsGame = new RtsGame({ roster, settings: { ...S.lobby.settings }, cards: CARDS });
+    if (S.game) S.game.close(); S.game = null; S.rtsGame = new RtsGame({ roster, settings: { ...S.lobby.settings }, cards: CARDS });
     S.rtsSeat = new Map(S.lobby.players.filter(p => p.token && !p.isBot).map(p => [p.token, p.id]));
     S.pausers = new Set();
     if (S.role === 'host') { S.net.send({ t: 'toAll', msg: { k: 'start', roster, settings: S.lobby.settings } }); sendMeta({ started: true }); }
@@ -1649,15 +1636,16 @@ function startMatch() {
     return;
   }
   if (S.lobby.settings.mode === 'amon') {   // AMON autobattler (amon.js): its own simulation, no shooter Game
-    S.game = null; S.amonGame = new AmonGame({ roster, settings: { ...S.lobby.settings }, cards: CARDS });
+    if (S.game) S.game.close(); S.game = null; S.amonGame = new AmonGame({ roster, settings: { ...S.lobby.settings }, cards: CARDS });
     S.pausers = new Set();
     if (S.role === 'host') { S.net.send({ t: 'toAll', msg: { k: 'start', roster, settings: S.lobby.settings } }); sendMeta({ started: true }); }
     beginGame(roster, S.lobby.settings);
     return;
   }
   // Cursed cards and weapon mods are always in the pool.
-  S.game = new Game({ roster, settings: { ...S.lobby.settings }, cards: CARDS, onOffer: handleOffer, onCombo: handleCombo, onBreak: handleBreak });
-  if (S.lobby.settings.mode === 'practice' && S.practiceCards) S.game.practiceSetCards(S.localId, S.practiceCards);
+  // v1.2.30: the match runs on its own CPU thread when Settings > CPU threads allows (simlink.js, hostsim.js)
+  if (S.game) S.game.close();
+  S.game = new SimLink({ roster, settings: { ...S.lobby.settings }, cards: CARDS, localId: S.localId, host: S.role === 'host', practiceCards: S.lobby.settings.mode === 'practice' ? S.practiceCards || null : null }, threadCount(settings.cpuThreads), simHandlers());
   S.pausers = new Set();
   if (S.role === 'host') {
     S.net.send({ t: 'toAll', msg: { k: 'start', roster, settings: S.lobby.settings } });
@@ -1665,7 +1653,7 @@ function startMatch() {
   }
   beginGame(roster, S.lobby.settings);
   S.game.start();
-  if (S.lobby.settings.mode === 'practice') { if (S.practiceCards) S.game.practiceSetCards(S.localId, S.practiceCards); openPracticePanel(true); }
+  if (S.lobby.settings.mode === 'practice') openPracticePanel(true);
 }
 function practiceRoster(me) {
   const st = S.lobby.settings, n = Math.max(1, Math.min(6, st.dummyCount || 3));
@@ -1801,7 +1789,7 @@ function showLootPick(ids, left) {
 function chooseLoot(i) {
   const id = i === -1 && S && S.lootOffer ? LOOT_DISCARD : S && S.lootOffer && S.lootOffer[i]; if (!id) return;
   S.lootOffer = null; $('lootPick').classList.add('hidden');
-  if (S.game) owLootPick(S.game, S.localId, id);
+  if (S.game) S.game.cmd({ t: 'loot', from: S.localId, card: id });
   else S.net.send({ t: 'toHost', msg: { k: 'lootPick', card: id } });
 }
 function restoreView() { if (S && S.owPrevView != null) { settings.view = S.owPrevView; S.owPrevView = null; } }
@@ -1826,7 +1814,7 @@ function endToLobby() {
   restoreView(); setModeTip(null);
   $('legend').classList.remove('hidden');
   renderer.applySettings(settings);
-  S.inGame = false; S.game = null; S.offer = null;
+  S.inGame = false; if (S.game) S.game.close(); S.game = null; S.offer = null;
   if (S.amon) { S.amon.dispose(); S.amon = null; } S.amonGame = null;
   if (S.rts) { S.rts.dispose(); S.rts = null; } S.rtsGame = null; S.rtsSeat = null;
   if (S.lobby.settings.mode === 'practice') S.lobby.settings.mode = 'ffa';   // the practice range lives on the title screen only
@@ -1838,41 +1826,7 @@ function endToLobby() {
   renderLobby(); show('lobby');
 }
 
-// Co-op wave bots (raiders, Elites, wave turrets and drones; not anyone's commander units) wear raider markings.
-const isRaider = (kind, transient, ownerId) => !!transient && !ownerId && ['wave', 'elite', 'turret', 'drone'].includes(kind);
-function viewOfPlayer(p) {
-  return {
-    id: p.id, name: p.name, color: p.color, team: p.team, pos: p.pos, vel: p.vel, aim: p.aim, aimPoint: p.aimPoint,
-    ...(S.game.isBrawl() && p.kind === 'hero' ? { pct: Math.round(p.pct || 0), stocks: p.stocks || 0, fighter: p.fighter || 'classic' } : {}),   // brawl: damage % tag instead of health (the host's own view; peers get it from the snapshot)
-    hp: p.hp, maxHp: Math.round(p.stats.health), alive: p.alive, blocking: S.game.shielded(p), flags: S.game.playerFlags(p), ammo: p.ammo, maxAmmo: Math.round(p.stats.ammo),
-    reloadFrac: p.reloadT > 0 ? p.reloadT / p.stats.reloadTime : 0, blockFrac: p.blockCdT > 0 ? p.blockCdT / p.stats.blockCooldown : 0,
-    flash: p.flashT > 0, sky: p.stats.skyfall > 0, size: p.size, blockSize: p.stats.blockSize || 1,
-    kind: p.kind, am: p.am, cosmetics: p.cosmetics, alive: p.alive && !p.reviving, maxHp: Math.round(S.game.maxHp(p)),
-    raider: isRaider(p.kind, p.transient, p.ownerId),
-    mod: p.mod, charge: p.fx.charging ? p.fx.chargeShots : 0, broken: p.mod === 'shield' && (p.fx.shieldBrokenT || 0) > S.game.time,
-    status: (S.game.burning(p) ? 1 : 0) | (p.fx.poisonS || (p.fx.toxT || 0) > S.game.time ? 2 : 0) | ((p.fx.chillT || 0) > S.game.time ? 4 : 0) | ((p.fx.hexT || 0) > S.game.time ? 8 : 0) | ((p.fx.wetT || 0) > S.game.time ? 16 : 0),
-    bulletSpeed: p.stats.bulletSpeed, bulletGrav: S.game.bulletGrav(p),
-    riotFrac: S.game.riotFrac(p), pillarFrac: S.game.pillarFrac(p), healN: p.healN || 0, critters: p.mod === 'critter' ? S.game.critterCount(p) : -1,
-    blockFx: (p.stats.blockShock > 0 ? 1 : 0) | (p.stats.blockLeech > 0 ? 2 : 0) | (p.stats.blockDeploy > 0 ? 4 : 0),
-    fieldR: S.game.slowFieldRadius(p.stats.slowField || 0),
-    ...extFields(S.game.extRow(p)),
-  };
-}
-// Katana charge, slash counter, Super Saiyan Hair pool and the hold-to-charge flag (sim.js extRow).
-function extFields(x) {
-  const [k, sn, hf, hp, hm, hold, ts, holy, mnt, nc] = x || [];
-  return { kCharge: k ?? -1, slashN: sn || 0, hairFrac: hf ?? -1, hairHp: hp || 0, hairMax: hm || 0, holding: !!hold, holdHoly: hold === 2,
-    tsFrac: ts ?? -1, holyShield: !!((holy || 0) & 1), robe: !!((holy || 0) & 2), mount: mnt || null, nc: ncFields(nc) };
-}
-
-// v1.2.15 round-2 cards (sim.js ncRow): flags, Pressure Stack, Battle Rhythm, Gambler's Mag roll, Gilded Shells, Ascension, Purge Pulse
 const GAMBLE_TAGS = ['🎲 ×2 dmg', '🎲 +bullets', '🎲 bouncy', '🎲 homing'];
-function ncFields(x) {
-  if (!x) return null;
-  const [f, press, rhy, gam, shell, asc, purge] = x;
-  return { bounty: !!(f & 1), od: !!(f & 2), rooted: !!(f & 4), cold: !!(f & 8), salvo: !!(f & 16), rhyReady: !!(f & 32), lastRound: !!(f & 64),
-    press: press || 0, rhy: rhy ?? -1, gam: gam ?? -1, shell: shell || 0, ascTier: (asc || 0) & 3, ascRounds: (asc || 0) >> 2, purge: purge || 0 };
-}
 // Words above a head: the Gambler's Mag roll, the Bounty Mark, a Snare Plate root
 function ncTag(v) {
   const n = v.nc; if (!n || !v.alive) return '';
@@ -1885,99 +1839,51 @@ function friendOf(ownerId) {
   return (teamPlay() || mode === 'waves' || mode === 'core') && !!o && !!me && (o.team || 0) === (me.team || 0);
 }
 
-// dt: real time since the last frame (up to 0.25 s). v1.2.6: the sim catches up in steps of 35 ms at most, so a long
-// frame no longer loses game time (it rubber-banded joiners and slowed the whole match on a slow host).
+// dt: real time since the last frame (up to 0.25 s). The match itself (stepping, joiners' inputs, snapshots) is in
+// hostsim.js; v1.2.30: it may run on its own CPU thread, in which case what it worked out comes back a frame later
+// (simFrame) while this thread draws.
 function hostFrame(dt, ts = 1) {
   const g = S.game, t0 = performance.now(); NR.sim.tick(t0);
-  const me = g.player(S.localId);
-  g.setInput(S.localId, gatherInput(me ? viewOfPlayer(me) : null));
-  let w = t0 - dt * 1000;   // (v1.2.9: the wall-clock time each step covers, for joiners' held-back inputs: queueInput)
-  if (!S.paused) for (let rem = dt * ts; rem > 1e-4;) { const st = Math.min(rem, 0.035); if (S.acks) releaseInputs(g, S.acks, w + st / ts * 500); w += st / ts * 1000; g.step(st); rem -= st; if (!S || S.game !== g) return; }
-  else if (S.acks) releaseInputs(g, S.acks, t0);
-  if (g.levelVersion !== S.levelVersion) {
-    S.levelVersion = g.levelVersion;
-    renderer.setLevel(g.level);
-    if (S.role === 'host') S.net.send({ t: 'toAll', msg: { k: 'level', level: g.levelForNet() } });
-  }
-  const evs = g.takeEvents();
-  if (S.role === 'host') S.outEvents.push(...evs);
-  for (const e of evs) handleEvent(e);
-  if (!S || !S.game) return;
-  S.view = {
-    phase: g.phase, phaseT: g.phaseT, scores: g.scores, round: g.round,
-    waiting: g.phase === 'picking' ? g.players.filter(p => !p.picked).length : 0,
-    players: g.players.filter(p => p.connected).map(viewOfPlayer),
-    bullets: g.bullets.map(b => ({ id: b.id, pos: b.pos, vel: b.vel, ring: b.ring || 0, r: b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r, color: b.color, fx: b.fx, tgt: b.swarm === 'bee' && b.swTgt ? b.swTgt.id : 0, o: b.owner })),
-    dynamics: g.dyn.map(o => ({ id: o.id, x: o.pos.x, y: o.pos.y, z: o.pos.z, h: o.h, tip: o.tipped || 0, tx: o.tx || 0, tz: o.tz || 0 })),
-    shields: g.shields.map(sh => ({ id: sh.id, x: sh.x, y0: sh.y0, z: sh.z, w: sh.w, h: sh.h, d: sh.d, ang: sh.ang || 0, shock: !!sh.shock, leech: !!sh.leech, box: !!sh.box, hp: sh.box ? Math.max(0, sh.hp) / sh.maxHp : 1, color: (g.player(sh.owner) || {}).color || '#ffffff', o: sh.owner })),
-    mines: g.mines.filter(m => !m.snare || friendOf(m.owner)).map(m => ({ id: m.id, x: m.x, y: m.y, z: m.z, armed: m.armT <= 0, sz: m.sz || 1, snare: !!m.snare, color: (g.player(m.owner) || {}).color || '#ffffff', o: m.owner })),
-    trapT: g.level && g.level.traps ? g.time : null,
-    laser: g.hazard && g.hazard.type === 'laser' ? [g.hazard.pos, g.hazard.state === 'warn' ? 1 : g.hazard.state === 'on' ? 2 : 0] : null,
-    telegraphs: g.telegraphs.length ? telegraphRows(g) : null, shocks: g.shockwaves.length ? shockRows(g) : null, boss: bossRow(g), final: g.isFinalRound(),
-    rituals: g.rituals.length ? g.ritualRows() : null, relics: g.relics.length ? g.relicRows() : null,
-    ow: g.ow ? { ...owView(g), taken: g.ow.taken } : null,
-    barricades: g.barricades.map(b => ({ id: b.id, kind: b.kind, x: b.x, y0: b.y0, z: b.z, len: b.len, h: b.h, th: b.th, ang: b.ang, hp: Math.max(0, b.hp) / b.maxHp, color: b.ownerRef.color, o: b.owner })),
-    core: g.settings.core ? coreRows(g) : null,
-  };
-  S.view.bitems = g.isBrawl() ? bItemRows(g) : null; S.view.bud = budgetRow(g); S.tn = tournRows(g);
-  S.brawlRows = g.isBrawl() ? g.brawlRows() : null; S.brawlT = g.isBrawl() ? Math.max(0, Math.ceil(BRAWL.suddenT - g.time)) : null;
+  const me = S.view && S.view.players.find(p => p.id === S.localId);
+  g.cmd({ t: 'local', i: gatherInput(me || null) });
+  let peers = null;
   if (S.role === 'host') {
-    S.sendT -= dt;
-    if (S.sendT <= 0) {
-      // v1.2.25: big lobbies send fewer, fuller updates (30 a second up to 30 players, 20 up to 60, then 15), which keeps
-      // each joiner's stream and the host's upload in check (every joiner gets the whole match)
-      const np = g.players.length, hz = np <= 30 ? 30 : np <= 60 ? 20 : 15;
-      S.sendT = S.sendT < -0.05 ? 1 / hz : S.sendT + 1 / hz;   // v30: keep an even rate (was reset each send, so it drifted to the frame rate)
-      const s = g.snapshot(); s.ev = S.outEvents; S.outEvents = [];
-      if (hz !== 30) s.hz = hz;
-      s.pz = [...(S.pausers || [])].map(id => rosterOf(id).name);
-      s.tm = Math.round(t0);   // v1.2.6: when this state was taken (host clock), so joiners place things by it, not by arrival
-      if (ts < 0.999) s.tk = Math.round(ts * 100) / 100;   // slow motion: joiners extrapolate slower too
-      S.snapN = (S.snapN || 0) + 1;
-      if (S.hostNet && S.snapN % 30 === 0) { s.ns = S.hostNet.rows(); s.hf = [Math.round(NR.frame.hz()), Math.round(NR.sim.hz()), Math.round(NR.send.hz()), Math.round((HM.frame.get() || { v: 0 }).v), Math.round((HM.send.get() || { v: 0 }).v)]; }   // everyone's connection, once a second (network window; v1.2.9 hf: host FPS, sim runs/s, updates/s)
-      NR.send.tick(); { const tn = performance.now(); if (HM.sendAt) HM.send.add(tn - HM.sendAt, null, tn); HM.sendAt = tn; }
-      // v1.2.3: each player gets the changes since the newest snapshot THEY confirmed, sent unreliably (a lost one
-      // is skipped, never resent), with any events they haven't confirmed riding along (netcodec.js AckEncoder)
-      const ev = s.ev; delete s.ev;
-      const enc = S.enc ||= new AckEncoder(), q = enc.push(s, ev);
-      S.acks ||= new Map();
-      const same = new Map();   // v1.2.9: players who confirmed the same snapshot share one message (encodeFor), sent once to all of them
-      for (const p of S.lobby.players) {
-        if (p.isBot || p.id === S.localId) continue;
-        let a = S.acks.get(p.id); if (!a) S.acks.set(p.id, a = { q: 0, since: q });
-        // v1.2.12: unconfirmed events are resent about once a round trip (2-4 snapshots), not in every snapshot (netcodec.js)
-        const hn = S.hostNet && S.hostNet.peers.get(p.id), rtt = hn && hn.rtt > 0 ? hn.rtt : 150, rs = Math.min(4, Math.max(2, Math.ceil((rtt + 40) / 33)));
-        const m = enc.encodeFor(a.q, a.since, a.k || 0, rs);
-        if (m) { const l = same.get(m); if (l) l.push(p.id); else same.set(m, [p.id]); }
-      }
-      for (const [m, ids] of same) S.net.send(ids.length > 1 ? { t: 'toPeerU', id: ids[0], ids, msg: { k: 'snap', s: m } } : { t: 'toPeerU', id: ids[0], msg: { k: 'snap', s: m } });
+    peers = [];
+    for (const p of S.lobby.players) {
+      if (p.isBot || p.id === S.localId) continue;
+      const hn = S.hostNet && S.hostNet.peers.get(p.id); peers.push([p.id, hn && hn.rtt > 0 ? hn.rtt : 0]);
     }
+    if (S.hostNet && t0 - (S.nsAt || 0) > 900) { S.nsAt = t0; g.cmd({ t: 'netRows', ns: S.hostNet.rows(), hf: [Math.round(NR.frame.hz()), Math.round(NR.sim.hz()), Math.round(NR.send.hz()), Math.round((HM.frame.get() || { v: 0 }).v), Math.round((HM.send.get() || { v: 0 }).v)] }); }   // (everyone's connection, once a second: network window)
   }
+  g.frame({ dt, ts, paused: !!S.paused, t0, hostFps: document.hidden ? 0 : NR.frame.hz(), peers, pz: [...(S.pausers || [])].map(id => rosterOf(id).name) });
 }
-
-// v1.2.9: joiners' inputs are used for as long as they were held, not from whenever each one happened to arrive. With uneven
-// delivery (jitter) the host used to apply one input 40 ms and the next 0 ms, so its idea of where you were drifted from your
-// own prediction and your view was pulled around at every snapshot (it was smooth once you died). Each input carries its
-// send time; the host holds each input until send time + a hold-back covering 97% of the recent (2 s) arrival - send spread
-// (at most 40 ms over the smallest), then applies it at that point inside the frame's steps (hostFrame, releaseInputs).
-function queueInput(g, a, from, i, now) {
-  if (!(i.t > 0)) { g.setInput(from, i); return; }
-  const o = now - i.t, dl = a.dl ||= []; dl.push(o); if (dl.length > 120) dl.shift();
-  // v1.2.9: the hold-back (a.hold) moves only when the wanted one is well off (6 ms): every change moves where an input lands
-  // on the host's step grid and so how long it seems to be held, which came back to the joiner as a correction
-  if (a.hold == null || !(now - a.mT < 500)) {
-    a.mT = now; const so = dl.slice().sort((x, y) => x - y), want = Math.min(so[0] + 40, so[Math.floor(so.length * 0.97)]);
-    if (a.hold == null || Math.abs(want - a.hold) > 6) a.hold = want;
-  }
-  const r = Math.min(now + 60, i.t + a.hold), Q = a.inq ||= [];
-  // v1.2.9: a late one is queued too (not applied at once): applied between frames it took effect a step earlier than the
-  // same release time would through releaseInputs (which rounds to the nearest step), so its length on the host was off by a step
-  if (i.q < (a.appQ || 0)) return;
-  let k = Q.length; while (k > 0 && Q[k - 1][2].q > i.q) k--; Q.splice(k, 0, [r, from, i]);
+// what the match sends back (simlink.js handlers)
+function simHandlers() {
+  return {
+    net: m => { if (S && S.net && S.role === 'host') S.net.send(m); },
+    ui: m => { if (S && S.inGame) onSimUi(m); },
+    frame: f => { if (S && S.inGame && S.game) simFrame(f); },
+    departed: d => { if (!S || !S.departed) return; const c = (S.departedCos && S.departedCos.get(d.token)) || {}; S.departed.set(d.token, { ...d.rec, ...c }); },
+    fail: why => { console.error(why); toast('The game thread stopped: ' + String(why).split('\n')[0].slice(0, 140)); },
+  };
 }
-function releaseInputs(g, acks, w) {
-  for (const a of acks.values()) { const Q = a.inq; while (Q && Q.length && Q[0][0] <= w) { const [, f, x] = Q.shift(); g.setInput(f, x); if (x.q > (a.appQ || 0)) a.appQ = x.q; } }
+// the host's own card offers and questions, the same messages a joiner gets
+function onSimUi(m) {
+  if (m.k === 'offer') showPick(m.offer, m.rerolls, m.info);
+  else if (m.k === 'comboAsk') showComboAsk(m.combo);
+  else if (m.k === 'breakAsk') showBreakAsk(m.opts || []);
+  else if (m.k === 'note') toast(m.text);
 }
+function simFrame(f) {
+  if (f.level) { S.levelVersion = (S.levelVersion || 0) + 1; renderer.setLevel(f.levelObj || prepareLevel(f.level)); }
+  if (f.sent) { NR.send.tick(); const tn = performance.now(); if (HM.sendAt) HM.send.add(tn - HM.sendAt, null, tn); HM.sendAt = tn; }
+  for (const e of f.evs) { handleEvent(e); if (!S || !S.game) return; }
+  const v = f.view;
+  v.mines = v.mines.filter(m => !m.snare || friendOf(m.o));   // (enemies' Snare Plates stay hidden)
+  S.view = v; S.tn = f.tn; S.brawlRows = f.brawlRows; S.brawlT = f.brawlT;
+}
+// main-thread events (emotes, bets) for joiners: they go out with the match's next snapshot
+function hostEv(e) { if (S && S.game) S.game.cmd({ t: 'ev', e }); }
 // Unit roster updates must land before the player list is read, or brand-new units (twins, turrets,
 // drones, wave enemies) show up white and without their extra parts on clients.
 function applyRosterEvents(evs) {
@@ -2383,6 +2289,7 @@ function netDetails(nameOf) {
     L.push(`Updates from host: <b class="${cls(hz, 20, 27)}">${hz}/s</b> (30 is normal)${hr ? ` · host <b class="${cls(hr[0], 25, 45)}">${hr[0]} FPS</b>, sim ${hr[1]}/s, sends ${hr[2]}/s` : ''}`);
     L.push(`This PC: <b class="${cls(me, 30, 50)}">${me} FPS</b>${c ? ` · your movement corrected by ${Math.round(c.avg * 100)} cm on average (max ${Math.round(c.max * 100)})` : ''}`);
   } else L.push(`This PC (host): <b class="${cls(me, 25, 45)}">${me} FPS</b> · sim ${Math.round(NR.sim.hz())}/s · sends <b class="${cls(NR.send.hz(), 20, 27)}">${Math.round(NR.send.hz())}</b> updates/s to each player`);
+  if (S.role !== 'peer' && S.game && S.game.stat) L.push(S.game.threaded ? `Game thread: <b class="good">on</b> (${coreCount()} CPU threads on this PC) · the match comes back ${Math.round(S.game.stat.waitMs)} ms after it's sent (about ${Math.max(1, Math.round((S.game.stat.late || 0) + 0.5))} frame)` : `Game thread: off (one thread: Settings > CPU threads${coreCount() < 2 ? ', this PC has 1' : ''})`);   // v1.2.30
   {   // v1.2.9: hitch readout: tells a slow PC (this one or the host) from a late network
     const hc = (v, warn, bad) => v >= bad ? 'bad' : v >= warn ? 'ok' : 'good', f = HM.frame.get(), m = HM.msg.get(), ms = v => `<b class="${hc(v, 25, 50)}">${Math.round(v)} ms</b>`;
     const parts = [];
@@ -2605,7 +2512,7 @@ function placeBet(v) {
   if (n <= 0) { toast('Not enough cash'); return; }
   settings.cash -= n; S.bet += n; S.betPay = (S.betPay || 0) + n * betMult(); saveSettings(settings); sound.play('coin');
   const ev = { t: 'bet', p: S.localId, a: S.bet };
-  if (isHostSide()) { if (S.role === 'host') S.outEvents.push(ev); handleEvent(ev); }
+  if (isHostSide()) { if (S.role === 'host') hostEv(ev); handleEvent(ev); }
   else { S.net.send({ t: 'toHost', msg: { k: 'bet', a: S.bet } }); handleEvent(ev); }
   renderBets(true);
 }
@@ -2801,7 +2708,8 @@ function handleEvent0(e) {
     case 'extend':
       S.matchSettings.roundsToWin = e.goal; scoreKeyCache = '';
       if (currentScreen === 'over') show('none');
-      toast(e.waves ? `Keep playing: survive ${e.goal} waves` : `Match extended: first to ${e.goal}`);
+      if (e.tourn) { S.matchSettings.tLives = e.goal; toast(t('Tournament extended: everyone gets {n} more', { n: e.add }) + (e.add === 1 ? ' ' + t('life') : ' ' + t('lives'))); }
+      else toast(e.waves ? `Keep playing: survive ${e.goal} waves` : `Match extended: first to ${e.goal}`);
       sound.playMusic('battle');
       break;
     case 'slash': renderer.slashFx(e, rosterOf(e.p).color); sound.play('slash', e.p === me ? 0.9 : vol(e.x, e.z) * 0.7); if (e.p === me) renderer.gunKick(); break;
@@ -2842,6 +2750,14 @@ function handleEvent0(e) {
     }
     case 'roundEnd': {
       S.betOpen = false; settleBet(e.w);
+      if (e.tw || e.tl) {   // v1.2.29 tournament: your side's result for the round (not "Draw" every time)
+        const mk = myKey(), won = (e.tw || []).includes(mk), lost = (e.tl || []).includes(mk), team = teamPlay();
+        const out = S.tn && S.tn.p.some(r => r[0] === me && r[3]);
+        if (out && !lost) banner(t('Round over'), '#cfd6e4', 1.8);
+        else banner(lost ? (team ? t('Your team loses a life') : t('You lose a life')) : won ? (team ? t('Your team takes the round') : t('You won the round')) : t('Draw — nobody loses a life'), lost ? '#ff6a6a' : won ? '#6aff9a' : '#cfd6e4', 1.8);
+        sound.play(lost ? 'roundLose' : 'roundWin');
+        break;
+      }
       if (e.w == null) { banner('Draw — nobody scores', null, 1.8); sound.play('roundLose'); break; }
       const L = keyLabel(e.w), mine = e.w === myKey();
       if (S.matchSettings.mode === 'open') {
@@ -3009,11 +2925,6 @@ function handleEvent0(e) {
 }
 
 // ---------------------------------------------------------------- picking
-function handleOffer(p) {
-  const info = S.game.offerInfo(p);
-  if (p.id === S.localId) showPick(p.offer, p.rerollsLeft, info);
-  else if (!p.isBot && S.role === 'host') S.net.send({ t: 'toPeer', id: p.id, msg: { k: 'offer', offer: p.offer, rerolls: p.rerollsLeft, info } });
-}
 function showPick(offer, rerolls, info = {}) {
   S.offer = offer; S.rerolls = rerolls; S.pickStart = performance.now(); S.pickInfo = info || {};
   const total = info.total || 1, k = total - (info.left || 1) + 1;
@@ -3063,10 +2974,6 @@ function showPick(offer, rerolls, info = {}) {
   renderPeek(true);
   if (wrap.firstChild) wrap.firstChild.focus({ preventScroll: true });
 }
-function handleCombo(p, C) { // host side
-  if (p.id === S.localId) showComboAsk(C.id);
-  else if (S.role === 'host') S.net.send({ t: 'toPeer', id: p.id, msg: { k: 'comboAsk', combo: C.id } });
-}
 function showComboAsk(comboId) {
   const C = cardById.get(comboId); if (!C) return;
   discover(comboId); S.comboAsk = comboId;
@@ -3081,11 +2988,7 @@ function showComboAsk(comboId) {
   if (document.pointerLockElement) document.exitPointerLock();
   show('comboAsk');
 }
-// Scrap It: choose which held mod (weapon or shield) to destroy.
-function handleBreak(p, opts) { // host side
-  if (p.id === S.localId) showBreakAsk(opts);
-  else if (S.role === 'host') S.net.send({ t: 'toPeer', id: p.id, msg: { k: 'breakAsk', opts } });
-}
+// Scrap It: choose which held mod (weapon or shield) to destroy (asked by the match: hostsim.js, or the host).
 function showBreakAsk(opts) {
   S.breakAsk = opts.slice();
   const row = $('breakCards'); row.innerHTML = '';
@@ -3105,14 +3008,14 @@ function answerBreak(id) {
   S.breakAsk = null;
   show('none');   // v1.0.1: first, so the next hand (speed mode / extra picks) that the host deals at once stays on screen
   if (S.role === 'peer') S.net.send({ t: 'toHost', msg: { k: 'breakChoice', card: id } });
-  else S.game.breakChoice(S.localId, id);
+  else S.game.cmd({ t: 'break', from: S.localId, card: id });
 }
 function answerCombo(accept) {
   if (!S || !S.comboAsk) return;
   S.comboAsk = null;
   show('none');   // v1.0.1: first (the host deals the next hand right away; hiding after it locked the second pick)
   if (S.role === 'peer') S.net.send({ t: 'toHost', msg: { k: 'comboChoice', accept } });
-  else S.game.comboChoice(S.localId, accept);
+  else S.game.cmd({ t: 'combo', from: S.localId, accept });
 }
 // v1.2.0: the chosen card flies up and the rest drop away before the screen closes (PICK_OUT ms)
 const PICK_OUT = 420;
@@ -3130,13 +3033,13 @@ function choosePick(i) {
     S.net.send({ t: 'toHost', msg: { k: 'pick', card: id } }); S.offer = null;
     if ((S.pickInfo && S.pickInfo.left) > 1) { setTimeout(() => { if (S && !S.offer && currentScreen === 'pick') $('pickCards').innerHTML = '<p class="hint">Dealing your next hand…</p>'; }, PICK_OUT); } else pickOut();
   }
-  else S.game.pick(S.localId, id);
+  else S.game.cmd({ t: 'pick', from: S.localId, card: id });
 }
 function doReroll() {
   if (!S || !S.offer || S.rerolls <= 0) return;
   sound.play('reroll');
   if (S.role === 'peer') { S.rerolls = 0; $('rerollBtn').disabled = true; S.net.send({ t: 'toHost', msg: { k: 'reroll' } }); }
-  else S.game.reroll(S.localId);
+  else S.game.cmd({ t: 'reroll', from: S.localId });
 }
 
 // ---------------------------------------------------------------- match over
@@ -3220,7 +3123,7 @@ function showOver(w, tally, wavesCleared) {
   }
   $('overTally').innerHTML = t.length ? `<tr><th>Player</th>${teamWins ? '' : '<th>Wins</th>'}<th>Damage</th><th>Kills</th><th>Deaths</th></tr>` + body : '';
   const unit = S.matchSettings.mode === 'waves' ? 'wave' : 'round';
-  for (const o of $('extendN').options) o.textContent = `+${o.value} ${unit}${o.value === '1' ? '' : 's'}`;
+  for (const o of $('extendN').options) o.textContent = S.matchSettings.mode === 'tourn' ? `+${o.value} ${o.value === '1' ? 'life' : 'lives'}` : `+${o.value} ${unit}${o.value === '1' ? '' : 's'}`;   // (v1.2.29 tournament: more lives)
   $('extendBtn').textContent = S.matchSettings.mode === 'waves' ? tr('Keep playing (harder, new boss)') : tr('Keep playing');
   // Co-op: more waves only after beating the boss; a wipe ends the run (the loss token was the retry).
   $('extendRow').classList.toggle('hidden', S.matchSettings.mode === 'waves' && !won);
@@ -3313,12 +3216,18 @@ function peekWinsOf(r, sc) {
   const key = mode === 'waves' ? 'players' : teamPlay() ? 't' + r.team : r.id;
   return sc[key] || 0;
 }
+// v1.2.29 tournament: [losses, lives] for a player (teams share one count), or null outside a tournament
+function tournLossOf(id) {
+  const T = S && S.tn; if (!T || S.matchSettings.mode !== 'tourn') return null;
+  const r = T.p.find(x => x[0] === id); if (!r) return null;
+  return [Math.max(0, T.L - r[2]), T.L];
+}
 function peekHeroes() { return [...S.roster.values()].filter(r => !r.transient && !r.ownerId && r.kind !== 'hazardTurret'); }
 function renderPeek(force) {
   if (!S || currentScreen !== 'pick') return;
   const sc = (S.view && S.view.scores) || {}, goal = S.matchSettings.roundsToWin;
   const heroes = peekHeroes();
-  const key = heroes.map(r => r.id + ':' + (r.cards || []).length + ':' + peekWinsOf(r, sc)).join('|') + innerHeight;
+  const key = heroes.map(r => r.id + ':' + (r.cards || []).length + ':' + peekWinsOf(r, sc) + ':' + (tournLossOf(r.id) || '')).join('|') + innerHeight;
   if (key === peekKey && !force) return;
   peekKey = key;
   const per = Math.max(3, Math.floor((innerHeight - 40) / 52));
@@ -3336,6 +3245,14 @@ function renderPeek(force) {
 // v1.0.1: the same player tile (hover = cards + stats window) is used on the pick screen, the pause menu and the scoreboard.
 function peekTile(r) {
   const sc = (S.view && S.view.scores) || {}, goal = S.matchSettings.roundsToWin;
+  const tl = tournLossOf(r.id);
+  if (tl) {   // v1.2.29 tournament: red loss pips here too (pick screen, pause menu, after-match), like the scoreboard
+    const [lost, L] = tl;
+    const pips = L <= 10 ? Array.from({ length: L }, (_, i) => `<span class="${i < lost ? 'loss' : ''}"></span>`).join('') : '';
+    return `<div class="peektile${r.id === S.localId ? ' me' : ''}${r.id === peekId ? ' open' : ''}" data-peek="${esc(r.id)}" style="--c:${r.color}">` +
+      `<div class="pn" data-noi18n>${esc(r.id === S.localId ? t('You') : r.name)}</div>` +
+      `<button type="button" class="tally tl" title="${esc(t('Losses'))}">${pips}<b>${lost}</b><small>${(r.cards || []).length} 🂠</small></button></div>`;
+  }
   {
     const w = peekWinsOf(r, sc);
     const pips = goal <= 10 ? Array.from({ length: goal }, (_, i) => `<span class="${i < w ? 'on' : ''}"></span>`).join('') : '';
@@ -3468,7 +3385,8 @@ function updateHover(v) {
 
 // ---------------------------------------------------------------- practice range
 let prFilter = 'all', prDmg = [], prLastTotal = 0, prBig = 0;
-function practiceMe() { return S && S.game && S.game.player(S.localId); }
+// (the match's mirror of you: your cards and damage dealt; hostsim.js mirror)
+function practiceMe() { const m = S && S.game && S.game.mirror && S.game.mirror.me; return m ? { cards: m.cards, tally: { damage: m.dmg } } : null; }
 function openPracticePanel(open) {
   const el = $('practice');
   el.classList.toggle('hidden', !open);
@@ -3492,7 +3410,7 @@ function renderPractice() {
     .sort((a, b) => order.indexOf(a.rarity) - order.indexOf(b.rarity) || a.name.localeCompare(b.name));
   $('prAll').innerHTML = list.map(c => `<button class="pcard" data-add="${esc(c.id)}" style="--r:${RARITY[rarityOf(c)].color}" title="${esc(cardLines(c).map(l => l[0] + ' ' + l[1]).join(', '))}"><b>${esc(c.name)}</b><small>${esc(c.description || '')}</small></button>`).join('');
 }
-function setPracticeCards(list) { S.practiceCards = list.slice(); S.game.practiceSetCards(S.localId, list); sound.play('cardPick', 0.6); }
+function setPracticeCards(list) { S.practiceCards = list.slice(); S.game.cmd({ t: 'practice', list }); if (S.game.mirror && S.game.mirror.me) { S.game.mirror.me.cards = list.slice(); renderPractice(); } sound.play('cardPick', 0.6); }
 function restartPractice() {
   const st = S.lobby.settings;
   st.dummyCount = +$('prDummies').value; st.dummyMode = $('prDummyMode').value; st.dummyHp = +$('prDummyHp').value; st.practiceGod = $('prGod').checked;
@@ -3516,9 +3434,9 @@ function bindPractice() {
   $('prMine').addEventListener('click', e => { const b = e.target.closest('[data-rm]'); const me = practiceMe(); if (b && me) { const l = me.cards.slice(); l.splice(+b.dataset.rm, 1); setPracticeCards(l); } });
   $('prClear').onclick = () => setPracticeCards([]);
   $('prRandom').onclick = () => { const me = practiceMe(); const pool = CARDS.filter(c => c.rarity !== 'combo'); if (me && pool.length) setPracticeCards([...me.cards, pool[Math.floor(Math.random() * pool.length)].id]); };
-  $('prResetDps').onclick = () => { const me = practiceMe(); if (me) me.tally.damage = 0; prDmg = []; prLastTotal = 0; prBig = 0; };
+  $('prResetDps').onclick = () => { if (S && S.game) S.game.cmd({ t: 'resetDmg' }); prDmg = []; prLastTotal = 0; prBig = 0; };
   for (const id of ['prDummies', 'prDummyMode', 'prDummyHp']) $(id).onchange = restartPractice;
-  $('prGod').onchange = () => { S.lobby.settings.practiceGod = $('prGod').checked; if (S.game) S.game.settings.practiceGod = $('prGod').checked; };
+  $('prGod').onchange = () => { S.lobby.settings.practiceGod = $('prGod').checked; if (S.game) S.game.cmd({ t: 'setting', k: 'practiceGod', v: $('prGod').checked }); };
   $('prNewArena').onclick = restartPractice;
 }
 
@@ -3767,7 +3685,8 @@ function tournIntro(e) {
     <div class="tiName">${foes.map(r => `<div style="color:${r.color}">${esc(r.name)}<div class="tiPips">${pips(r.id)}</div></div>`).join('')}</div></div>
     <div class="tiMid"><div class="tiVs">VS</div><div class="tiMe" style="color:${rosterOf(S.localId).color}">${esc(t('You'))}<div class="tiPips">${pips(S.localId)}</div></div></div>
     <div class="tiR">${foes.map(r => { const cs = cardsOf(r); return `<h3 style="color:${r.color}">${esc(r.name)}${t("'s cards")} <small>${cs.length}</small></h3><div class="tiCards${cs.length > 8 ? ' many' : ''}"></div>`; }).join('')}</div>
-    <div class="tiBar"><i></i><span></span></div>`;
+    <div class="tiBar"><i></i><span></span><button type="button" class="btn small tiReady">${esc(t('Ready'))}</button></div>`;
+  el.querySelector('.tiReady').onclick = ev => { ev.stopPropagation(); tournReady(); };
   el.querySelectorAll('.tiCards').forEach((box, k) => {
     const cs = cardsOf(foes[k]);
     if (!cs.length) { box.innerHTML = `<div class="tiNone">${esc(t('No cards yet'))}</div>`; return; }
@@ -3813,6 +3732,12 @@ function tournIntro(e) {
   };
   requestAnimationFrame(tick);
 }
+// v1.2.29: Enter or the Ready button (from any menu) readies you; again to unready
+function tournReady() {
+  if (!TI) return;
+  I.ready = I.ready === TI.round ? 0 : TI.round; sound.play('ui');
+  const b = TI.el.querySelector('.tiReady'); if (b) { b.classList.toggle('on', I.ready === TI.round); b.textContent = I.ready === TI.round ? t('Not ready') : t('Ready'); }
+}
 function tournIntroEnd() {
   if (!TI) return;
   const me = TI; TI = null;
@@ -3841,9 +3766,7 @@ function giftAllies() {
 }
 function sendGift(k, extra) {
   if (S.role === 'peer') S.net.send({ t: 'toHost', msg: { k, ...extra } });
-  else if (k === 'giftOffer') giftOffer(S.game, S.localId, extra.to, extra.card);
-  else if (k === 'giftAccept') giftAccept(S.game, S.localId, extra.card);
-  else giftDecline(S.game, S.localId);
+  else if (S.game) S.game.cmd({ t: k, from: S.localId, ...extra });
 }
 function renderGiftRow() {
   // 🎁 on each card while an ally is picking too (the 'picking' event can land after the hand is dealt)
@@ -4120,7 +4043,7 @@ function bindSettings() {
     ['sCurAmmo', 'cursorAmmo', 'checked'], ['sHaze', 'shieldHaze', 'checked'],
     ['sLighting', 'lighting', 'value'], ['sShadowQ', 'shadowQ', 'value'], ['sAO', 'ao', 'checked'], ['sBloom', 'bloom', 'value'],
     ['sRefl', 'reflections', 'value'], ['sAA', 'aa', 'value'], ['sScale', 'renderScale', 'value', Number, pct], ['sUiScale', 'uiScale', 'value', Number, pct],
-    ['sVsync', 'vsync', 'checked'], ['sFpsCap', 'fpsCap', 'value', Number], ['sShowFps', 'showFps', 'checked'], ['sShowPing', 'showPing', 'checked'], ['sNetPredict', 'netPredict', 'checked'], ['sHiModels', 'hiModels', 'checked'],
+    ['sVsync', 'vsync', 'checked'], ['sFpsCap', 'fpsCap', 'value', Number], ['sThreads', 'cpuThreads', 'value', Number], ['sShowFps', 'showFps', 'checked'], ['sShowPing', 'showPing', 'checked'], ['sNetPredict', 'netPredict', 'checked'], ['sHiModels', 'hiModels', 'checked'],
     ['sRT', 'raytracing', 'value'], ['sUpscale', 'upscaler', 'value'],
   ];
   const GFX = new Set(['shadows', 'lighting', 'shadowQ', 'ao', 'bloom', 'reflections', 'aa', 'renderScale', 'raytracing', 'upscaler', 'hiModels']);
@@ -4351,8 +4274,8 @@ function bindUI() {
   $('pauseSettings').onclick = () => { settingsReturn = 'pause'; show('settings'); };
   $('leaveMatchBtn').onclick = () => leaveMatch();
   $('rematchBtn').onclick = () => { if (isHostSide()) startMatch(); };
-  $('extendBtn').onclick = () => { if (isHostSide() && S.game) S.game.extend(+$('extendN').value); };
-  $('retryBtn').onclick = () => { if (isHostSide() && S.game) S.game.retryRound(); };
+  $('extendBtn').onclick = () => { if (isHostSide() && S.game) S.game.cmd({ t: 'extend', n: +$('extendN').value }); };
+  $('retryBtn').onclick = () => { if (isHostSide() && S.game) S.game.cmd({ t: 'retry' }); };
   $('toLobbyBtn').onclick = () => { if (S && S.role === 'host') S.net.send({ t: 'toAll', msg: { k: 'toLobby' } }); endToLobby(); };
   $('overLeave').onclick = () => leaveSession();
   document.querySelectorAll('#legend [data-tier]').forEach(i => { i.style.background = ART.tierColors[+i.dataset.tier]; });
@@ -4452,7 +4375,6 @@ function frameBody(now) {
   // frame rate limit (Settings > Graphics): skip animation frames that come too soon
   const cap = +settings.fpsCap || 0;
   if (cap && now - last < 1000 / cap - 1) return;
-  if (S && S.game && S.game.settings) S.game.hostFps = document.hidden ? 0 : NR.frame.hz();   // (v1.2.25 shot budget)
   fpsTick(now - last); gfxTick(now - last); loadGuard(now - last, now); NR.frame.tick();
   const gap = now - last, j0 = performance.now();
   renderNetHud();

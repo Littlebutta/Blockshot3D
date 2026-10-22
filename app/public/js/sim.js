@@ -2,7 +2,7 @@
 import { RULES, DEFAULT_STATS, DEFAULT_LOBBY_SETTINGS, sizeFor, speedFor, UNITS, bulletGravityFor, ROUND_MODS } from './config.js';
 import { applyCard, finishStats, weightedOffer, VARIANT_CHANCE, variantBase } from './cards.js';
 import { generateLevel, spawnPoints, clearSpawns, mulberry32, edgeDistance, boundaryPoint } from './levelgen.js';
-import { tournOn, tournStart, tournCheck, tournAfter, tournRows, tournIntroInfo, TOURN } from './tourn.js';
+import { tournOn, tournStart, tournCheck, tournAfter, tournRows, tournIntroInfo, tournExtend, TOURN } from './tourn.js';
 import { BUDGET, budgetTick, budgetAllow, budgetAdd, budgetRoom, budgetRow } from './budget.js';
 import { prepareLevel, movePlayer, moveBody, accel, pointInSolid, rayExit, groundBelow, segBlocked, clampToArena, wallSegments, buildGrid, PA } from './physics.js';
 import { planWave, splitWave, unitSpec, spawnBoss, spawnAllyBoss, bossThink, portalThink, coopTick, bossDown, telegraphRows, shockRows, bossRow, gmBudget, coopDiff, UNIT_COSTS, UNIT_NAMES, isBossWave, addBlotch, CORE_TWISTS } from './coop.js';
@@ -1593,6 +1593,13 @@ export class Game {
   }
   step0(dt) {
     this.stepDt = dt; this.stepN++;
+    if (this.phase === 'countdown' && this.tourn && this.phaseT > (RULES.countdown || 3) + 0.2) {
+      // v1.2.29 (Devin): the tournament matchup screen holds the world still (no health drain, burns, regen, timers)
+      this.phaseT -= dt;
+      const humans = this.heroes().filter(p => p.connected && !p.isBot && !p.tko);
+      if (humans.length && humans.every(p => p.input.ready === this.round)) { this.phaseT = 3.2; this.emit({ t: 'tGo' }); }
+      return;
+    }
     if (this.phase === 'countdown') {
       this.phaseT -= dt; this.time += dt;
       const c = Math.ceil(this.phaseT);
@@ -1602,10 +1609,6 @@ export class Game {
       this.updateDynamics(dt); this.refreshSolids();
       if (this.ow) owTick(this, dt);
       if (this.settings.core) coreTick(this, dt);   // build phase: drops keep falling, you can carry and place
-      if (this.tourn && this.phaseT > 3.2) {   // v1.2.28 tournament matchup screen: ends early once every player is ready
-        const humans = this.heroes().filter(p => p.connected && !p.isBot && !p.tko);
-        if (humans.length && humans.every(p => p.input.ready === this.round)) { this.phaseT = 3.2; this.emit({ t: 'tGo' }); }
-      }
       if (this.settings.core && this.phaseT > 3.2) {   // v28: once every player is ready (Enter; again to unready) the wave comes early
         const humans = this.heroes().filter(p => p.connected && !p.isBot);
         for (const p of this.heroes()) p.coreReady = p.connected && (p.isBot || p.input.ready === this.round);
@@ -3514,13 +3517,13 @@ export class Game {
     if (keys.size <= 1) this.endRound(keys.size === 1 ? [...keys][0] : null);
   }
 
-  endRound(w) {
+  endRound(w, extra) {
     this.phase = 'roundEnd'; this.phaseT = 2.0; this.roundWinner = w; this.unitsOnlyT = null;
     if (w != null && w !== 'waves' && w in this.scores) this.scores[w]++;
     // v1.2.15 kill cam: a versus round that just ended on a kill waits for the replay (main.js kcStart)
     const lk = this.lastKill, kc = w != null && lk && this.time - lk.t < 1.2 && lk.k != null && lk.k !== lk.p && !this.isWaves() && !this.isSide() && !this.isOpen() && !this.isPractice() && !this.settings.commander ? { k: lk.k, p: lk.p, v: this.viewOf(lk.k) } : null;
     if (kc) this.phaseT += 3.2;
-    this.emit({ t: 'roundEnd', w, wave: this.isWaves() ? this.round : 0, kc });
+    this.emit({ t: 'roundEnd', w, wave: this.isWaves() ? this.round : 0, kc, ...extra });
   }
 
   tallyList() {
@@ -3633,6 +3636,7 @@ export class Game {
   }
   extend(extraRounds) {
     if (this.phase !== 'over') return false;
+    if (this.tourn) return tournExtend(this, extraRounds);   // v1.2.29: more lives for everyone
     if (this.isWaves()) {
       // Co-op: only after a win (the boss is down). More waves, a new boss on the last one, everything tougher.
       const won = this.winner === 'players';

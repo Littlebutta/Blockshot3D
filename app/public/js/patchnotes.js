@@ -1,6 +1,33 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.30', date: 'Oct 22', notes: {
+    Added: [
+      'Settings > Graphics > CPU threads: how many CPU threads the game may use. Auto (the default) uses every core your PC has; 1 runs everything on one thread like before.',
+    ],
+    Changed: [
+      'Multithreading: when you host (or play solo), the match itself now runs on its own CPU thread: the simulation, the bots\' thinking and the updates sent to everyone. Your main thread only draws, so the frame rate holds up much better in big matches (100 players: about 40% less work per frame on the drawing thread). Works in every mode except AMON and the RTS (those come later). Your own view of the match is about one frame behind your inputs when it\'s on; set CPU threads to 1 if you\'d rather not have that.',
+      'Network window (N / F2) shows whether the game thread is on and how long the match takes to come back.',
+    ],
+  } },
+  { v: '1.2.29', date: 'Oct 22', notes: {
+    Added: [
+      'Tournament: a Ready button on the matchup screen, next to the timer (Enter still works, now from any menu too).',
+    ],
+    Changed: [
+      'Wall and block textures keep the same size and shape everywhere instead of stretching to fit each wall, tops included.',
+      'Blocks of the same height that touch read as one shape: no colored outline along the seams between them.',
+      'Team tournaments: the whole team shares one loss count, and the team only loses a life when every player on it lost their arena.',
+      'Squid bullets have a flat drawn mouth that opens and chomps, matching the simple squid model.',
+    ],
+    Fixed: [
+      'Tournament: the end of each round no longer says "Draw"; it says whether you (or your team) won the round or lost a life.',
+      'Tournament: health drain, burns and other effects no longer tick during the matchup screen before the round.',
+      'Tournament: opening the pause menu during the matchup screen shows the menu instead of hiding it behind the matchup screen.',
+      'Tournament: the pick screen, pause menu and after-match screen show the red loss pips too.',
+      'Tournament: Keep playing works (everyone gets that many more lives, the knocked out come back).',
+    ],
+  } },
   { v: '1.2.28', date: 'Oct 21', notes: {
     Added: [
       'The GUI now scales itself to your screen resolution and aspect ratio (from 16:9 up to 32:9 ultrawide). The GUI scale slider in Settings works on top of that.',

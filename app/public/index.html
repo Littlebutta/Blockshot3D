@@ -359,6 +359,8 @@
     <label class="check"><input type="checkbox" id="sVsync"> V-sync</label>
     <label class="field">Frame rate limit
       <select id="sFpsCap"><option value="0">No limit</option><option value="30">30 FPS</option><option value="60">60 FPS</option><option value="120">120 FPS</option><option value="144">144 FPS</option><option value="240">240 FPS</option></select></label>
+    <label class="field">CPU threads
+      <select id="sThreads" title="How many CPU threads the game may use. Auto uses every core on this PC. RTS: the simulation runs on its own thread and unit pathing is spread over the rest, so big battles don't hitch the picture. 1 runs everything on one thread, as before. Takes effect at the next match"><option value="0">Auto</option><option value="1">1 (off)</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="6">6</option><option value="8">8</option><option value="12">12</option><option value="16">16</option></select></label>
     <label class="check"><input type="checkbox" id="sHiModels"> High model details (e.g. squid bullet tentacles)</label>
     <label class="check"><input type="checkbox" id="sShowFps"> Show FPS counter (top right)</label>
     <div class="row left"><button type="button" id="recheckGfxBtn" class="small">Re-check my graphics</button></div>

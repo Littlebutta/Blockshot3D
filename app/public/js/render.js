@@ -30,6 +30,21 @@ function amonShooterModel(id) {
   const gunPivot = new THREE.Group(), shield = buildShieldBubble(1.05); shield.visible = false; shield.position.y = 0.6; g.add(gunPivot, shield);
   return { root: g, tint, gunPivot, shield, hitMeshes: hit };
 }
+// v1.2.29 (Devin): box textures keep one shape everywhere instead of stretching to fit each face. Tops (and bottoms)
+// tile by position every `top` metres; sides tile along their length every `side` metres and keep their height
+// mapping (the height stripes) unless `sideV` is given. (ox, oy, oz) is where the box sits, so neighbours line up.
+function boxUV(geo, { top = 2, side = 2, sideV = 0, ox = 0, oy = 0, oz = 0 } = {}) {
+  const P = geo.attributes.position.array, N = geo.attributes.normal.array, U = geo.attributes.uv.array;
+  for (let i = 0; i < P.length / 3; i++) {
+    const x = P[i * 3] + ox, y = P[i * 3 + 1] + oy, z = P[i * 3 + 2] + oz, nx = N[i * 3], ny = N[i * 3 + 1], nz = N[i * 3 + 2];
+    if (Math.abs(ny) > 0.5) { U[i * 2] = x / top; U[i * 2 + 1] = -z / top; continue; }
+    const h = Math.abs(nx) > 0.5 ? -z * Math.sign(nx) : x * Math.sign(nz);   // (each side runs left to right, unmirrored)
+    U[i * 2] = h / side;
+    if (sideV) U[i * 2 + 1] = y / sideV;
+  }
+  geo.attributes.uv.needsUpdate = true;
+  return geo;
+}
 // v1.2.6: appends a geometry's faces, offset by (x, y, z), to per-material buckets (setLevel merges static blocks).
 function mergeInto(B, geo, mats, x, y, z, cast) {
   const P = geo.attributes.position.array, N = geo.attributes.normal.array, U = geo.attributes.uv.array, I = geo.index.array;
@@ -330,7 +345,7 @@ export class Renderer {
     if (theme.style) this.stylePattern(g, theme, top, rowOf); else this.standardDetail(g, top, rowOf);
     const tex = new THREE.CanvasTexture(c);
     tex.magFilter = theme.style ? THREE.LinearFilter : THREE.NearestFilter;
-    if (theme.style) { tex.wrapS = THREE.RepeatWrapping; tex.repeat.x = 2; }
+    tex.wrapS = THREE.RepeatWrapping; if (theme.style) tex.repeat.x = 2;   // (v1.2.29: tiles along the side, see boxUV)
     const m = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 });
     if (theme.style === 'neon') { m.emissiveMap = tex; m.emissive = new THREE.Color(0xffffff); m.emissiveIntensity = 0.75; }
     if (theme.style === 'volcano') { m.emissiveMap = tex; m.emissive = new THREE.Color(0xffffff); m.emissiveIntensity = 0.35; }
@@ -570,7 +585,7 @@ export class Renderer {
       g.fillStyle = 'rgba(255,255,255,.05)'; for (let k = 8; k < 64; k += 8) { g.fillRect(k, 0, 1, 64); g.fillRect(0, k, 64, 1); }
       g.strokeStyle = theme.glow[1]; g.lineWidth = 2; g.strokeRect(3, 3, 58, 58);
     }
-    const t = new THREE.CanvasTexture(c);
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping;   // (v1.2.29: tops tile by position, see boxUV)
     this.texCache.set(key, t);
     return t;
   }
@@ -588,13 +603,9 @@ export class Renderer {
     g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(0, 0, 64, 2);
     g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(0, 40, 64, 1);
     for (let i = 0; i < 220; i++) { g.fillStyle = rnd(i) > 0.5 ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.04)'; g.fillRect(rnd(i + 1) * 64, rnd(i + 2) * 64, 1, 1); }
-    const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.userData = { panel: true };
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.userData = { panel: true };
     this.texCache.set(key, t);
     return t;
-  }
-  wallMatFor(base, len) {
-    if (!base.map || !(base.map.userData && base.map.userData.panel)) return base;
-    const m = base.clone(); m.map = base.map.clone(); m.map.needsUpdate = true; m.map.repeat.x = Math.max(1, Math.round(len / 2)); m.map.userData = { perLevel: true }; return m;
   }
   // Soft dark contact shadow where blocks meet the floor (one shared texture, a flat quad per block; v1.2.6: all of a
   // level's quads are one instanced mesh per strength, walls 0.3 and blocks 0.42).
@@ -974,7 +985,22 @@ export class Renderer {
     const topLine = (b, inset = 1) => {
       const y = b.y0 + b.h + (st === 'tundra' ? 0.085 : 0.015), hw = b.w / 2 * inset, hd = b.d / 2 * inset, tier = this.tierOf(b.y0 + b.h);
       const x0 = b.x - hw, x1 = b.x + hw, z0 = b.z - hd, z1 = b.z + hd;
-      lines[tier].push(x0, y, z0, x1, y, z0, x1, y, z0, x1, y, z1, x1, y, z1, x0, y, z1, x0, y, z1, x0, y, z0);
+      if (inset !== 1) { lines[tier].push(x0, y, z0, x1, y, z0, x1, y, z0, x1, y, z1, x1, y, z1, x0, y, z1, x0, y, z1, x0, y, z0); return; }
+      // v1.2.29 (Devin): blocks of the same height that touch read as one shape: no outline along the seams between them
+      const top = b.y0 + b.h, E = 0.03, nb = level.boxes.filter(o => o !== b && !o.wall && !o.field && Math.abs(o.y0 + o.h - top) < E &&
+        o.x - o.w / 2 <= x1 + E && o.x + o.w / 2 >= x0 - E && o.z - o.d / 2 <= z1 + E && o.z + o.d / 2 >= z0 - E);
+      // along x at depth z (covered where a neighbour spans across z), then along z at x
+      const edge = (a0, a1, fixed, alongX, out) => {
+        let segs = [[a0, a1]];
+        for (const o of nb) {
+          const oa0 = alongX ? o.x - o.w / 2 : o.z - o.d / 2, oa1 = alongX ? o.x + o.w / 2 : o.z + o.d / 2;
+          const ob0 = alongX ? o.z - o.d / 2 : o.x - o.w / 2, ob1 = alongX ? o.z + o.d / 2 : o.x + o.w / 2;
+          if (!(ob0 < fixed + E && ob1 > fixed - E && (out < 0 ? ob0 < fixed - E : ob1 > fixed + E))) continue;   // (reaches past this edge, outward)
+          segs = segs.flatMap(([s0, s1]) => oa1 <= s0 || oa0 >= s1 ? [[s0, s1]] : [[s0, Math.max(s0, oa0)], [Math.min(s1, oa1), s1]].filter(([p, q]) => q - p > 0.02));
+        }
+        for (const [s0, s1] of segs) lines[tier].push(...(alongX ? [s0, y, fixed, s1, y, fixed] : [fixed, y, s0, fixed, y, s1]));
+      };
+      edge(x0, x1, z0, true, -1); edge(x0, x1, z1, true, 1); edge(z0, z1, x0, false, -1); edge(z0, z1, x1, false, 1);
     };
     this.forestLogs = [];
     for (const b of level.boxes) {
@@ -986,7 +1012,7 @@ export class Renderer {
       if (b.wall) {
         if (level.poly) continue;   // polygon arenas draw their own angled walls (addPolyShell)
         const near = b.z > level.hz, h = st === 'forest' ? 0.9 : b.h;
-        mesh = new THREE.Mesh(new THREE.BoxGeometry(b.w, h, b.d), this.wallMatFor(wallMat, Math.max(b.w, b.d)));
+        mesh = new THREE.Mesh(boxUV(new THREE.BoxGeometry(b.w, h, b.d), { ox: b.x, oz: b.z }), wallMat);   // (v1.2.29: world-space tiling, no per-wall stretch)
         mesh.position.set(b.x, h / 2, b.z); mesh.castShadow = mesh.receiveShadow = true;
         if (!level.lava) contacts.push([b.x, b.z, b.w * (b.w > b.d ? 1 : 0.3), b.d * (b.d > b.w ? 1 : 0.3), 0.3]);
         G.add(mesh); this.aimables.push(mesh);
@@ -1011,7 +1037,7 @@ export class Renderer {
       const side = this.bandMaterial(theme, b.h, b.y0);
       if (!side.userData.base) side.userData.base = side.color.clone();
       if (!this.slopMats.includes(side)) this.slopMats.push(side);
-      mesh = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d), [side, side, topMats[tier], bottom, side, side]);
+      mesh = new THREE.Mesh(boxUV(new THREE.BoxGeometry(b.w, b.h, b.d), { ox: b.x, oy: b.y0 + b.h / 2, oz: b.z }), [side, side, topMats[tier], bottom, side, side]);
       topLine(b);
       if (st === 'tundra')   // a soft snow cap that hangs over the edges a touch
         mergeInto(merged, new THREE.BoxGeometry(b.w + 0.08, 0.07, b.d + 0.08), this.snowCapMat ||= new THREE.MeshStandardMaterial({ color: 0xf5f9fd, roughness: 0.9 }), b.x, top + 0.03, b.z, false);
@@ -1068,7 +1094,7 @@ export class Renderer {
     shelf.rotation.x = -Math.PI / 2; shelf.receiveShadow = true; G.add(shelf); this.aimables.push(shelf);
     for (const e of level.edges) {
       const h = this.edgeWallH(level, theme, e), len = e.len + 0.5;
-      const w = new THREE.Mesh(new THREE.BoxGeometry(len, h, 0.5), this.wallMatFor(wallMat, len));
+      const w = new THREE.Mesh(boxUV(new THREE.BoxGeometry(len, h, 0.5)), wallMat);   // (v1.2.29: tiles every 2 m, top included)
       w.position.set((e.ax + e.bx) / 2 - e.nx * 0.25, h / 2, (e.az + e.bz) / 2 - e.nz * 0.25);
       w.rotation.y = -Math.atan2(e.bz - e.az, e.bx - e.ax);
       w.castShadow = w.receiveShadow = true; G.add(w); this.aimables.push(w);
@@ -1083,7 +1109,7 @@ export class Renderer {
       let mesh;
       if (d.kind === 'piston') {
         // v26: a full-height pillar that slides up out of the floor and back down into it (no squashed texture)
-        const H = d.hMax || d.h || 1, geo = new THREE.BoxGeometry(d.w, H, d.d); geo.translate(0, -H / 2, 0);
+        const H = d.hMax || d.h || 1, geo = boxUV(new THREE.BoxGeometry(d.w, H, d.d)); geo.translate(0, -H / 2, 0);
         const sideM = this.bandMaterial(theme, H, 0);
         mesh = new THREE.Mesh(geo, [sideM, sideM, new THREE.MeshStandardMaterial({ color: 0xffd166, roughness: 0.5 }), topMats[0], sideM, sideM]);
       } else if (d.kind === 'crusher') {   // v1.2.15: a steel slab with a hazard band that slams down (origin on its bottom face)
@@ -2845,28 +2871,40 @@ export class Renderer {
 
   // v1.2.16 bee bullet: two dark stripes, a stinger and a pair of pale wings (shared geometry and materials: bees come in swarms)
   // v1.2.22 (Devin): a little mouth at the front of each squid; it snaps open and shut while latched on (chomping),
-  // and slowly opens and closes as it swims
-  squidMouth(m, latched) {
-    let g = m.userData.mouth;
-    if (!g) {
-      const K = this.mouthKit || (this.mouthKit = (() => {
-        const jaw = new THREE.SphereGeometry(0.5, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2);
-        const tooth = new THREE.ConeGeometry(0.09, 0.22, 4);
-        return { jaw, tooth, jm: new THREE.MeshBasicMaterial({ color: '#3a0d2e' }), tm: new THREE.MeshBasicMaterial({ color: '#ffffff' }) };
-      })());
-      g = m.userData.mouth = new THREE.Group(); g.position.set(0, 0, 0.82);
-      const mk = up => {
-        const piv = new THREE.Group(), j = new THREE.Mesh(K.jaw, K.jm);
-        j.scale.set(0.9, 0.35, 0.7); j.rotation.x = up ? 0 : Math.PI; j.position.z = 0.2; piv.add(j);
-        for (let i = -1; i <= 1; i++) { const t = new THREE.Mesh(K.tooth, K.tm); t.position.set(i * 0.22, up ? -0.02 : 0.02, 0.45); t.rotation.x = up ? Math.PI : 0; piv.add(t); }
-        g.add(piv); return piv;
-      };
-      g.userData.up = mk(true); g.userData.dn = mk(false);
-      m.add(g);
+  // and slowly opens and closes as it swims. v1.2.29 (Devin): drawn as a flat cartoon texture on the body (a patch of
+  // the sphere just over its front), flipping through a few drawn frames, to match the simple squid model.
+  squidMouthKit() {
+    if (this.mouthKit) return this.mouthKit;
+    const N = 6, mats = [];
+    for (let f = 0; f < N; f++) {
+      const k = f / (N - 1), c = document.createElement('canvas'); c.width = 128; c.height = 96;
+      const g = c.getContext('2d'), cx = 64, cy = 50, w = 40, h = 4 + k * 30;
+      g.lineCap = g.lineJoin = 'round';
+      if (k < 0.05) {   // shut: a little smile
+        g.strokeStyle = '#2a0a22'; g.lineWidth = 7; g.beginPath(); g.moveTo(cx - w, cy - 6); g.quadraticCurveTo(cx, cy + 12, cx + w, cy - 6); g.stroke();
+      } else {
+        g.fillStyle = '#2a0a22'; g.beginPath(); g.ellipse(cx, cy, w, h, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#ff6a8a'; g.beginPath(); g.ellipse(cx, cy + h * 0.55, w * 0.55, h * 0.35, 0, 0, Math.PI * 2); g.fill();   // tongue
+        g.fillStyle = '#ffffff';
+        for (const [sx, dir] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) {   // two fangs up top, two below
+          const tx = cx + sx * w * 0.42, ty = cy - dir * h * 0.92, tl = Math.min(14, 4 + h * 0.45);
+          g.beginPath(); g.moveTo(tx - 6, ty); g.lineTo(tx + 6, ty); g.lineTo(tx, ty + dir * tl); g.closePath(); g.fill();
+        }
+        g.strokeStyle = '#2a0a22'; g.lineWidth = 4; g.beginPath(); g.ellipse(cx, cy, w, h, 0, 0, Math.PI * 2); g.stroke();
+      }
+      const tex = new THREE.CanvasTexture(c);
+      mats.push(new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
     }
+    const geo = new THREE.SphereGeometry(1.02, 10, 6, Math.PI / 2 - 0.62, 1.24, Math.PI / 2 - 0.42, 0.84);   // (front of the body, +z)
+    return (this.mouthKit = { mats, geo, N });
+  }
+  squidMouth(m, latched) {
+    const K = this.squidMouthKit();
+    let g = m.userData.mouth;
+    if (!g) { g = m.userData.mouth = new THREE.Mesh(K.geo, K.mats[0]); g.renderOrder = 1; m.add(g); }
     const t = performance.now() / 1000;
-    const open = latched ? Math.max(0, Math.sin(t * 13)) * 0.75 : 0.12 + 0.12 * Math.sin(t * 3);
-    g.userData.up.rotation.x = -open; g.userData.dn.rotation.x = open;
+    const open = latched ? Math.max(0, Math.sin(t * 13)) : 0.25 + 0.25 * Math.sin(t * 3);
+    g.material = K.mats[Math.min(K.N - 1, Math.round(open * (K.N - 1)))];
   }
   beeParts(m, age) {
     let p = m.userData.bee;

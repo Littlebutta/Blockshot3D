@@ -2046,6 +2046,24 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
     if (teams) check('tournament teams: an ally trade swaps the offered card for one from the ally\'s hand', traded === true, traded);
     const rows = T.tournRows(tg); check(`${name}: the snapshot carries lives and arenas`, rows && rows.p.length === 6 && rows.L === 2);
   }
+  {   // v1.2.29: tournament round ends name winners/losers (no more "Draw"), teams share one loss count, the matchup
+      // screen holds the world still, and "Keep playing" adds lives
+    const tg = new Game({ roster: roster(4).map((r, i) => ({ ...r, team: i % 2 })), settings: { mode: 'tourn', tTeams: true, tLives: 3, pickTime: 1, startPick: false }, cards }); tg.start();
+    const h = tg.heroes()[0]; h.stats.drain = 0.5; const hp0 = h.hp, t0 = tg.time;
+    for (let i = 0; i < 60 * 5; i++) { tg.step(1 / 60); tg.takeEvents(); }
+    check('tournament 1.2.29: the matchup screen freezes the world (no health drain, clock still)', tg.phase === 'countdown' && h.hp === hp0 && tg.time === t0, `${tg.phase} ${hp0}->${h.hp} ${t0}->${tg.time}`);
+    h.stats.drain = 0;
+    let ends = 0, named = 0, shared = true;
+    for (let i = 0; i < 60 * 60 * 10 && tg.phase !== 'over'; i++) {
+      tg.step(1 / 60);
+      for (const e of tg.takeEvents()) if (e.t === 'roundEnd') { ends++; if (Array.isArray(e.tw) && Array.isArray(e.tl)) named++; }
+      for (const k of ['t0', 't1']) { const L = new Set(tg.heroes().filter(p => tg.scoreKey(p) === k).map(p => p.tLives)); if (L.size > 1) shared = false; }
+    }
+    check('tournament 1.2.29: every round end names who won and who lost a life', ends >= 1 && named === ends, `${named}/${ends}`);
+    check('tournament 1.2.29 teams: everyone on a team has the same loss count', shared && tg.phase === 'over');
+    const L0 = T.livesOf(tg); tg.extend(2); tg.takeEvents();
+    check('tournament 1.2.29: Keep playing gives everyone 2 more lives and starts a round', tg.phase !== 'over' && T.livesOf(tg) === L0 + 2 && tg.heroes().every(p => !p.tko && p.tLives >= 2), `${tg.phase} ${T.livesOf(tg)}`);
+  }
   for (const k of ['pods', 'hive', 'bowtie']) { const L = LG.generateLevel(12, k, 11, 'standard', 12); check(`map shape ${k}: built and spawns are open ground`, L.shape === k && LG.spawnPoints(L, Array(12).fill(1)).flat().every(p => L.insideFn(p.x, p.z, 1))); }
 }
 {   // v1.2.27 RTS mode (rts.js, rtsmap.js, rtsdata.js, rtsai.js)
@@ -2088,6 +2106,42 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
     check('rts unit budget: near the cap, training is held', held === true);
     g.setConnected('p0', false); check('rts: a player who leaves is replaced by a bot', p.isBot && g.bots.has('p0'));
     check('rts: they get their base back on return', g.rebind('p0', 'p0b') && !g.player('p0b').isBot && g.units.some(u => u.owner === 'p0b'));
+  }
+}
+{ // v1.2.30: the host's match on its own thread (hostsim.js): every shooter mode runs through it, what it sends the page can be
+  // copied to another thread (structuredClone, as postMessage does), joiners get snapshots and their inputs move them, leavers' builds come back
+  // (Core's prep and the tournament's matchup screen outlast 12 s, so the movement check skips them; Brawl/practice have no joiner here)
+  const { HostSim } = await J('hostsim.js'); const T = await J('threads.js');
+  check('threads: 1 thread without workers (node), the setting picks a count', T.threadCount(0) === 1 && T.coreCount() >= 1);
+  check('threads: cards can go to another thread', (() => { try { structuredClone(cards); return true; } catch { return false; } })());
+  for (const [label, n, st] of [['ffa', 4, {}], ['tdm', 6, { mode: 'tdm' }], ['waves', 3, { mode: 'waves' }], ['core', 3, { mode: 'core' }], ['brawl', 4, { mode: 'ffa', brawl: true, side: true }], ['2d', 4, { side: true }], ['open', 4, { mode: 'open' }], ['tourn', 4, { mode: 'tourn' }], ['practice', 1, { mode: 'practice' }]]) {
+    const r = roster(n, { teams: st.mode === 'tdm' ? 2 : 0 }).map((x, i) => ({ ...x, isBot: i > 1 }));
+    if (label === 'practice') r.push({ id: 'd1', name: 'Dummy', team: 1, isBot: true, dummy: true, difficulty: 'normal', color: '#c9ced8', kind: 'hero' });
+    const out = { frame: 0, snap: 0, ui: 0, level: 0 }; let bad = null, x0 = null;
+    const hs = new HostSim({ roster: r, settings: { pickTime: 1, roundsToWin: 99, ...st }, cards, localId: 'p0', host: true }, (k, v) => {
+      if (k === 'ui' && v.k === 'offer') { out.ui++; hs.cmd({ t: 'pick', from: 'p0', card: v.offer[0] }); }
+      if (k === 'net' && v.msg && v.msg.k === 'offer') hs.cmd({ t: 'pick', from: v.id, card: v.msg.offer[0] });
+      if (k === 'net' && v.msg && v.msg.k === 'snap') out.snap++;
+      if (k === 'frame') { out.frame++; if (v.level) out.level++; if (out.frame % 30 === 0) try { structuredClone(v); } catch (e) { bad = e.message; } }
+    });
+    hs.start();
+    let t = 1000, err = null;
+    try {
+      for (let i = 0; i < 60 * 12; i++) {
+        t += 1000 / 60;
+        const p1 = hs.g.player('p1'); if (hs.g.phase === 'play' && p1 && p1.alive) { if (x0 == null) x0 = [p1.pos.x, p1.pos.x]; x0[0] = Math.min(x0[0], p1.pos.x); x0[1] = Math.max(x0[1], p1.pos.x); }
+        hs.cmd({ t: 'input', from: 'p1', i: { q: i + 1, mx: (i / 60 | 0) % 2 ? 1 : -1, mz: (i / 90 | 0) % 2 ? 1 : -1, t: t - 40 }, now: t });   // (back and forth: not just into a wall)
+        hs.cmd({ t: 'frame', dt: 1 / 60, ts: 1, paused: false, t0: t, hostFps: 60, peers: [['p1', 80]], pz: [] });
+      }
+    } catch (e) { err = e; console.log(e.stack); }
+    const p1 = hs.g.player('p1');
+    check('game thread ' + label + ': runs, draws a level, sends snapshots, copies cleanly', !err && !bad && out.level >= 1 && out.frame === 720 && out.snap > 200, JSON.stringify({ ...out, bad, phase: hs.g.phase }));
+    if (!['practice', 'brawl', 'core', 'tourn'].includes(label)) check('game thread ' + label + ': a joiner\'s input moves them', x0 != null && x0[1] - x0[0] > 0.5, String(x0));
+    if (label === 'ffa') {
+      let dep = null; hs.emit = (k, v) => { if (k === 'departed') dep = v; };
+      hs.cmd({ t: 'leave', id: 'p1', token: 'tok1' });
+      check('game thread: a leaver\'s build is kept for their return', dep && dep.token === 'tok1' && Array.isArray(dep.rec.cards) && dep.rec.cards.length >= 1, JSON.stringify(dep));
+    }
   }
 }
 console.log(`baseline: ${passes} passed, ${fails} failed, ${(Date.now() - t0) / 1000}s`);
