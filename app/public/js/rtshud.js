@@ -4,7 +4,7 @@
 // alerts, tooltips, the drawn cursor used while the mouse is locked (fullscreen), and the end screen.
 // Every button works with the real cursor and with the locked (drawn) one: clicks go through press().
 // =====================================================================
-import { RTS, UNITS, BUILDINGS, UNIT_IDS, BUILD_MENU, ABILITIES, GRID_KEYS, TRAIN_KEYS, BUILD_KEYS, researchCards, upLines, sumUps, pullCost, FACTION } from './rtsdata.js';
+import { RTS, UNITS, BUILDINGS, UNIT_IDS, BUILD_MENU, ABILITIES, GRID_KEYS, TRAIN_KEYS, BUILD_KEYS, researchCards, upLines, sumUps, pullCost, FACTION, cardCap } from './rtsdata.js';
 import { CELL } from './rtsmap.js';
 import { thumbOf } from './rtsart.js';
 import { RARITY } from './config.js';
@@ -15,7 +15,7 @@ const keyL = code => code ? code.replace(/^Key/, '').replace(/^Digit/, '') : '';
 const fmtT = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const rarC = r => (RARITY[r] && RARITY[r].color) || (r === 'combo' ? '#ffd166' : '#9aa5bd');
 const MM = 220;   // minimap size (css px)
-const ERR_KINDS = new Set(['noC', 'noF', 'supply', 'tech', 'qfull', 'place', 'cd', 'nob', 'hand', 'held']);
+const ERR_KINDS = new Set(['noC', 'noF', 'supply', 'tech', 'qfull', 'place', 'cd', 'nob', 'hand', 'held', 'full']);
 const HIT_KINDS = new Set(['baseHit', 'armyHit', 'derLost']);
 
 const CSS = `
@@ -489,9 +489,9 @@ export class HUD {
     cv.width = cv.height = Math.round(MM * dpr); this.mmS = cv.width;
     const base = document.createElement('canvas'); base.width = base.height = N;
     const g = base.getContext('2d'), img = g.createImageData(N, N);
-    const pal = [[74, 102, 58], [104, 124, 70], [138, 140, 96], [52, 52, 46]];
+    const pal = [[74, 102, 58], [98, 120, 66], [126, 136, 84], [156, 152, 112], [52, 52, 46]];   // (v1.2.28: four heights + the mountains)
     for (let k = 0; k < N * N; k++) {
-      const L = Math.max(0, Math.min(3, M.lv[k])); let [r, gg, b] = pal[L];
+      const L = Math.max(0, Math.min(4, M.lv[k])); let [r, gg, b] = pal[L];
       if (M.ramp[k]) { r = 150; gg = 136; b = 100; }
       else if (!M.walk[k]) { r *= 0.6; gg *= 0.6; b *= 0.6; }
       const n = ((k * 2654435761) >>> 24) / 255 * 10 - 5;
@@ -583,15 +583,15 @@ export class HUD {
     const key = JSON.stringify([off, co.offN, hand, ups, this.cardSel, selType, co.pulls]);
     if (key === this.cardKey) return; this.cardKey = key;
     const col = c.me() ? c.me().color : '#5aa0ff';
-    let h = `<h3><span>📚 Research <small style="opacity:.6;font-weight:400">· every card works on every unit type</small></span><button class="rb" data-a="cClose">✕ Close (Esc)</button></h3>`;
+    let h = `<h3><span>📚 Research <small style="opacity:.6;font-weight:400">· every card works on every unit type · up to ${RTS.pull.perUnit} cards per unit (Riggers: any number) · click ✕ on a fitted card to take it back</small></span><button class="rb" data-a="cClose">✕ Close (Esc)</button></h3>`;
     this.acts.set('cClose', () => this.openCards(false));
     const fitRow = (onFit, keep) => {
       let r = `<div class="fit"><span>Fit to:</span>`;
       for (const u of UNIT_IDS) {
-        const n = (ups[u] || []).length;
-        r += `<button class="rb ${u === selType ? 'hl' : ''}" data-a="fit_${u}" data-tip="fit_${u}"><img src="${thumbOf(u, col)}">${esc(UNITS[u].name)}${n ? ` <small>${n}</small>` : ''}</button>`;
-        this.acts.set('fit_' + u, () => onFit(u));
-        this.tipFor['fit_' + u] = () => ({ t: UNITS[u].name, d: `${UNITS[u].role}. ${n ? `${n} card${n > 1 ? 's' : ''} fitted already.` : 'No cards fitted yet.'}` });
+        const n = (ups[u] || []).length, cap = cardCap(u), full = n >= cap;   // (v1.2.28: 4 cards per unit type)
+        r += `<button class="rb ${u === selType ? 'hl' : ''}${full ? ' off' : ''}" data-a="fit_${u}" data-tip="fit_${u}"${full ? ' style="opacity:.45"' : ''}><img src="${thumbOf(u, col)}">${esc(UNITS[u].name)} <small>${cap === Infinity ? (n || '') : `${n}/${cap}`}</small></button>`;
+        this.acts.set('fit_' + u, () => { if (full) { this.c.sfx && this.c.sfx('ui', 0.4); this.note(`${UNITS[u].name}s already have ${cap} cards. Take one off below first.`, 'err'); return; } onFit(u); });
+        this.tipFor['fit_' + u] = () => ({ t: UNITS[u].name, d: `${UNITS[u].role}. ${n ? `${n} card${n > 1 ? 's' : ''} fitted` : 'No cards fitted yet'}${cap === Infinity ? ' (workers take any number).' : ` of ${cap}.${full ? ' Full: take one off below to fit another.' : ''}`}` });
       }
       if (keep) { r += `<button class="rb" data-a="keep">✋ Keep in hand</button>`; this.acts.set('keep', keep); }
       return r + `</div>`;
@@ -618,8 +618,9 @@ export class HUD {
     const typed = UNIT_IDS.filter(u => (ups[u] || []).length);
     if (!typed.length) h += `<div class="none">No upgrades yet.</div>`;
     for (const u of typed) {
-      const ids = ups[u], S = sumUps(ids.map(id => (this.cardById.get(id) || {}).up));
-      h += `<div class="upr"><img src="${thumbOf(u, col)}"><div><b>${esc(UNITS[u].name)}</b><div class="cs">${ids.map(id => { const cd = this.cardById.get(id); return cd ? `<span style="border-color:${rarC(cd.rarity)};color:${rarC(cd.rarity)}">${esc(cd.name)}</span>` : ''; }).join('')}</div><div class="ls">${upLines(S).map(l => esc(l.text)).join(' · ')}</div></div></div>`;
+      const ids = ups[u], S = sumUps(ids.map(id => (this.cardById.get(id) || {}).up)), cap = cardCap(u);
+      // v1.2.28: ✕ takes a card off (back to your hand), so upgrades can be moved to another unit type
+      h += `<div class="upr"><img src="${thumbOf(u, col)}"><div><b>${esc(UNITS[u].name)}</b> <small style="opacity:.6">${cap === Infinity ? ids.length : `${ids.length}/${cap}`}</small><div class="cs">${ids.map((id, i) => { const cd = this.cardById.get(id); if (!cd) return ''; this.acts.set(`un_${u}_${i}`, () => c.act({ t: 'unfit', c: id, u })); return `<span style="border-color:${rarC(cd.rarity)};color:${rarC(cd.rarity)}">${esc(cd.name)} <button class="rb x" data-a="un_${u}_${i}" title="Take this card off (back to your hand)" style="padding:0 4px;min-width:0;font-size:11px">✕</button></span>`; }).join('')}</div><div class="ls">${upLines(S).map(l => esc(l.text)).join(' · ')}</div></div></div>`;
     }
     this.$('rtsCards').innerHTML = h;
   }

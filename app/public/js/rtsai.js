@@ -4,7 +4,7 @@
 // A bot keeps its Riggers mining, builds depots before it gets supply blocked, follows a loose build order,
 // expands, pulls research cards, keeps its buildings training a mixed army and attacks in waves that grow.
 // =====================================================================
-import { RTS, UNITS, BUILDINGS } from './rtsdata.js';
+import { RTS, UNITS, BUILDINGS, pullCost } from './rtsdata.js';
 
 const LEVELS = {
   easy:   { think: 2.2, workers: 14, waveAt: 22, waveGrow: 6, expandAt: 420, maxBarracks: 1, pulls: 1, micro: false },
@@ -86,16 +86,16 @@ class RtsBot {
     }
     // expand to the natural (and later more bases)
     if (g.time > L.expandAt * (1 + this.expanded * 1.2) && p.crystal >= 400 && !building('hub') && this.expanded < 3) this.expand();
+    // research cards (before the army, so training doesn't eat every crystal: v1.2.28)
+    const arch = this.myB('archive', true)[0];
+    if (arch && !arch.queue.length && (p.pulls < L.pulls * (1 + Math.floor(g.time / 400)) || p.flux > 600) && p.crystal >= pullCost(p.pulls)[0] && p.flux >= pullCost(p.pulls)[1]) this.act({ t: 'pull', ids: [arch.id] });
+    for (const c of p.hand.slice()) this.act({ t: 'fit', c, u: this.bestType() });
     // 5) army production
     for (const b of this.myB(null, true)) {
       if (!b.def.trains || b.type === 'hub' || b.queue.length >= 2) continue;
       const pick = this.armyPick(b);
       if (pick) this.act({ t: 'train', b: b.id, u: pick });
     }
-    // research cards
-    const arch = this.myB('archive', true)[0];
-    if (arch && !arch.queue.length && (p.pulls < L.pulls * (1 + Math.floor(g.time / 400)) || p.flux > 600) && p.crystal > 200 && p.flux > 125) this.act({ t: 'pull', ids: [arch.id] });
-    for (const c of p.hand.slice()) this.act({ t: 'fit', c, u: this.bestType() });
     // rally new units to the front of the base
     const rally = this.rallyPoint(home);
     for (const b of this.myB(null, true)) if (b.def.trains && b.type !== 'hub' && (!b.rally || Math.hypot(b.rally.x - rally.x, b.rally.z - rally.z) > 4)) this.act({ t: 'cmd', ids: [b.id], o: { k: 'rally', x: rally.x, z: rally.z } });
@@ -158,9 +158,10 @@ class RtsBot {
     let r = g.rnd() * tot; for (const t of opts) { r -= w[t] || 0; if (r <= 0) return t; }
     return opts[0];
   }
-  bestType() {
+  bestType() {   // (v1.2.28: only unit types with room for another card; Riggers take any number)
     const cnt = {}; for (const u of this.g.units) if (u.owner === this.p.id && !u.def.worker) cnt[u.type] = (cnt[u.type] || 0) + u.def.supply;
-    return Object.entries(cnt).sort((a, b) => b[1] - a[1]).map(x => x[0])[0] || 'trooper';
+    const ok = t => this.g.roomFor(this.p, t, true);
+    return Object.entries(cnt).sort((a, b) => b[1] - a[1]).map(x => x[0]).find(ok) || ['trooper', 'lancer', 'medic'].find(ok) || 'rigger';
   }
   pickCard() {
     const off = this.p.offers[0]; if (!off) return;

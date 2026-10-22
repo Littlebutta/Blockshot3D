@@ -7,11 +7,14 @@
 export const TOURN = {
   lives: 4,          // default losses before you're out (lobby: 1-10)
   quiet: 10,         // an arena where nobody has dealt damage for this long (only units left) is a draw
+  intro: 15,         // v1.2.28: seconds of matchup screen (opponent's model + cards) before each round's 3-2-1
 };
+// v1.2.28: what the 'round' event carries for the matchup screen
+export const tournIntroInfo = g => tournOn(g) && g.tArenas ? { ti: TOURN.intro, tA: g.tArenas.map(A => A.ids) } : null;
 
 export const tournOn = g => !!g && g.settings.mode === 'tourn';
 export const tournTeams = g => tournOn(g) && !!g.settings.tTeams;
-export const livesOf = g => Math.max(1, Math.min(10, Math.round(g.settings.tLives || TOURN.lives)));
+export const livesOf = g => Math.max(1, Math.min(99, Math.round(g.settings.tLives || TOURN.lives)));   // (v1.2.29: up to 99 after extensions)
 
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const pairKey = (a, b) => a.id < b.id ? a.id + '|' + b.id : b.id + '|' + a.id;
@@ -102,7 +105,27 @@ export function tournCheck(g) {
     g.emit({ t: 'tArena', a: i, w, left: g.tArenas.filter(x => !x.done).length });
     if (tournTeams(g) && w != null) for (const p of ps) helpAlly(g, p, i);
   });
-  if (!fighting && g.tArenas.every(A => A.done)) g.endRound(null);
+  if (!fighting && g.tArenas.every(A => A.done)) {
+    // v1.2.29 (Devin): the round end says who won and who lost a life (it used to read "Draw" every time)
+    const o = tournOutcome(g);
+    g.endRound(null, { tw: [...o.won], tl: [...o.lost] });
+  }
+}
+// v1.2.29: who won and who lost this round, by score key (a player, or a team with teams on). A side loses only when
+// every arena it fought in was won by someone else (teams: every player on it lost); a drawn arena costs nobody.
+export function tournOutcome(g) {
+  const won = new Set(), fought = new Map();
+  for (const A of g.tArenas || []) {
+    if (A.winner != null) won.add(A.winner);
+    for (const id of A.ids) {
+      const p = g.player(id); if (!p) continue;
+      const k = g.scoreKey(p), f = fought.get(k) || { all: true };
+      if (A.winner == null || A.winner === k) f.all = false;
+      fought.set(k, f);
+    }
+  }
+  const lost = new Set([...fought].filter(([k, f]) => f.all && !won.has(k)).map(([k]) => k));
+  return { won, lost };
 }
 
 // Teams: the winners of an arena go to help an ally (a teammate) whose arena is still fighting.
@@ -126,17 +149,21 @@ function helpAlly(g, p, from) {
 }
 
 // After the round: losers lose a life (a draw costs nobody one), the knocked out leave, losers pick a card.
+// v1.2.29 teams: a team shares one loss count; it only loses a life when every player on it lost their arena.
 export function tournAfter(g) {
-  const losers = [];
-  for (const A of g.tArenas || []) {
-    if (A.winner == null) continue;
-    for (const id of A.ids) {
-      const p = g.player(id);
-      if (!p || g.scoreKey(p) === A.winner) continue;
-      p.tLives = Math.max(0, (p.tLives ?? livesOf(g)) - 1);
-      if (p.tLives <= 0 && !p.tko) { p.tko = true; g.emit({ t: 'tKO', p: p.id }); }
-      else losers.push(p);
+  const { lost } = tournOutcome(g), losers = [];
+  for (const k of lost) {
+    const ps = g.players.filter(p => p.kind === 'hero' && !p.tko && g.scoreKey(p) === k);
+    const left = Math.max(0, Math.min(...ps.map(p => p.tLives ?? livesOf(g))) - 1);
+    for (const p of ps) {
+      p.tLives = left;
+      if (left <= 0) { p.tko = true; g.emit({ t: 'tKO', p: p.id }); }
     }
+  }
+  // the players who lost their own arena pick a card (teams too, even when an ally saved the team's life)
+  for (const A of g.tArenas || []) if (A.winner != null) for (const id of A.ids) {
+    const p = g.player(id);
+    if (p && !p.tko && g.scoreKey(p) !== A.winner && !losers.includes(p)) losers.push(p);
   }
   const inPlay = g.heroes().filter(p => p.connected && !p.tko), keys = new Set(inPlay.map(p => g.scoreKey(p)));
   if (keys.size <= 1) {
@@ -147,6 +174,17 @@ export function tournAfter(g) {
   }
   if (!losers.length) { g.startRound(); return; }
   g.offerCards(losers.filter(p => p.connected));
+}
+
+// v1.2.29 (Devin): "Keep playing" after a tournament: everyone gets that many more losses, the knocked out come back.
+export function tournExtend(g, extra) {
+  extra = Math.max(1, extra | 0);
+  g.settings.tLives = livesOf(g) + extra;
+  for (const p of g.players) if (p.kind === 'hero') { p.tLives = (p.tLives ?? 0) + extra; p.tko = false; }
+  g.winner = null;
+  g.emit({ t: 'extend', goal: livesOf(g), tourn: 1, add: extra });
+  g.startRound();
+  return true;
 }
 
 // Snapshot row: [id, arena, lives, knocked out] for every player, the arenas still fighting, done flags per arena, teams on

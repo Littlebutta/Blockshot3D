@@ -8,7 +8,7 @@
 export const BUDGET = {
   fpsTarget: 30, fpsGood: 36,             // frame rate (host, or the slowest player that reports one) to hold / that counts as smooth
   msSlow: 22, msGood: 12,                 // host sim step (ms) that counts as too slow / comfortable
-  capMin: 60, perHead: 3,                 // a cap never goes below either of these (shots, shots per player)
+  capMin: 40, perHead: 1.5,               // a cap never goes below either of these (shots, shots per player; v1.2.28: was 60 and 3, which kept 300 shots at 100 players)
   every: 0.5, down: 0.88, up: 1.08,       // how often and how hard the cap moves
   release: 6,                             // seconds of smooth play with room to spare before the cap is dropped again
   press: 0.75,                            // above this share of the cap, per-player limits start
