@@ -10,8 +10,9 @@ export const BUDGET = {
   msSlow: 22, msGood: 12,                 // host sim step (ms) that counts as too slow / comfortable
   capMin: 40, perHead: 1.5,               // a cap never goes below either of these (shots, shots per player; v1.2.28: was 60 and 3, which kept 300 shots at 100 players)
   every: 0.25, down: 0.88, up: 1.06,      // how often and how hard the cap moves (v1.2.31: twice as often; under 30 fps
-                                          // it drops in step with the frame rate: at 15 fps to about half at once)
-  downMin: 0.4,                           // the most one step can take off
+                                          // it drops in step with the frame rate)
+  downMin: 0.6,                           // the most one step can take off (v1.2.32: was 0.4)
+  slowFor: 2, panicFps: 20,               // v1.2.32: slow two checks in a row (half a second) before it cuts, unless under panicFps
   release: 6,                             // seconds of smooth play with room to spare before the cap is dropped again
   press: 0.75,                            // above this share of the cap, per-player limits start
   minShare: 3,                            // nobody is ever limited below this many shots
@@ -45,10 +46,11 @@ export function budgetTick(g, dt, stepMs) {
     let heads = 0; for (const p of g.players) if (p.kind === 'hero' && p.alive) heads++;
     const floor = Math.max(BUDGET.capMin, BUDGET.perHead * heads);
     // v1.2.31 (Devin: frames dropped to 0 before the budget caught up): the cut matches how slow it is
-    const k = fps > 0 && fps < BUDGET.fpsTarget ? Math.max(BUDGET.downMin, Math.min(BUDGET.down, fps / BUDGET.fpsTarget * 0.9)) : BUDGET.down;
-    B.slow = slow;
-    if (slow) { B.goodT = 0; B.cap = Math.max(floor, Math.floor(Math.min(B.cap, Math.max(B.total, floor)) * k)); }
-    else if (good && B.cap !== Infinity) {
+    const k = fps > 0 && fps < BUDGET.fpsTarget ? Math.max(BUDGET.downMin, Math.min(BUDGET.down, fps / BUDGET.fpsTarget)) : BUDGET.down;
+    B.slowN = slow ? (B.slowN || 0) + 1 : 0;
+    B.slow = slow && (B.slowN >= BUDGET.slowFor || (fps > 0 && fps < BUDGET.panicFps));
+    if (B.slow) { B.goodT = 0; B.cap = Math.max(floor, Math.floor(Math.min(B.cap, Math.max(B.total, floor)) * k)); }
+    else if (!slow && good && B.cap !== Infinity) {
       if (B.total > B.cap * 0.6) B.cap = Math.ceil(B.cap * BUDGET.up);
       B.goodT += B.t;
       if (B.goodT >= BUDGET.release && B.total < B.cap * 0.8) B.cap = Infinity;   // smooth for a while: no limit again

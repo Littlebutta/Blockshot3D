@@ -24,9 +24,10 @@ import { prepareLevel, accel, movePlayer, groundBelow, wallSegments, seedThru, u
 import { AckDecoder } from './netcodec.js';
 import { PeerNetStats, HostNetStats, pingClass, RateMeter, Worst } from './netstats.js';
 const NR = { frame: new RateMeter(), sim: new RateMeter(), send: new RateMeter() };
-// v1.2.31: the frame rate the shot budget goes by: an average over the last few frames (NR.frame looks back 2 s, which
-// let a heavy fight sink to a few fps before the budget even saw it)
-const FR = { ms: 16.7 }, fastFps = () => 1000 / FR.ms;
+// v1.2.31: the frame rate the shot budget goes by: frames in the last half second (NR.frame looks back 2 s, which let a
+// heavy fight sink to a few fps before the budget saw it). v1.2.32: a count, not an average of frame times, so one
+// long frame on its own doesn't read as a slow game (in 1.2.31 every hitch made the budget cut shots)
+const fastFps = () => NR.frame.hz(undefined, 500);
 // v1.2.9: hitch readout (network window): worst frame over the last 5 s with its [game, draw] ms, slowest snapshot handling, longest gap between sends (host)
 const HM = { frame: new Worst(), msg: new Worst(), send: new Worst(), sendAt: 0 };   // v1.2.9: frames drawn, host sim runs and snapshots sent per second (network window)
 import { gpuInfo, GFX_TIERS, TIER_LABEL } from './gfxdetect.js';
@@ -2713,7 +2714,7 @@ function handleEvent0(e) {
       sound.play('death', vol(e.x, e.z)); killFeed(e);
       if (e.p === me && e.dl) showDeathLog(e);
       if (e.k === me && e.p !== me) { hitMarker(true); sound.play('kill', 0.9); renderer.addShake(0.22); }
-      if (hero) { S.lastDeath = { x: e.x, y: e.y, z: e.z }; KC.death = { t: performance.now(), p: e.p, k: e.k, x: e.x, y: e.y, z: e.z }; if (duelMode()) hitStop(0.075); }
+      if (hero) { S.lastDeath = { x: e.x, y: e.y, z: e.z }; KC.death = { t: performance.now(), p: e.p, k: e.k, x: e.x, y: e.y, z: e.z }; if (duelMode() && (e.p === me || e.k === me || S.roster.size <= 8)) hitStop(0.075); }   // (v1.2.32: in big lobbies only your own kills and deaths pause time: 100 bots dying froze the match over and over)
       break;
     }
     // ---- co-op: Game Master, elites, boss
@@ -4401,7 +4402,7 @@ function frameBody(now) {
   // frame rate limit (Settings > Graphics): skip animation frames that come too soon
   const cap = +settings.fpsCap || 0;
   if (cap && now - last < 1000 / cap - 1) return;
-  fpsTick(now - last); gfxTick(now - last); loadGuard(now - last, now); NR.frame.tick(); FR.ms += (Math.min(2000, now - last) - FR.ms) * 0.2;
+  fpsTick(now - last); gfxTick(now - last); loadGuard(now - last, now); NR.frame.tick();
   const gap = now - last, j0 = performance.now();
   renderNetHud();
   const rawDt = Math.min(0.25, Math.max(0, now - last) / 1000), dt = Math.min(0.035, rawDt); last = now;   // (v1.2.6: the host sim runs on rawDt; drawing, effects and joiners on dt)

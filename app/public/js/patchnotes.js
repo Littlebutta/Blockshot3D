@@ -1,6 +1,12 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.32', date: 'Oct 22', notes: {
+    Changed: [
+      'Big solo matches no longer run in slow motion: every bot death paused time for a moment (the hit-stop meant for duels), which with 100 bots slowed the whole match to about 75% speed. In lobbies over 8 players only your own kills and deaths do it now.',
+      'Shot budget is calmer: it goes by how many frames you actually got in the last half second (one long frame no longer counts as a slow game), waits half a second of real slowness before cutting (unless under 20 fps), and cuts less at once. In 1.2.31 every hitch made it hold back shots.',
+    ],
+  } },
   { v: '1.2.31', date: 'Oct 22', notes: {
     Added: [
       'No player limit: add as many bots and players as you like (new +100 bots button in the lobby). Steam lobbies hold up to 250 people, Steam\'s own maximum.',

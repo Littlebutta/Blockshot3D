@@ -1996,6 +1996,8 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
   BG.budgetTick(g3, 0.6, 5);
   check('shot budget: 30+ fps keeps it uncapped', B2.cap === Infinity);
   g3.hostFps = 25; BG.budgetTick(g3, 0.6, 5);
+  check('shot budget: one slow check alone doesn\'t cut (v1.2.32)', B2.cap === Infinity);
+  BG.budgetTick(g3, 0.6, 5);
   check('shot budget: under 30 fps a cap appears below the current shot count', B2.cap < 200 && B2.cap >= BG.BUDGET.capMin, B2.cap);
   g3.hostFps = 60; g3.bullets.length = 20; for (let k = 0; k < 20; k++) BG.budgetTick(g3, 0.6, 5);
   check('shot budget: smooth again for a few seconds drops the cap', B2.cap === Infinity, B2.cap);

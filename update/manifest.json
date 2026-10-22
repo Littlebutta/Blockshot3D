@@ -1,6 +1,6 @@
 {
- "version": "1.2.31",
- "built": "2026-10-22T20:44:28.351Z",
+ "version": "1.2.32",
+ "built": "2026-10-22T21:11:04.855Z",
  "files": {
   ".gitignore": [
    "0068ba7ed54e738118cfb5244ca651fe18f44c4ef3e5236241677de513dfaa9d",
@@ -2119,7 +2119,7 @@
    554
   ],
   "package.json": [
-   "a1938f190da86c6610f7449e26a71a63a799e1907b0c0c463838e0f292b9f2ad",
+   "3b8e05d961506a4743e46d6f021a1d17722cb5cdb29d2043b00b78756dee572c",
    749
   ],
   "public/css/style.css": [
@@ -2171,8 +2171,8 @@
    22535
   ],
   "public/js/budget.js": [
-   "7e66477bbf365ca54a3a32efb1f4de9c8e345de4b8787d65fba352caa81d0af3",
-   7265
+   "87c96918e654afdc78c1c56b0d57ebe7d0ae9394a0cc9957fd58308204c58ed7",
+   7503
   ],
   "public/js/cardinfo.js": [
    "6c40ba0d38aed9466502f7763afeb7c954de8954d3c2de00825473d7051dcc44",
@@ -2231,8 +2231,8 @@
    43307
   ],
   "public/js/main.js": [
-   "8fee7afc3371b35af3b51beaa365759292bee397ba1772c9fc0ad79ba3f0c6c6",
-   340365
+   "f0c1ed743408e64a31a019e39bfe5d9ee65f1b2edd7d19220705e2aac71eefdd",
+   340629
   ],
   "public/js/net.js": [
    "d415f683a93c1c3320d56977ba98fe00506efc8dacc6d989f8826a6d8c86a2de",
@@ -2243,8 +2243,8 @@
    22035
   ],
   "public/js/netstats.js": [
-   "0b5ac56604563fb184337790136aaf7f4bc7227ec1a248fec0d4b05faf091280",
-   9443
+   "609607ab78726897551858e1c5be9b8ec575a85fe198453ce2a5746c835d6621",
+   9449
   ],
   "public/js/openworld.js": [
    "1050071b38cee1b09a057b214e08d5f21b2f46fe64cfb44058bfc1f845785ef8",
@@ -2255,8 +2255,8 @@
    27697
   ],
   "public/js/patchnotes.js": [
-   "2f9746a3828370597c3eee9ac830f7e9bbe2407f9a736c72b29f9de0dc1db31a",
-   25675
+   "1a23c82271dde1df784f2d8c4161d813c5ef003087eaf3e3ffbf652897d6b788",
+   26301
   ],
   "public/js/physics.js": [
    "349c6151380f842e12e4a1aae299634bce6d4a913dc0af8eb47914864e5d8086",
@@ -2407,8 +2407,8 @@
    2422
   ],
   "tools/simtest.mjs": [
-   "d085f4e663113443b68503d7df715478cafe8461691b25608f6d82184122edc9",
-   182821
+   "5385b819460093e1a74fb2b5abf1eb81f0674b6efc1bf088dbc88c94b2cb3c29",
+   182940
   ],
   "tools/trim-build.cjs": [
    "f14cc62bb2ab8633c47b31e660b4a38c3774977e6e95d099f8a71b9b6c4d288d",
