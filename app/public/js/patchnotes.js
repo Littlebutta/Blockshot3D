@@ -1,6 +1,16 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.31', date: 'Oct 22', notes: {
+    Added: [
+      'No player limit: add as many bots and players as you like (new +100 bots button in the lobby). Steam lobbies hold up to 250 people, Steam\'s own maximum.',
+    ],
+    Changed: [
+      'Smoother big matches: the regular dropped frame every quarter to half second in 100-bot matches is fixed. It was the browser pausing to clean up memory: the match view now crosses from the game thread packed, and the kill-cam recorder no longer copies every fighter every frame (about 60% less memory churn at 100 players).',
+      'Shot budget reacts much faster: it checks four times a second using the current frame rate (it used to look back 2 seconds) and cuts in step with how slow things are (at 15 fps it halves the shots allowed at once), so heavy fights hold 30 fps instead of sinking first. While a match is running slow, cards don\'t add new critters or afterimages either.',
+      'Clone card: half the block cooldown penalty (x1.6, was x3.2). Only the fighter you control can split: clones no longer make more clones.',
+    ],
+  } },
   { v: '1.2.30', date: 'Oct 22', notes: {
     Added: [
       'Settings > Graphics > CPU threads: how many CPU threads the game may use. Auto (the default) uses every core your PC has; 1 runs everything on one thread like before.',

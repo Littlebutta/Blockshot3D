@@ -9,7 +9,9 @@ export const BUDGET = {
   fpsTarget: 30, fpsGood: 36,             // frame rate (host, or the slowest player that reports one) to hold / that counts as smooth
   msSlow: 22, msGood: 12,                 // host sim step (ms) that counts as too slow / comfortable
   capMin: 40, perHead: 1.5,               // a cap never goes below either of these (shots, shots per player; v1.2.28: was 60 and 3, which kept 300 shots at 100 players)
-  every: 0.5, down: 0.88, up: 1.08,       // how often and how hard the cap moves
+  every: 0.25, down: 0.88, up: 1.06,      // how often and how hard the cap moves (v1.2.31: twice as often; under 30 fps
+                                          // it drops in step with the frame rate: at 15 fps to about half at once)
+  downMin: 0.4,                           // the most one step can take off
   release: 6,                             // seconds of smooth play with room to spare before the cap is dropped again
   press: 0.75,                            // above this share of the cap, per-player limits start
   minShare: 3,                            // nobody is ever limited below this many shots
@@ -42,7 +44,10 @@ export function budgetTick(g, dt, stepMs) {
     const slow = ms > BUDGET.msSlow || (fps > 0 && fps < BUDGET.fpsTarget), good = ms < BUDGET.msGood && (!fps || fps >= BUDGET.fpsGood);
     let heads = 0; for (const p of g.players) if (p.kind === 'hero' && p.alive) heads++;
     const floor = Math.max(BUDGET.capMin, BUDGET.perHead * heads);
-    if (slow) { B.goodT = 0; B.cap = Math.max(floor, Math.floor(Math.min(B.cap, Math.max(B.total, floor)) * BUDGET.down)); }
+    // v1.2.31 (Devin: frames dropped to 0 before the budget caught up): the cut matches how slow it is
+    const k = fps > 0 && fps < BUDGET.fpsTarget ? Math.max(BUDGET.downMin, Math.min(BUDGET.down, fps / BUDGET.fpsTarget * 0.9)) : BUDGET.down;
+    B.slow = slow;
+    if (slow) { B.goodT = 0; B.cap = Math.max(floor, Math.floor(Math.min(B.cap, Math.max(B.total, floor)) * k)); }
     else if (good && B.cap !== Infinity) {
       if (B.total > B.cap * 0.6) B.cap = Math.ceil(B.cap * BUDGET.up);
       B.goodT += B.t;
@@ -91,6 +96,9 @@ export function budgetAdd(g, p) {
   B.counts.set(o.id, (B.counts.get(o.id) || 0) + 1); B.total++;
   if (B.share === Infinity && B.total >= B.cap * BUDGET.press) B.share = shareOf(B);
 }
+
+// v1.2.31: while the match runs slow, cards don't add new critters or afterimages (shots aren't all that slows a big fight)
+export const budgetSummon = g => !g.bud || !g.bud.slow;
 
 // Extra shots made by a shot (bounce splits, shrapnel): skipped only once the whole cap is used up.
 export const budgetRoom = g => !g.bud || g.bud.total < g.bud.cap;

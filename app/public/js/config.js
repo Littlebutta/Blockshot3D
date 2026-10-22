@@ -10,7 +10,8 @@ export const RULES = {
   playerHeight: 1.5,
   chest: 1.0,           // height bullets are fired from (clears 0.8 m cover)
   eye: 1.35,            // first-person camera height
-  maxPlayers: 100,   // v1.2.25 (Devin): 100-player lobbies (the entity budget keeps them playable)
+  maxPlayers: Infinity,   // v1.2.31 (Devin): no player limit (v1.2.25: was 100); the entity budget keeps big matches playable
+  steamSeats: 250,        // v1.2.31: the most people one Steam lobby can hold (Steam's own limit); bots don't count
   skyfallHeight: 14,    // where Sky Strike bullets spawn
   pickSeconds: 30,
   countdown: 3,         // seconds of 3-2-1 before each round      // default time limit for picking a card (lobby can change it)

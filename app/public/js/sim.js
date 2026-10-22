@@ -3,7 +3,7 @@ import { RULES, DEFAULT_STATS, DEFAULT_LOBBY_SETTINGS, sizeFor, speedFor, UNITS,
 import { applyCard, finishStats, weightedOffer, VARIANT_CHANCE, variantBase } from './cards.js';
 import { generateLevel, spawnPoints, clearSpawns, mulberry32, edgeDistance, boundaryPoint } from './levelgen.js';
 import { tournOn, tournStart, tournCheck, tournAfter, tournRows, tournIntroInfo, tournExtend, TOURN } from './tourn.js';
-import { BUDGET, budgetTick, budgetAllow, budgetAdd, budgetRoom, budgetRow } from './budget.js';
+import { BUDGET, budgetTick, budgetAllow, budgetAdd, budgetRoom, budgetRow, budgetSummon } from './budget.js';
 import { prepareLevel, movePlayer, moveBody, accel, pointInSolid, rayExit, groundBelow, segBlocked, clampToArena, wallSegments, buildGrid, PA } from './physics.js';
 import { planWave, splitWave, unitSpec, spawnBoss, spawnAllyBoss, bossThink, portalThink, coopTick, bossDown, telegraphRows, shockRows, bossRow, gmBudget, coopDiff, UNIT_COSTS, UNIT_NAMES, isBossWave, addBlotch, CORE_TWISTS } from './coop.js';
 import { botThink } from './ai.js';
@@ -1127,10 +1127,10 @@ export class Game {
   // Clone: the block spawns a copy of you (your stats and cards). Dying with a clone up moves you into it.
   // Every clone splits you: your health (max and current), damage and block stats (not the cooldown) are halved,
   // and the clone gets the same halved numbers. The next clone halves again. Lasts until the round ends.
-  // A clone that blocks splits itself the same way: half of its current stats each (no cap on clone count).
+  // v1.2.31 (Devin): only the body you control splits; a clone's block does nothing (clones used to split themselves too).
   spawnClone(p) {
     const isClone = p.kind === 'clone', owner = isClone ? this.player(p.ownerId) : p;
-    if (!owner) return null;
+    if (!owner || isClone) return null;
     p.splitK = (p.splitK || 1) * CLONE_SPLIT;
     const hpNow = p.hp;
     if (isClone) applySplit(p.stats, CLONE_SPLIT); else this.recompute(p);
@@ -1486,6 +1486,7 @@ export class Game {
   critterCount(p) { let n = 0; for (const u of this.players) if (u.kind === 'critter' && u.ownerId === p.id && u.alive && !u.ritual) n++; return n; }
   // at: spawn point for Pentagram portal critters (they don't count toward the Critter mod's cap, and have their own).
   spawnCritter(p, off, at = null) {
+    if (!budgetSummon(this)) return null;   // (v1.2.31: the match is running slow, budget.js)
     const s = p.stats, L = this.level;
     if (at) this.capUnits(p, 'critter', RITUAL_CRITTER_MAX, true);
     else {
@@ -3946,7 +3947,7 @@ export class Game {
   // Block add-ons: Afterimage, Snare Plate and the Scorched Floor / Swap Shot shield mods
   ncBlock(p) {
     const s = p.stats;
-    if (s.afterimage > 0 && p.kind !== 'decoy') this.spawnDecoy(p);
+    if (s.afterimage > 0 && p.kind !== 'decoy' && budgetSummon(this)) this.spawnDecoy(p);
     if (s.snare > 0) {
       const mine = this.mines.filter(m => m.owner === p.id && m.snare);
       if (mine.length >= NEWC.snare.max) this.mines = this.mines.filter(m => m !== mine[0]);

@@ -9,6 +9,7 @@
 // time adds up and goes with the next one, so drawing never waits on the match.
 // =====================================================================
 import { HostSim } from './hostsim.js';
+import { ViewUnpacker } from './viewpack.js';
 
 export class SimLink {
   constructor(opts, threads, handlers) {
@@ -32,7 +33,7 @@ export class SimLink {
   }
   out(k, v) {
     if (this.closed) return;
-    if (k === 'frame') { this.mirror = v.mirror; this.h.frame(v); }
+    if (k === 'frame') { if (v.view && v.view.pk) (this.unpacker || (this.unpacker = new ViewUnpacker())).unpack(v.view); this.mirror = v.mirror; this.h.frame(v); }
     else if (this.h[k]) this.h[k](v);
   }
   onMsg(m) {
