@@ -23,11 +23,13 @@ export function mulberry32(a) {
 // Grows quickly up to 8 players, then more gently up to the 20-player cap.
 // v1.2.22 (Devin): big lobbies get noticeably bigger maps (more room per player past 8), and past 20 players the
 // area keeps growing with the player count (the side length with its square root) up to the 100-player cap.
+// v1.2.34 (Devin): spawns now spread over the whole floor (spawnPoints), so maps no longer need wall room for everyone:
+// past 8 players they grow more slowly (about 100 x 66 m at 100 players instead of 135 x 93).
 export function arenaSize(n) {
   n = Math.max(2, Math.min(RULES.maxPlayers || 100, n));
   const a = Math.min(8, n), b = Math.max(0, Math.min(20, n) - 8), c = Math.max(0, n - 20);
-  const k = c ? Math.pow(n / 20, 0.6) : 1;
-  return { hx: Math.round((15 + 2 * a + 1.7 * b) * k), hz: Math.round((9 + 1.5 * a + 1.2 * b) * k) };
+  const k = c ? Math.pow(n / 20, 0.45) : 1;
+  return { hx: Math.round((15 + 2 * a + 1.3 * b) * k), hz: Math.round((9 + 1.5 * a + 0.9 * b) * k) };
 }
 
 // Classic layouts, designed for an 18 x 11 half-size arena and stretched to fit.
@@ -542,7 +544,8 @@ export function spawnPoints(level, groupSizes, opts = {}) {
   }
   // v1.2.28 (Devin): big lobbies (12+ sides, e.g. 100-player deathmatch) spawn all over the map, evenly apart, instead of
   // packed rings along the walls: open ground clear of blocks, picked farthest-first, so everyone gets room to breathe.
-  if (G >= 12 && !opts.noSpread) { const S = spreadSpawns(level, groupSizes); if (S) return S; }
+  // v1.2.34 (Devin): every lobby of 3+ sides spawns spread through the whole map, not just along the walls, which lets maps be smaller.
+  if (G >= 3 && !opts.noSpread) { const S = spreadSpawns(level, groupSizes); if (S) return S; }
   // v1.2.22 (Devin): keep spawns apart in big lobbies. When the perimeter can't fit every group SPAWN_GAP apart, the
   // extra groups go on inner rings (each RING_STEP further in), spread round evenly and offset from the ring outside.
   const E = level.edges || arenaEdges(level), per = E.reduce((a, e) => a + e.len, 0);
@@ -597,14 +600,38 @@ export function spreadSpawns(level, groupSizes) {
   for (let x = -level.hx + 2; x <= level.hx - 2; x += step) for (let z = -level.hz + 2; z <= level.hz - 2; z += step) if (free(x, z)) cands.push([x, z]);
   const need = groupSizes.reduce((a, b) => a + b, 0);
   if (cands.length < need * 3) return null;
-  const dist = new Float64Array(cands.length).fill(Infinity), taken = new Uint8Array(cands.length), centers = [];
-  // start at the open spot nearest the west wall's middle (deterministic per map), then always take the farthest
-  let first = 0; for (let i = 1; i < cands.length; i++) if (cands[i][0] < cands[first][0] - 1e-6 || (Math.abs(cands[i][0] - cands[first][0]) < 1e-6 && Math.abs(cands[i][1]) < Math.abs(cands[first][1]))) first = i;
+  // v1.2.34: start at the most open spot, then keep taking the spot farthest from everything taken so far (the walls
+  // count too, else small lobbies all start in the corners).
+  const E = level.edges || arenaEdges(level);
+  const dist = new Float64Array(cands.length), taken = new Uint8Array(cands.length), centers = [];
+  for (let j = 0; j < cands.length; j++) dist[j] = edgeDistance(E, cands[j][0], cands[j][1]) ** 2;
+  let first = 0; for (let i = 1; i < cands.length; i++) if (dist[i] > dist[first] + 1e-6) first = i;
   const take = i => { taken[i] = 1; const [x, z] = cands[i]; for (let j = 0; j < cands.length; j++) { const d = (cands[j][0] - x) ** 2 + (cands[j][1] - z) ** 2; if (d < dist[j]) dist[j] = d; } };
   for (let g = 0, i = first; g < G; g++) {
     if (g > 0) { i = -1; let bd = -1; for (let j = 0; j < cands.length; j++) if (!taken[j] && dist[j] > bd) { bd = dist[j]; i = j; } if (i < 0) return null; }
     centers.push(i); take(i);
   }
+  // then even them out (a few rounds of Lloyd's: each spawn moves to the middle of the open ground nearest to it), so
+  // everyone gets about the same share of the map, in the middle as much as along the walls
+  const gap = cs => { let m = Infinity; for (let a = 0; a < cs.length; a++) for (let b = a + 1; b < cs.length; b++) m = Math.min(m, (cands[cs[a]][0] - cands[cs[b]][0]) ** 2 + (cands[cs[a]][1] - cands[cs[b]][1]) ** 2); return m; };
+  const ff = centers.slice();
+  const C = cands.length, own = new Int32Array(C), sx = new Float64Array(G), sz = new Float64Array(G), sn = new Float64Array(G);
+  for (let it = 0; it < 10 && G > 1; it++) {
+    sx.fill(0); sz.fill(0); sn.fill(0);
+    for (let j = 0; j < C; j++) {
+      const [x, z] = cands[j]; let b = 0, bd = Infinity;
+      for (let g = 0; g < G; g++) { const c = cands[centers[g]], d = (c[0] - x) ** 2 + (c[1] - z) ** 2; if (d < bd) { bd = d; b = g; } }
+      own[j] = b; sx[b] += x; sz[b] += z; sn[b]++;
+    }
+    const used = new Set();
+    for (let g = 0; g < G; g++) {
+      const mx = sx[g] / sn[g], mz = sz[g] / sn[g]; let b = centers[g], bd = Infinity;
+      for (let j = 0; j < C; j++) if (own[j] === g && !used.has(j)) { const d = (cands[j][0] - mx) ** 2 + (cands[j][1] - mz) ** 2; if (d < bd) { bd = d; b = j; } }
+      used.add(b); centers[g] = b;
+    }
+  }
+  if (gap(ff) > gap(centers)) centers.splice(0, G, ...ff);   // (around lots of blocks that can bunch people up: keep whichever keeps the closest two further apart)
+  taken.fill(0); for (const i of centers) taken[i] = 1;
   return groupSizes.map((m, g) => {
     const [cx, cz] = cands[centers[g]], pts = [{ x: cx, z: cz }];
     if (m > 1) {   // teammates: the nearest free spots around their point

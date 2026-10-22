@@ -1,6 +1,6 @@
 {
- "version": "1.2.33",
- "built": "2026-10-22T21:21:52.582Z",
+ "version": "1.2.34",
+ "built": "2026-10-22T21:45:00.556Z",
  "files": {
   ".gitignore": [
    "0068ba7ed54e738118cfb5244ca651fe18f44c4ef3e5236241677de513dfaa9d",
@@ -2119,7 +2119,7 @@
    554
   ],
   "package.json": [
-   "258d36d9fbf36449abb5a0192fef1d64a892dd116ae1c259eff227e472a4c0b2",
+   "79ae80b72eb283e89cc236babd502b1de169dd23ed7a464f7aa29e45c7981a04",
    749
   ],
   "public/css/style.css": [
@@ -2227,8 +2227,8 @@
    11605
   ],
   "public/js/levelgen.js": [
-   "c4bd2701e9f28f8ee1e9bc4fd226bb6a0f0660ee7c4c779b33c8c29e109b278f",
-   43307
+   "9ef55f60fa6a84d5e5ead2a01d9c486000e1b1060df3fdcb363c8be0b1a2914e",
+   45294
   ],
   "public/js/main.js": [
    "b410df97bdbe7b553613f9d01880a497a3baf3f2ac0310fbe72f3eab701d4054",
@@ -2255,8 +2255,8 @@
    27697
   ],
   "public/js/patchnotes.js": [
-   "dbac3c6430c56cf92d2cdbf7547516ecd22dbe660e4af54d5d56d9cdb4621e5d",
-   27751
+   "a65767f4a429611d3a873110c416514b1a4652faf3978a55b15099b7d9ad80ab",
+   28274
   ],
   "public/js/physics.js": [
    "349c6151380f842e12e4a1aae299634bce6d4a913dc0af8eb47914864e5d8086",
@@ -2423,8 +2423,8 @@
    2422
   ],
   "tools/simtest.mjs": [
-   "705fe7fd13904bd043aaa17c5bcd1292ae7daf33c8b7e72703a98460fa57c38b",
-   186260
+   "d853750763e1e7c9a053fe26dfe74f56714e35574e57a40d215a1b898f7c4805",
+   187027
   ],
   "tools/trim-build.cjs": [
    "f14cc62bb2ab8633c47b31e660b4a38c3774977e6e95d099f8a71b9b6c4d288d",

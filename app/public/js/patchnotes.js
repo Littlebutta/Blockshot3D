@@ -1,6 +1,12 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.34', date: 'Oct 22', notes: {
+    Changed: [
+      'Spawns are spread through the whole map, not just along the walls, in every game with 3 or more players or teams. Everyone gets about the same share of open ground, clear of blocks and traps, and teammates still start together.',
+      'Because nobody needs room on the walls any more, maps past 8 players are smaller: about 94 x 64 m at 20 players (was 102 x 70) and 192 x 132 m at 100 (was 270 x 186). Fights find you sooner in big lobbies.',
+    ],
+  } },
   { v: '1.2.33', date: 'Oct 22', notes: {
     Added: [
       'RTS: a second faction, the Hive. Pick it next to your name in the lobby (bots can be set to Steelborne, Hive or Random). Bug-like aliens that only use crystal (the blue one): no flux, no refineries.',

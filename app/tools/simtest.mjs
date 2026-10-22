@@ -1906,7 +1906,13 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
   const st = LG.generateLevel(10, 'star', 3, 'standard', 10);
   check('star: one leg per player (10 legs -> 20 hull corners)', st.poly.length === 20);
   const md = n => { const L = LG.generateLevel(n, 'generated', 5, 'standard', n, { shape: 'rect' }), sp = LG.spawnPoints(L, Array(n).fill(1)).flat(); let m = 1e9; for (let i = 0; i < sp.length; i++) for (let j = i + 1; j < sp.length; j++) m = Math.min(m, Math.hypot(sp[i].x - sp[j].x, sp[i].z - sp[j].z)); return m; };
-  check('big lobbies: spawns at least 10 m apart at 20 players, 6 m at 100', md(20) >= 10 && md(100) >= 6, `${md(20)} ${md(100)}`);
+  check('big lobbies: spawns at least 10 m apart at 20 players, 4.5 m at 100 (smaller maps since 1.2.34)', md(20) >= 10 && md(100) >= 4.5, `${md(20)} ${md(100)}`);
+  { // v1.2.34: spawns spread through the map, not only along the walls, from 3 players up
+    let inner = 0, tot = 0;
+    for (const n of [3, 4, 6, 8]) for (let seed = 1; seed <= 4; seed++) { const L = LG.generateLevel(n, 'generated', seed * 31, 'standard', n); if (L.lava) continue; for (const p of LG.spawnPoints(L, Array(n).fill(1)).flat()) { tot++; if (Math.abs(p.x) < L.hx - 6 && Math.abs(p.z) < L.hz - 6) inner++; } }
+    check('spawns spread through the map in small lobbies too (most are 6+ m from the walls)', inner / tot > 0.6, `${inner}/${tot}`);
+    check('100-player map is smaller than before (about 96 x 66 half-size)', LG.arenaSize(100).hx <= 100 && LG.arenaSize(100).hz <= 70, JSON.stringify(LG.arenaSize(100)));
+  }
 }
 { // v1.2.23 Brawl: item boxes, weight cap, HUD rows; Core: move the core by holding use, spawns stay away from it
   const B = await J('brawl.js');
