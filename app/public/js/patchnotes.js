@@ -1,6 +1,14 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.35', date: 'Oct 22', notes: {
+    Changed: [
+      'Huge lobbies (Devin: 1000 players): the tournament now treats every arena as its own little match. Fighters, bots, shots, walls, shields and blasts only look at their own arena instead of all 1000 players: a 1000-bot tournament went from about 250 ms of game work a frame to about 15.',
+      'In the tournament your screen, and each friend\'s, only gets the arena it shows (yours, or the one you watch once you\'re out): a friend\'s stream in a 1000-player tournament went from about 500 KB an update to 1-2 KB (about 14 kB/s). The kill feed there shows your arena\'s kills.',
+      'Past 200 players, bots take turns thinking (every other frame, every third past 500); you won\'t notice the difference in how they play.',
+      'Filling a lobby with hundreds of bots is fast again (999 bots: 85 s down to about 10 s), and the scoreboard and tournament table no longer redo their work every frame in big games.',
+    ],
+  } },
   { v: '1.2.34', date: 'Oct 22', notes: {
     Changed: [
       'Spawns are spread through the whole map, not just along the walls, in every game with 3 or more players or teams. Everyone gets about the same share of open ground, clear of blocks and traps, and teammates still start together.',

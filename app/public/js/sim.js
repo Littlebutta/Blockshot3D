@@ -2,7 +2,7 @@
 import { RULES, DEFAULT_STATS, DEFAULT_LOBBY_SETTINGS, sizeFor, speedFor, UNITS, bulletGravityFor, ROUND_MODS } from './config.js';
 import { applyCard, finishStats, weightedOffer, VARIANT_CHANCE, variantBase } from './cards.js';
 import { generateLevel, spawnPoints, clearSpawns, mulberry32, edgeDistance, boundaryPoint } from './levelgen.js';
-import { tournOn, tournStart, tournCheck, tournAfter, tournRows, tournIntroInfo, tournExtend, TOURN } from './tourn.js';
+import { tournOn, tournStart, tournCheck, tournAfter, tournRows, tournSnap, tournIntroInfo, tournExtend, TOURN } from './tourn.js';
 import { BUDGET, budgetTick, budgetAllow, budgetAdd, budgetRoom, budgetRow, budgetSummon } from './budget.js';
 import { prepareLevel, movePlayer, moveBody, accel, pointInSolid, rayExit, groundBelow, segBlocked, clampToArena, wallSegments, buildGrid, PA } from './physics.js';
 import { planWave, splitWave, unitSpec, spawnBoss, spawnAllyBoss, bossThink, portalThink, coopTick, bossDown, telegraphRows, shockRows, bossRow, gmBudget, coopDiff, UNIT_COSTS, UNIT_NAMES, isBossWave, addBlotch, CORE_TWISTS } from './coop.js';
@@ -153,6 +153,9 @@ export const NEWC = {
 };
 const WAVE_COLORS = ['#ff5f5f', '#ff7f50', '#e04a6a', '#ff9a6b'];
 
+const NO_ONE = Object.freeze([]);
+const byArena = L => { const m = new Map(); for (const q of L) { const a = q.arena ?? null; let l = m.get(a); if (!l) m.set(a, l = []); l.push(q); } return m; };
+
 export class Game {
   constructor({ roster, settings, cards, onOffer, onCombo, onBreak }) {
     this.settings = { ...DEFAULT_LOBBY_SETTINGS, ...settings };
@@ -286,6 +289,40 @@ export class Game {
     if (!this.isEnemy(src, t)) return this.settings.friendlyFire; // friendly fire only covers allies
     return true;
   }
+  // v1.2.35 (Devin: 1000-player lobbies): who x (a fighter or unit, or anything with an ownerRef) can touch. In the
+  // tournament that's only x's arena, from lists made once per step, so per-fighter work no longer walks every player
+  // in every arena (it was most of a 1000-player frame). Anywhere else, or when x has no arena yet, it's everyone.
+  pool(x) {
+    if (!this.tourn || !x) return this.players;
+    const o = x.arena !== undefined ? x : x.ownerRef;
+    if (!o || o.arena === undefined) return this.players;
+    return (this._ap || this.arenaPools()).get(o.arena ?? null) || NO_ONE;
+  }
+  // v1.2.35: a big tournament's scores for one arena's snapshot: just its players' (all 1000 changed every time an arena finished)
+  scopedScores(ps) { const o = {}; for (const p of ps) { const k = this.scoreKey(p); if (k in this.scores) o[k] = this.scores[k]; } return o; }
+  // v1.2.35: whether x (a shot, wall, shield or mine, by its owner) is in tournament arena a; things with no owner are everywhere
+  seenIn(x, a) {
+    const o = x.ownerRef || (x.owner != null ? this.player(x.owner) : null);
+    return !o || o.arena === undefined || (o.arena ?? null) === a;
+  }
+  // one of updateBullets' per-step lists for bullet b (a Map by arena in the tournament)
+  listFor(L, b) {
+    if (!L) return this.pool(b);
+    if (!(L instanceof Map)) return L;
+    return L.get(b.ownerRef ? b.ownerRef.arena ?? null : null) || NO_ONE;
+  }
+  arenaPools() {
+    const m = this._ap = new Map();
+    for (const p of this.players) { const a = p.arena ?? null; let l = m.get(a); if (!l) m.set(a, l = []); l.push(p); }
+    return m;
+  }
+  // the bullets in x's arena (bots dodging): made once per step, so new shots join next step
+  bulletPool(x) {
+    if (!this.tourn || !x || x.arena === undefined) return this.bullets;
+    let m = this._bp;
+    if (!m) { m = this._bp = new Map(); for (const b of this.bullets) { const a = b.ownerRef ? b.ownerRef.arena ?? null : null; let l = m.get(a); if (!l) m.set(a, l = []); l.push(b); } }
+    return m.get(x.arena ?? null) || NO_ONE;
+  }
   // v1.2.13 (Devin): SCP also covers your own shots after someone blocked them back at you (bullets, bees, their blasts, fire, clouds).
   ownShot(x, q) { return !!(x && x.cown && x.cown === q.id && q.stats.noSelfDamage > 0); }
   creditOf(p) { return p && p.ownerId ? this.player(p.ownerId) : p; }
@@ -311,6 +348,7 @@ export class Game {
   }
 
   removePlayer(id) {
+    this._ap = null;
     const p = this.player(id);
     if (!p) return;
     p.connected = false; p.alive = false; p.reviving = false; p.picked = true; p.offer = null;
@@ -655,6 +693,7 @@ export class Game {
     p.stats = stats; p.cards = cards;
     if (this.tourn) p.arena = owner.arena ?? null;   // (a unit fights in its owner's arena)
     this.players.push(p);
+    if (this._ap) { const a = p.arena ?? null, l = this._ap.get(a); if (l) l.push(p); else this._ap.set(a, [p]); }
     this.resetPlayer(p, pt);
     return p;
   }
@@ -721,6 +760,7 @@ export class Game {
   isFinalRound() {
     if (this.isPractice()) return false;
     if (this.isWaves()) return this.round >= this.settings.roundsToWin;
+    if (this.tourn) return false;   // (v1.2.35: a tournament ends on lives, not round wins; this walked every player each frame)
     const keys = new Set(this.heroes().filter(p => p.connected).map(p => this.scoreKey(p)));
     return [...keys].some(k => (this.scores[k] || 0) + 1 >= this.settings.roundsToWin);
   }
@@ -965,6 +1005,7 @@ export class Game {
     if (this.level.grid) {   // static boxes through the grid, the rest always checked
       this.solids.grid = this.level.grid; this.solids.hAt = this.level.hAt;
       this.solids.extra = this.solids.length > this.level.solids.length ? this.solids.slice(this.level.solids.length) : [];
+      if (this.tourn) { const by = this.solids.extraBy = new Map(); for (const q of this.solids.extra) { const k = q.arena === undefined || q.arena === null ? -1 : q.arena; let l = by.get(k); if (!l) by.set(k, l = []); l.push(q); } }   // (v1.2.35, physics.js pushExtra)
     }
     if (this.level.side) this.solids.hAt = this.level.hAt;   // 2D side view: no floor (groundBelow over a pit finds nothing)
   }
@@ -1252,7 +1293,7 @@ export class Game {
     for (const sh of this.shields) {
       if (sh.box ? this.inBox(sh, x, y + 0.8, z, r) : y < sh.y0 + sh.h && y + 1.6 > sh.y0 && (([lx, lz]) => Math.abs(lx) < sh.w / 2 + r && Math.abs(lz) < sh.d / 2 + r)(this.shieldLocal(sh, x, z))) return false;
     }
-    for (const q of this.players) if (q !== p && q.alive && Math.hypot(q.pos.x - x, q.pos.z - z) < PR * (q.size || 1) + r + 0.15 && Math.abs(q.pos.y - y) < 2.2) return false;
+    for (const q of this.pool(p)) if (q !== p && q.alive && Math.hypot(q.pos.x - x, q.pos.z - z) < PR * (q.size || 1) + r + 0.15 && Math.abs(q.pos.y - y) < 2.2) return false;
     for (const m of this.mines) if (Math.hypot(m.x - x, m.z - z) < r + 0.6 && Math.abs(m.y - y) < 1.5) return false;
     for (const d of this.coreDrops || []) if (!d.done && Math.hypot(d.x - x, d.z - z) < r + 1) return false;
     return true;
@@ -1291,7 +1332,7 @@ export class Game {
   eatUse(p, u) { p.lastUseSeq = u; if (p.ow) p.ow.useSeq = u; }
   mountNear(p) {
     let best = null, bd = Infinity;
-    for (const u of this.players) {
+    for (const u of this.pool(p)) {
       if (u.kind !== 'mount' || !u.alive || this.mountRider(u) || Math.abs(u.pos.y - p.pos.y) > 1.6) continue;
       const d = Math.hypot(u.pos.x - p.pos.x, u.pos.z - p.pos.z) - PR * (u.size + p.size);
       if (d < MOUNT.reach && d < bd) { bd = d; best = u; }
@@ -1462,7 +1503,7 @@ export class Game {
   groundSlam(p) {
     const s = p.stats, R = 3.2 * (s.blockSize || 1), dmg = SLAM.base + SLAM.dmgShare * this.effDamage(s);
     this.emit({ t: 'slam', p: p.id, x: p.pos.x, y: p.pos.y + 0.1, z: p.pos.z, r: R });
-    for (const q of this.players) {
+    for (const q of this.pool(p)) {
       if (!q.alive || q.reviving || !this.isEnemy(p, q)) continue;
       const dx = q.pos.x - p.pos.x, dz = q.pos.z - p.pos.z, d = Math.hypot(dx, dz);
       if (d > R + PR * q.size || Math.abs(q.pos.y - p.pos.y) > 2) continue;
@@ -1554,7 +1595,7 @@ export class Game {
       m.armT -= dt; m.life -= dt;
       if (m.life <= 0) { m.dead = true; continue; }
       if (m.snare) { this.snareCheck(m); continue; }   // v1.2.15 Snare Plate
-      for (const q of this.players) {
+      for (const q of this.pool(m)) {
         if (!q.alive || q.reviving || q.flying) continue;
         if (q === m.ownerRef && m.armT > 0) continue;
         if (Math.hypot(q.pos.x - m.x, q.pos.z - m.z) < 0.85 * q.size + 0.2 * (m.sz || 1) + 0.3 * ((m.sz || 1) - 1) && Math.abs(q.pos.y - m.y) < 1) {
@@ -1576,7 +1617,7 @@ export class Game {
       f.t -= dt;
       if (f.t > 0) continue;
       f.dead = true;
-      for (const q of this.players) {
+      for (const q of this.pool(f)) {
         if (!q.alive || q.reviving || this.isEnemy(f.ownerRef, q)) continue;
         if (Math.hypot(q.pos.x - f.x, q.pos.z - f.z) < f.r && Math.abs(q.pos.y - f.y) < 2.5) { const h0 = q.hp; q.hp = Math.min(this.maxHp(q), q.hp + f.heal); this.healPing(q, h0); }
       }
@@ -1593,7 +1634,7 @@ export class Game {
     budgetTick(this, dt, performance.now() - t0);   // v1.2.25 entity / bullet budget (budget.js)
   }
   step0(dt) {
-    this.stepDt = dt; this.stepN++;
+    this.stepDt = dt; this.stepN++; this._ap = this._bp = null; this._maxSc = undefined;
     if (this.phase === 'countdown' && this.tourn && this.phaseT > (RULES.countdown || 3) + 0.2) {
       // v1.2.29 (Devin): the tournament matchup screen holds the world still (no health drain, burns, regen, timers)
       this.phaseT -= dt;
@@ -1669,6 +1710,7 @@ export class Game {
     this.players = this.players.filter(p => !(p.ephemeral && !p.alive));
   }
   updatePlayers(dt, canAct) {
+    const crowd = this.players.length > 500 ? 3 : this.players.length > 200 ? 2 : 1;
     for (const p of this.players) {
       if (!p.alive) continue;
       if (this.tourn) PA.a = p.arena ?? null;   // (v1.2.26: only your own arena's walls)
@@ -1682,7 +1724,12 @@ export class Game {
       else if (p.kind === 'angel') { this.angelThink(p, dt); continue; }
       else if (p.kind === 'decoy') { /* v1.2.15 Afterimage: stands still where you blocked */ }
       else if (p.kind === 'mount') { this.mountThink(p, dt); if (!p.alive) continue; }
-      else if (p.isBot || p.commanded) (this.ow ? owBotThink : botThink)(this, p, dt);
+      else if (p.isBot || p.commanded) {
+        // v1.2.35: past 200 fighters each bot thinks every other step (past 500, every third), taking turns, with that much
+        // more time: its last buttons stay held in between. Bot thinking was the biggest part of a 1000-player step.
+        if (crowd === 1) (this.ow ? owBotThink : botThink)(this, p, dt);
+        else if (((p._tk ??= (this._tkN = (this._tkN | 0) + 1)) + this.stepN) % crowd === 0) (this.ow ? owBotThink : botThink)(this, p, dt * crowd);
+      }
       this.updatePlayer(p, dt, canAct);
       if (real) { p.input = real; this.riderPin(p); }
     }
@@ -1830,10 +1877,10 @@ export class Game {
   }
   // v30 client-side prediction: per remote human [id, last input seq applied, walk speed, jump speed, ok, on ground].
   // ok = 0 whenever the simple walk/jump model would guess wrong (vehicles, falling in, brawl, holds, moving floors...).
-  predRows() {
+  predRows(ps = null) {
     const L = this.level, out = [];
     if (L.side || L.brawl || BRAWL_ON) return out;
-    for (const p of this.players) {
+    for (const p of ps || this.players) {
       if (p.isBot || !p.connected || p.kind !== 'hero' || p.input.q == null) continue;
       // v1.2.6: joiners now replay against walls, blocks and props too, so standing on a crate, a resting piston or a
       // bobbing float stays predicted (not on slides / swings, or anything moving faster than 0.6 m/s); a rising pillar lifts you
@@ -1911,7 +1958,7 @@ export class Game {
   critterReach(p, q) { return PR * (p.size + q.size) + CRITTER_REACH; }
   meleeContact(p) {
     const crit = p.kind === 'critter';
-    for (const q of this.players) {
+    for (const q of this.pool(p)) {
       if (!q.alive || q.reviving || q === p) continue;
       // v1.2.6: the reach before isEnemy (two scoreKey walks per pair, for every pair of a critter swarm), and a box test before
       // the hypot (exact: hypot >= |dx|, |dz|)
@@ -2009,7 +2056,7 @@ export class Game {
   }
   // Bullets: blocked where they cross the shield's surface (an arc RIOT.radius out from the holder).
   riotCheck(b, prev) {
-    for (const q of this._riotQ || this.players) {
+    for (const q of this.listFor(this._riotQ, b)) {
       if (q.mod !== 'shield' || q.id === b.owner || !this.riotUp(q) || !this.isEnemy(b.ownerRef, q)) continue;
       const R = RIOT.radius * q.size;
       const d1 = Math.hypot(prev.x - q.pos.x, prev.z - q.pos.z), d2 = Math.hypot(b.pos.x - q.pos.x, b.pos.z - q.pos.z);
@@ -2069,7 +2116,7 @@ export class Game {
     const arc = Math.min(1.7, KATANA.arc + 0.1 * (n - 1)), reach = KATANA.reach * p.size * this.katanaScale(p), a = norm({ x: p.aim.x, y: 0, z: p.aim.z });
     const from = { x: p.pos.x, y: this.chest(p), z: p.pos.z }, dmg = this.effDamage(s) * KATANA.slashMul;
     p.fx.slashT = KATANA.active; p.fx.slashArc = arc; p.fx.slashN = ((p.fx.slashN || 0) + 1) & 255;
-    for (const q of this.players) {
+    for (const q of this.pool(p)) {
       if (q === p || !q.alive || q.reviving || !this.canHurt(p, q)) continue;
       const dx = q.pos.x - p.pos.x, dz = q.pos.z - p.pos.z, d = Math.hypot(dx, dz);
       if (d - PR * q.size > reach) continue;
@@ -2614,7 +2661,7 @@ export class Game {
     if (s.blockShock > 0) this.shockBurst(p);
     if (s.blockPush > 0) {
       const R = 3.5 * s.blockSize;
-      for (const q of this.players) {
+      for (const q of this.pool(p)) {
         if (!q.alive || q.reviving || !this.isEnemy(p, q)) continue;
         const dx = q.pos.x - p.pos.x, dz = q.pos.z - p.pos.z, d = Math.hypot(dx, dz);
         if (!(d < R && d > 0.01)) continue;
@@ -2640,7 +2687,7 @@ export class Game {
   shockBurst(p) {
     const s = p.stats, R = SHOCK.radius * Math.sqrt(Math.max(0.5, s.blockSize)) * Math.max(1, p.size * 0.8), dmg = s.blockShock * SHOCK.dmgK;
     const gy = p.pos.y;
-    for (const q of this.players) {
+    for (const q of this.pool(p)) {
       if (!q.alive || q.reviving || !this.isEnemy(p, q)) continue;
       if (Math.hypot(q.pos.x - p.pos.x, q.pos.z - p.pos.z) > R + PR * q.size || Math.abs(q.pos.y - gy) > SHOCK.height) continue;
       this.hurt(q, dmg, p, null);
@@ -2802,7 +2849,7 @@ export class Game {
     if (b.limpet > 0) this.booms.push({ t: 1.0, follow: q, pos: { ...q.pos }, dmg: b.dmg * 0.6 * b.limpet, owner: src, opts: { cown: b.cown } });
     if (b.chain > 0 && !b.chained) {
       let best = null, bd = 6;
-      for (const o of this.players) {
+      for (const o of this.pool(src)) {
         if (o === q || !o.alive || o.reviving || !this.isEnemy(src, o) || this.ownShot(b, o)) continue;
         const d = Math.hypot(o.pos.x - q.pos.x, o.pos.z - q.pos.z);
         if (d < bd) { bd = d; best = o; }
@@ -2839,7 +2886,7 @@ export class Game {
   explode(pos, dmg, owner, opts = {}) {
     const R = (1.4 + 0.6 * Math.sqrt(Math.max(1, dmg) / DEFAULT_STATS.damage)) * (opts.rmul || 1);
     this.emit({ t: 'boom', x: pos.x, y: pos.y, z: pos.z, r: R, p: owner ? owner.id : null });
-    for (const q of this.players) {
+    for (const q of this.pool(owner)) {
       if (!q.alive || q.reviving) continue;
       const cx = q.pos.x - pos.x, cy = this.chest(q) - pos.y, cz = q.pos.z - pos.z, d = Math.hypot(cx, cy, cz);
       if (d >= R || this.ownShot(opts, q)) continue;
@@ -2904,7 +2951,7 @@ export class Game {
   }
 
   bounce(b, ax) {
-    if (b.bLeft > 0) { b.vel[ax] *= -1; b.bLeft--; b.bounced = true; this.emit({ t: 'bounce', x: b.pos.x, y: b.pos.y, z: b.pos.z }); this.onBounce(b); return true; }
+    if (b.bLeft > 0) { b.vel[ax] *= -1; b.bLeft--; b.bounced = true; this.emit({ t: 'bounce', x: b.pos.x, y: b.pos.y, z: b.pos.z, o: b.owner }); this.onBounce(b); return true; }
     this.killBullet(b, true); return false;
   }
   // Bounce off an angled wall with inward normal (nx, nz).
@@ -2912,7 +2959,7 @@ export class Game {
     if (b.bLeft > 0) {
       const vn = b.vel.x * nx + b.vel.z * nz;
       if (vn < 0) { b.vel.x -= 2 * vn * nx; b.vel.z -= 2 * vn * nz; }
-      b.bLeft--; b.bounced = true; this.emit({ t: 'bounce', x: b.pos.x, y: b.pos.y, z: b.pos.z }); this.onBounce(b); return true;
+      b.bLeft--; b.bounced = true; this.emit({ t: 'bounce', x: b.pos.x, y: b.pos.y, z: b.pos.z, o: b.owner }); this.onBounce(b); return true;
     }
     this.killBullet(b, true); return false;
   }
@@ -2989,7 +3036,7 @@ export class Game {
 
   // Shields (bubbles and deployed walls) get first say on every bullet, even drilling ones.
   shieldCheck(b, prev) {
-    for (const q of this._shQ || this.players) {   // (v1.2.25: updateBullets lists who has a shield up once per step)
+    for (const q of this.listFor(this._shQ, b)) {   // (v1.2.25: updateBullets lists who has a shield up once per step)
       if (!q.alive || q.reviving || q.id === b.owner) continue;
       const R = 1.05 * q.stats.blockSize * q.size, c = { x: q.pos.x, y: q.pos.y + 0.8 * q.size, z: q.pos.z };
       const off = { x: b.pos.x - c.x, y: b.pos.y - c.y, z: b.pos.z - c.z }, d = len(off);
@@ -3064,7 +3111,7 @@ export class Game {
   drainTarget(p) {
     let best = null, bd = DRAIN_RANGE + (p.stats.drainRange || 0);
     const from = { x: p.pos.x, y: this.chest(p), z: p.pos.z };
-    for (const q of this.players) {
+    for (const q of this.pool(p)) {
       if (!q.alive || q.reviving || !this.isEnemy(p, q)) continue;
       const d = Math.hypot(q.pos.x - p.pos.x, q.pos.y - p.pos.y, q.pos.z - p.pos.z);
       if (d < bd && !segBlocked(this.solids, from, { x: q.pos.x, y: this.chest(q), z: q.pos.z })) { bd = d; best = q; }
@@ -3184,7 +3231,7 @@ export class Game {
       c.r = c.r0 * (1 + (TOXIC.grow - 1) * (1 - c.t / TOXIC.life));
       if ((c.checkT -= dt) > 0) continue;
       c.checkT = 0.25;
-      for (const q of this.players) {
+      for (const q of this.pool(c)) {
         if (!q.alive || q.reviving || q === c.ownerRef || !this.canHurt(c.ownerRef, q) || this.ownShot(c, q) || this.shielded(q)) continue;
         if (Math.hypot(q.pos.x - c.x, q.pos.z - c.z) > c.r + PR * q.size || q.pos.y > c.y + c.r || q.pos.y + PH * q.size < c.y - c.r - 0.6) continue;
         this.dmgTag = 'toxic'; this.hurt(q, c.dps * 0.25, c.ownerRef, null, true);
@@ -3195,7 +3242,7 @@ export class Game {
   }
   homingTarget(b, near) {
     const cands = [];
-    for (const q of this.players) {
+    for (const q of this.pool(b)) {
       if (!q.alive || q.reviving || !this.isEnemy(b.ownerRef, q) || this.ownShot(b, q)) continue;   // (blocked-back seekers don't chase an SCP shooter)
       const dq = Math.hypot(q.pos.x - b.pos.x, this.chest(q) - b.pos.y, q.pos.z - b.pos.z);
       if (dq < near) cands.push([dq, q]);
@@ -3226,19 +3273,21 @@ export class Game {
     // v1.2.25: per-step lookups so a bullet only tests the players near it (big lobbies have hundreds of bullets)
     this._shQ = this.players.filter(q => q.alive && !q.reviving && this.shielded(q));
     this._riotQ = this.players.filter(q => q.mod === 'shield');
+    if (this.tourn) { this._shQ = byArena(this._shQ); this._riotQ = byArena(this._riotQ); }   // (v1.2.35: per arena, Map arena -> list)
     const PG = new Map(), PGC = 4, hasBags = this.barricades.length > 0;
     let pgR = 0;
     this.players.forEach((q, i) => {
       if (!q.alive) return;
       q._bi = i;
-      const k = Math.floor(q.pos.x / PGC) * 4096 + Math.floor(q.pos.z / PGC);
+      const k = Math.floor(q.pos.x / PGC) * 4096 + Math.floor(q.pos.z / PGC) + (this.tourn ? ((q.arena ?? -1) + 2) * 16777216 : 0);   // (v1.2.35: tournament arenas overlap in space: each has its own grid)
       let a = PG.get(k); if (!a) PG.set(k, a = []); a.push(q);
       const r = PR * q.size * (q.stats.hitScale || 1); if (r > pgR) pgR = r;
     });
     const near = [], nearOf = (b, hr) => {
       near.length = 0;
+      const ak = this.tourn ? ((b.ownerRef ? b.ownerRef.arena ?? -1 : -1) + 2) * 16777216 : 0;
       const R = pgR + hr + 0.01, i0 = Math.floor((b.pos.x - R) / PGC), i1 = Math.floor((b.pos.x + R) / PGC), j0 = Math.floor((b.pos.z - R) / PGC), j1 = Math.floor((b.pos.z + R) / PGC);
-      for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const a = PG.get(i * 4096 + j); if (a) for (const q of a) near.push(q); }
+      for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const a = PG.get(i * 4096 + j + ak); if (a) for (const q of a) near.push(q); }
       if (near.length > 1) near.sort((x, y) => x._bi - y._bi);   // same order as the full player list
       return near;
     };
@@ -3266,7 +3315,7 @@ export class Game {
           tgt = b.homeTgt;
         } else {
           let bd = near;
-          for (const q of this.players) {
+          for (const q of this.pool(b)) {
             if (!q.alive || q.reviving || !this.isEnemy(b.ownerRef, q)) continue;
             const ref = b.lock;
             const dq = Math.hypot(q.pos.x - ref.x, q.pos.z - ref.z);
@@ -3313,7 +3362,7 @@ export class Game {
         }
         if (Math.abs(b.pos.x) > L.hx + 2 || Math.abs(b.pos.z) > L.hz + 2 || b.pos.y > (L.open ? OW.ceil : 45) || (L.side && b.pos.y < L.side.bottom - 4)) { this.killBullet(b, false); break; }
         if (this.shieldCheck(b, prev)) continue;
-        if (this._riotQ.length && this.riotCheck(b, prev)) continue;
+        if ((this._riotQ.length || this._riotQ.size) && this.riotCheck(b, prev)) continue;
         const s = pointInSolid(this.solids, b.pos.x, b.pos.y, b.pos.z, b.r, friendlyBag);
         if (s) {
           if (tShot && s.barricade && !this.canHurt(b.ownerRef, s.barricade.ownerRef)) { this.killBullet(b, true); break; }   // turret shots stop on friendly walls
@@ -3348,7 +3397,7 @@ export class Game {
         const fy = L.hAt ? L.hAt(b.pos.x, b.pos.z) : 0;
         if (b.pos.y < fy + b.r) { if (b.napalm > 0) this.napalmSplat(b, { x: b.pos.x, y: fy, z: b.pos.z }, { x: 0, y: 1, z: 0 }, null); b.pos.y = fy + b.r; if (!this.bounce(b, 'y')) break; continue; }
         if (b.cutter) this.waveCuts(b);
-        for (const q of b.ring > 0 ? this.players : nearOf(b, b.hitR || b.r)) {
+        for (const q of b.ring > 0 ? this.pool(b) : nearOf(b, b.hitR || b.r)) {
           if (!q.alive || q.reviving || (q.id === b.owner && !b.bounced) || q.id === b.noHit || (q.ow && q.ow.st === 'bus')) continue;
           const hr = b.hitR || b.r, qr = PR * q.size * (q.stats.hitScale || 1) + hr;   // (v1.2.15 Light Frame: smaller hitbox)
           if ((b.pos.x > q.pos.x - qr && b.pos.x < q.pos.x + qr && b.pos.z > q.pos.z - qr && b.pos.z < q.pos.z + qr &&
@@ -3449,7 +3498,7 @@ export class Game {
       f.t -= dt;
       if ((f.checkT -= dt) > 0) continue;
       f.checkT = 0.1;
-      for (const q of this.players) {
+      for (const q of this.pool(f)) {
         if (!q.alive || q.reviving || q === f.ownerRef || !this.canHurt(f.ownerRef, q) || this.ownShot(f, q) || this.shielded(q)) continue;
         const pr = PR * q.size + 0.22, top = q.pos.y + PH * q.size;
         if (f.bits.some(k => Math.abs(k.x - q.pos.x) < pr && Math.abs(k.z - q.pos.z) < pr && k.y > q.pos.y - 0.2 && k.y < top + 0.05 && Math.hypot(k.x - q.pos.x, k.z - q.pos.z) < pr)) {
@@ -3860,7 +3909,7 @@ export class Game {
     if ((p.fx.poundT || 0) > this.time) return;
     p.fx.poundT = this.time + 0.4;
     const lv = p.stats.pound, P = NEWC.pound, R = P.r + 0.5 * (lv - 1);
-    for (const q of this.players) {
+    for (const q of this.pool(p)) {
       if (!q.alive || q.reviving || !this.isEnemy(p, q) || q.flying) continue;
       if (Math.hypot(q.pos.x - p.pos.x, q.pos.z - p.pos.z) > R + PR * q.size || Math.abs(q.pos.y - p.pos.y) > 1.5) continue;
       if (!q.heavy) { q.vel.y = Math.max(q.vel.y, P.pop * Math.sqrt(lv) / q.size); q.onGround = false; }
@@ -3983,7 +4032,7 @@ export class Game {
   }
   snareCheck(m) {
     if (m.armT > 0) return;
-    for (const q of this.players) {
+    for (const q of this.pool(m)) {
       if (!q.alive || q.reviving || q.flying || !this.isEnemy(m.ownerRef, q) || q.kind === 'boss' || q.kind === 'core' || q.kind === 'decoy') continue;
       if (Math.hypot(q.pos.x - m.x, q.pos.z - m.z) < 0.6 + PR * q.size && Math.abs(q.pos.y - m.y) < 1) {
         m.dead = true; q.fx.rootT = this.time + m.snare; q.vel.x = 0; q.vel.z = 0;
@@ -4013,7 +4062,7 @@ export class Game {
     const ss = src && src.stats;
     if (ss && ss.overpen > 0 && !quiet && dir && over >= 1 && src.alive) {   // Overpen Rounds: the overkill flies on
       let best = null, bd = NEWC.overpen;
-      for (const q of this.players) {
+      for (const q of this.pool(src)) {
         if (q === t || !q.alive || q.reviving || !this.isEnemy(src, q)) continue;
         const dx = q.pos.x - t.pos.x, dz = q.pos.z - t.pos.z, d = Math.hypot(dx, dz);
         if (d < bd && (dx * dir.x + dz * dir.z) > -0.3 * d) { bd = d; best = q; }
@@ -4042,7 +4091,9 @@ export class Game {
   bountyMarked(q) {
     if (!q || q.kind !== 'hero' || this.isWaves() || this.isOpen() || this.isPractice()) return false;
     const v = this.scores[this.scoreKey(q)];
-    return v > 0 && v >= Math.max(...Object.values(this.scores));
+    if (!(v > 0)) return false;
+    if (this._maxSc === undefined || this._maxScN !== this.stepN) { this._maxSc = Math.max(...Object.values(this.scores)); this._maxScN = this.stepN; }   // (v1.2.35: once a step, not once per player)
+    return v >= this._maxSc;
   }
   ncHitMul(b, q) {
     const src = b.ownerRef, s = src && src.stats;
@@ -4092,7 +4143,7 @@ export class Game {
     const W = NEWC.well;
     for (const w of this.wells) {
       w.t -= dt;
-      for (const q of this.players) {
+      for (const q of this.pool(w.o)) {
         if (!q.alive || q.reviving || q.heavy || q.flying || !this.isEnemy(w.o, q)) continue;
         const dx = w.x - q.pos.x, dy = w.y - this.chest(q), dz = w.z - q.pos.z, d = Math.hypot(dx, dy, dz);
         if (d > W.r || d < 0.35) continue;
@@ -4131,13 +4182,15 @@ export class Game {
   // A one-off heal (lifesteal, leech, healing field, Field Medic, Bloodforge...): bumps a counter the health bar flashes on.
   // Steady healing (regen, life drain) doesn't count; regen shows as a pulsing outline instead.
   healPing(q, before) { if (q.hp - before >= 0.5) q.healN = ((q.healN || 0) + 1) & 255; }
-  snapshot() {
+  // v1.2.35 sc (scope): { ps: the players to send, a: the arena } for one tournament arena (hostsim.js scopeFor): only its
+  // fighters, shots, walls, shields and mines go (a 1000-player tournament sent everyone's to everyone, 500 KB a time)
+  snapshot(sc = null) {
     const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100, r3 = v => Math.round(v * 1000) / 1000;
-    const h = this.hazard;
+    const h = this.hazard, F = sc ? L => L.filter(x => this.seenIn(x, sc.a)) : L => L;
     return {
-      ph: this.phase, pt: fin(this.phaseT) ? r2(this.phaseT) : -1, rd: this.round, sc: this.scores, bud: budgetRow(this), tn: tournRows(this),
+      ph: this.phase, pt: fin(this.phaseT) ? r2(this.phaseT) : -1, rd: this.round, sc: sc && this.players.length > 60 ? this.scopedScores(sc.ps) : this.scores, bud: budgetRow(this), tn: tournSnap(this)[0], tq: tournSnap(this)[1],
       pw: this.phase === 'picking' ? this.players.filter(p => !p.picked).length : 0,
-      pl: this.players.filter(p => p.connected).map(p => [
+      pl: (sc ? sc.ps : this.players).filter(p => p.connected).map(p => [
         p.id, r2(p.pos.x), r2(p.pos.y), r2(p.pos.z), r2(p.aim.x), r2(p.aim.y), r2(p.aim.z),   // (v1.0.1: aim to 2 places, less traffic)
         Math.ceil(p.hp), Math.round(this.maxHp(p)), p.alive && !p.reviving ? 1 : 0, this.shielded(p) ? 1 : 0,
         p.ammo, Math.round(p.stats.ammo), p.reloadT > 0 ? r2(p.reloadT / p.stats.reloadTime) : 0,
@@ -4151,21 +4204,21 @@ export class Game {
         p.healN || 0, p.mod === 'critter' ? this.critterCount(p) : -1, r2(this.slowFieldRadius(p.stats.slowField || 0)),
         this.extRow(p),
       ]),
-      bfx: this.bullets.filter(b => b.fx).map(b => b.latch ? [b.id, b.fx, b.latch.q.id, 1] : b.swarm === 'bee' && b.swTgt ? [b.id, b.fx, b.swTgt.id] : [b.id, b.fx]),   // v1.2.20: [2] who a bee is after (it turns red for them)
-      bu: this.bullets.map(b => [b.id, r2(b.pos.x), r2(b.pos.y), r2(b.pos.z), b.hold ? 0 : r2(b.vel.x * (b.slowK ?? 1)), b.hold ? 0 : r2(b.vel.y * (b.slowK ?? 1)), b.hold ? 0 : r2(b.vel.z * (b.slowK ?? 1)),
+      bfx: F(this.bullets).filter(b => b.fx).map(b => b.latch ? [b.id, b.fx, b.latch.q.id, 1] : b.swarm === 'bee' && b.swTgt ? [b.id, b.fx, b.swTgt.id] : [b.id, b.fx]),   // v1.2.20: [2] who a bee is after (it turns red for them)
+      bu: F(this.bullets).map(b => [b.id, r2(b.pos.x), r2(b.pos.y), r2(b.pos.z), b.hold ? 0 : r2(b.vel.x * (b.slowK ?? 1)), b.hold ? 0 : r2(b.vel.y * (b.slowK ?? 1)), b.hold ? 0 : r2(b.vel.z * (b.slowK ?? 1)),
         r3(b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r), b.owner, b.ring ? r2(b.ring) : 0, b.cown && b.cown !== b.owner ? b.cown : 0,
         b.hold ? 0 : r2((b.grav ?? RULES.bulletGravity) * (b.slowK ?? 1) ** 2)]),   // v1.2.9: [11] its gravity, so joiners' decoders predict the drop (netcodec.js GRAV)
-      bc: this.barricades.map(b => [b.id, r2(b.x), r2(b.y0), r2(b.z), r2(b.len), r2(b.h), r2(b.th), r2(Math.max(0, b.hp) / b.maxHp), b.owner, r3(b.ang), b.kind === 'concrete' ? 1 : b.kind === 'pillar' ? 2 : b.kind === 'block' ? 3 : b.kind === 'cube' ? 4 : b.kind === 'plank' ? 5 : b.kind === 'slab' ? 6 : b.kind === 'steel' ? 7 : b.kind === 'spikes' ? 8 : 0]),
+      bc: F(this.barricades).map(b => [b.id, r2(b.x), r2(b.y0), r2(b.z), r2(b.len), r2(b.h), r2(b.th), r2(Math.max(0, b.hp) / b.maxHp), b.owner, r3(b.ang), b.kind === 'concrete' ? 1 : b.kind === 'pillar' ? 2 : b.kind === 'block' ? 3 : b.kind === 'cube' ? 4 : b.kind === 'plank' ? 5 : b.kind === 'slab' ? 6 : b.kind === 'steel' ? 7 : b.kind === 'spikes' ? 8 : 0]),
       ob: this.dyn.map(o => [o.id, r2(o.pos.x), r2(o.pos.y), r2(o.pos.z), r2(o.h), o.tipped || 0, r2(o.tx || 0), r2(o.tz || 0)]),
-      sh: this.shields.map(s => [s.id, r2(s.x), r2(s.y0), r2(s.z), r2(s.w), r2(s.h), r2(s.d), s.owner, (s.shock ? 1 : 0) | (s.leech ? 2 : 0) | (s.box ? 4 : 0), s.box ? r2(Math.max(0, s.hp) / s.maxHp) : 1, r2(s.ang || 0)]),
-      mn: this.mines.map(m => m.snare ? [m.id, r2(m.x), r2(m.y), r2(m.z), m.owner, m.armT <= 0 ? 1 : 0, 1, 1] : [m.id, r2(m.x), r2(m.y), r2(m.z), m.owner, m.armT <= 0 ? 1 : 0, r2(m.sz || 1)]),   // (v1.2.15: [7] 1 = Snare Plate)
+      sh: F(this.shields).map(s => [s.id, r2(s.x), r2(s.y0), r2(s.z), r2(s.w), r2(s.h), r2(s.d), s.owner, (s.shock ? 1 : 0) | (s.leech ? 2 : 0) | (s.box ? 4 : 0), s.box ? r2(Math.max(0, s.hp) / s.maxHp) : 1, r2(s.ang || 0)]),
+      mn: F(this.mines).map(m => m.snare ? [m.id, r2(m.x), r2(m.y), r2(m.z), m.owner, m.armT <= 0 ? 1 : 0, 1, 1] : [m.id, r2(m.x), r2(m.y), r2(m.z), m.owner, m.armT <= 0 ? 1 : 0, r2(m.sz || 1)]),   // (v1.2.15: [7] 1 = Snare Plate)
       tp: this.level.traps ? Math.round(this.time * 100) / 100 : null,   // v1.2.15 trap clock (traps.js)
       lz: h && h.type === 'laser' ? [r2(h.pos), h.state === 'warn' ? 1 : h.state === 'on' ? 2 : 0] : null,
       tg: this.telegraphs.length ? telegraphRows(this) : null, sw: this.shockwaves.length ? shockRows(this) : null, bo: bossRow(this),
       rt: this.rituals.length ? this.ritualRows() : null, rl: this.relics.length ? this.relicRows() : null,
       ow: this.ow ? this.owSnap() : null,
       co: this.settings.core ? coreRows(this) : null,
-      mv: this.predRows(),
+      mv: this.predRows(sc && sc.ps),
       bw: BRAWL_ON ? this.brawlRows() : null, bi: BRAWL_ON ? bItemRows(this) : null, bwt: BRAWL_ON ? Math.max(0, Math.ceil(BRAWL.suddenT - this.time)) : null,
     };
   }

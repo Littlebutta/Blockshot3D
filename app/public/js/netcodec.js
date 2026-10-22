@@ -13,7 +13,7 @@
 //   - small side blocks (core, scores, telegraphs, boss bar...) that didn't change are left out and listed in s.u;
 //   - keyframes every 2 s instead of every 0.5 s (a joiner still gets one at once).
 const LISTS = ['pl', 'ob', 'bc', 'sh', 'mn', 'bu', 'ov'];
-const STICKY = ['sc', 'co', 'tg', 'sw', 'bo', 'rt', 'rl', 'lz', 'bw', 'mv', 'bfx', 'ow'];
+const STICKY = ['sc', 'co', 'tg', 'sw', 'bo', 'rt', 'rl', 'lz', 'bw', 'mv', 'bfx', 'ow', 'tn', 'tq'];   // (v1.2.35 tn / tq: the tournament's arenas and its table of players, 1000 rows in a 1000-player game, each only when it changes)
 export const KEY_EVERY = 60;   // two seconds at 30 snapshots a second
 const same = (a, b) => a === b || (a !== null && b !== null && typeof a === 'object' && typeof b === 'object' && JSON.stringify(a) === JSON.stringify(b));
 
@@ -115,6 +115,8 @@ const EV_KEEP = 150;           // event batches kept for players who fall behind
 // after that a copy would come 100+ ms late anyway. Hits, deaths and everything else are resent until confirmed.
 const FX = new Set(['shoot', 'impact', 'bounce', 'jump', 'reload', 'block', 'blockOn', 'splash', 'lava', 'drain', 'leech', 'zap', 'push', 'tip', 'drill', 'pad', 'beam', 'chain', 'cut', 'mine', 'unitGone', 'ritualHum', 'kingHum', 'edgeBounce']);
 const FX_TTL = 3;
+const EVA = new WeakMap();   // v1.2.35: sound / particle event (or hit) -> its tournament arena (AckEncoder push evArena)
+const LOCAL = new Set([...FX, 'hit', 'boom', 'skyLock', 'toxic', 'nc', 'death']);   // (hits, blasts, card effects: sparks, sounds, your own hit marker; deaths: the kill feed, big lobbies only: hostsim.js)
 // v1.2.6: the wire copy of an event: top-level fractions to 2 places (1 cm), about half the bytes (the host's own
 // handleEvent already ran on the originals; nested arrays / objects such as unit lists are left alone)
 const r2 = v => typeof v === 'number' && !Number.isInteger(v) ? Math.round(v * 100) / 100 : v;
@@ -170,16 +172,26 @@ function deltaList(rows, base, pv, dt, gv, L) {   // base: Map id -> row (or und
 export class AckEncoder {
   constructor() { this.n = 0; this.hist = new Map(); this.evLog = []; this.e = 1 + Math.floor(Math.random() * 1e6); }   // e: match id, so an ack from an earlier match is never used as a base
   // Store this tick's full snapshot (s: plain rows, ev: this tick's events). Returns its sequence number.
-  push(s, ev) {
-    const q = ++this.n;
-    if (s.ow && Array.isArray(s.ow.veh)) { s.ov = s.ow.veh; s.ow = { ...s.ow }; delete s.ow.veh; }
-    const lists = {}, side = {};
-    for (const L of LISTS) if (Array.isArray(s[L])) lists[L] = new Map(s[L].map(r => [r[0], r]));
-    for (const k of STICKY) if (k in s) side[k] = JSON.stringify(s[k] ?? null);
-    this.hist.set(q, { s, lists, side });
+  // v1.2.35: or several, one per group of players who see different things (a Map key -> snapshot: the tournament sends
+  // each player only the arena they're in or watching). They share the tick number and the events; a player whose
+  // group isn't in the snapshot they confirmed (they moved arena) simply gets a keyframe of the lists.
+  // v1.2.35 evArena(e): the tournament arena an event happened in (null: everywhere); a group with an arena (encodeFor ga)
+  // then gets only its own arena's sound / particle events and hits (a 1000-player tournament made about 90 kB of them a second).
+  push(s, ev, evArena = null) {
+    const q = ++this.n, G = s instanceof Map ? s : new Map([[0, s]]), groups = new Map();
+    for (const [gk, s] of G) {
+      if (s.ow && Array.isArray(s.ow.veh)) { s.ov = s.ow.veh; s.ow = { ...s.ow }; delete s.ow.veh; }
+      const lists = {}, side = {};
+      for (const L of LISTS) if (Array.isArray(s[L])) lists[L] = new Map(s[L].map(r => [r[0], r]));
+      for (const k of STICKY) if (k in s) side[k] = s[k] && s[k].sig != null ? '#' + s[k].sig : JSON.stringify(s[k] ?? null);   // (v1.2.35: the tournament table carries its own change signature)
+      groups.set(gk, { s, lists, side });
+    }
+    this.hist.set(q, groups);
     this.hist.delete(q - HIST);
     if (ev && ev.length) {
-      const all = ev.map(netEvent), keep = all.filter(e => !FX.has(e.t)), K = keep.length === all.length ? all : keep;
+      const all = ev.map(netEvent);
+      if (evArena) for (let i = 0; i < ev.length; i++) if (LOCAL.has(ev[i].t)) { const a = evArena(ev[i]); if (a != null) EVA.set(all[i], a); }
+      const keep = all.filter(e => !FX.has(e.t)), K = keep.length === all.length ? all : keep;
       // v1.2.6: a 'units' event is the whole unit roster (the peer rebuilds its list from it), so a resend only needs the
       // newest one: nu is the batch without its 'units' events, sent instead once a newer batch carries one ('split' only
       // adds units, so it always stays)
@@ -196,16 +208,18 @@ export class AckEncoder {
   // player with no ack yet, the first snapshot they were sent (they get every event from then on until they ack).
   // v1.2.12: `ek` = the newest event batch that player has applied with everything before it (AckDecoder.ack()[2]; 0 / none
   // yet: every unconfirmed batch goes in every snapshot, as before), `rs` = snapshots between resends of an unconfirmed one.
-  encodeFor(ack, since, ek, rs) {
-    const q = this.n, cur = this.hist.get(q); if (!cur) return null;
-    const base = ack && ack < q ? this.hist.get(ack) : null;
+  encodeFor(ack, since, ek, rs, gk = 0, ga = null) {
+    const q = this.n, cur = this.hist.has(q) ? this.hist.get(q).get(gk) : null; if (!cur) return null;
+    const bh = ack && ack < q ? this.hist.get(ack) : null, base = bh ? bh.get(gk) || null : null;
+    // (v1.2.35: no base when they weren't in this group then: a keyframe of the lists; events still go from their ack)
     // v1.2.9: players who confirmed the same snapshot get the very same message (one encode, and one deflate in the desktop app,
     // instead of one per player: a host with 9 joiners mostly encoded the same delta several times a tick)
-    const ck = (base ? 'a' + ack : 'k' + (ack || 0) + '_' + (since || 0)) + (ek > 0 ? '_' + ek + '_' + rs : '');
+    const ck = gk + '|' + (base ? 'a' + ack : 'k' + (ack || 0) + '_' + (since || 0)) + (ek > 0 ? '_' + ek + '_' + rs : '');
     if (this.memo && this.memo.q === q) { const m = this.memo.m.get(ck); if (m) return m; } else this.memo = { q, m: new Map() };
-    const out = this.encodeNew(q, cur, base, ack, since, ek, rs); this.memo.m.set(ck, out); return out;
+    const out = this.encodeNew(q, cur, base, ack, since, ek, rs, ga); this.memo.m.set(ck, out); return out;
   }
-  encodeNew(q, cur, base, ack, since, ek, rs) {
+  encodeNew(q, cur, base, ack, since, ek, rs, ga = null) {
+    const F = ga == null ? L => L : L => L.filter(e => { const a = EVA.get(e); return a === undefined || a === ga; });
     const out = { q, e: this.e, b: base ? ack : 0 };
     if (!base) out.kf = 1;
     for (const [k, v] of Object.entries(cur.s)) if (!LISTS.includes(k) && !STICKY.includes(k) && k !== 'ev') out[k] = v;
@@ -230,9 +244,9 @@ export class AckEncoder {
       if (bq <= low) continue;
       const fr = bq > from && bq > q - FX_TTL, kp = pk >= 0 && bq > fromK && (!(ek > 0) || bq === q || (q - bq) % R === 0), U = nu && bq < lastU;
       const p = pk >= first ? pk : 0;   // (its predecessor is no longer kept here: the joiner takes it as is)
-      if (fr && kp) { const evs = U ? nu[0] : all; eb.push(pk >= 0 ? [bq, evs, p, 1] : [bq, evs]); }
-      else if (fr) { if (fx.length) eb.push([bq, fx]); }
-      else if (kp) eb.push([bq, U ? nu[1] : keep, p]);
+      if (fr && kp) { const evs = F(U ? nu[0] : all); eb.push(pk >= 0 ? [bq, evs, p, 1] : [bq, evs]); }
+      else if (fr) { const f = F(fx); if (f.length) eb.push([bq, f]); }
+      else if (kp) eb.push([bq, F(U ? nu[1] : keep), p]);
     }
     if (eb.length) out.eb = eb;
     return out;

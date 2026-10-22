@@ -61,6 +61,7 @@ function teamPairs(g, heroes) {
 export function tournStart(g, heroes) {
   for (const p of g.players) if (p.kind === 'hero' && p.tLives === undefined) p.tLives = livesOf(g);
   const arenas = tournPair(g, heroes);
+  g._ap = null;
   g.tArenas = arenas.map((A, i) => { for (const p of A) p.arena = i; return { ids: A.map(p => p.id), done: false, winner: null }; });
   for (const p of g.players) if (p.kind === 'hero' && !heroes.includes(p)) p.arena = null;   // knocked out: watching
   g.tQuietT = null;
@@ -82,15 +83,17 @@ const ARENA_UNITS = new Set(['turret', 'blockTurret', 'mount', 'critter', 'clone
 // checkRoundEnd for tournaments: arenas finish one by one; the round ends when they all have.
 export function tournCheck(g) {
   let fighting = 0;
+  const pools = g.arenaPools();   // (v1.2.35: each arena's own list, not every player for every arena)
   g.tArenas.forEach((A, i) => {
     if (A.done) return;
-    const ps = g.players.filter(p => p.kind === 'hero' && p.arena === i && live(p));
+    const pool = pools.get(i) || [];
+    const ps = pool.filter(p => p.kind === 'hero' && live(p));
     const keys = new Set(ps.map(p => g.scoreKey(p)));
     if (keys.size >= 2) { fighting++; return; }
     let w = keys.size === 1 ? [...keys][0] : null;
     if (keys.size === 0) {   // everyone in it is down: units still standing decide, a units-only standoff is a draw
       const side = new Map();
-      for (const u of g.players) {
+      for (const u of pool) {
         if (!u.alive || !u.transient || !ARENA_UNITS.has(u.kind) || arenaOf(g, u) !== i) continue;
         const o = g.player(u.ownerId || u.kingOf), k = o && g.scoreKey(o);
         if (k) side.set(k, (side.get(k) || 0) + Math.max(0, u.hp));
@@ -141,7 +144,7 @@ function helpAlly(g, p, from) {
     const d = foes.length ? Math.min(...foes.map(q => Math.hypot(q.pos.x - s.x, q.pos.z - s.z))) : 0;
     if (d > bd) { bd = d; spot = s; }
   }
-  p.arena = dest;
+  p.arena = dest; g._ap = null;
   for (const u of g.players) if (u.transient && u.ownerId === p.id && u.alive) u.alive = false;   // (your units stay behind: they go)
   if (spot) { p.pos = { x: spot.x, y: spot.y || 0, z: spot.z }; p.vel = { x: 0, y: 0, z: 0 }; }
   p.fx.invulnT = g.time + 1;
@@ -188,10 +191,28 @@ export function tournExtend(g, extra) {
 }
 
 // Snapshot row: [id, arena, lives, knocked out] for every player, the arenas still fighting, done flags per arena, teams on
+// v1.2.35: the same object until something in it changes (quick signatures first), so a 1000-player table isn't rebuilt,
+// copied to the page and compared every frame. The player rows (p) change only at round ends; the arenas' done flags
+// change all round, so the snapshot sends them apart (sim.js snapshot tn / tq). Their .sig (not sent) tells the snapshot
+// encoder they're unchanged.
+const sigOf = (o, sig) => { Object.defineProperty(o, 'sig', { value: sig, enumerable: false }); return o; };
 export function tournRows(g) {
   if (!tournOn(g)) return null;
-  const rows = g.players.filter(p => p.kind === 'hero').map(p => [p.id, p.arena ?? -1, p.tLives ?? livesOf(g), p.tko ? 1 : 0]);
-  return { p: rows, n: (g.tArenas || []).filter(A => !A.done).length, a: (g.tArenas || []).length, L: livesOf(g), d: (g.tArenas || []).map(A => A.done ? 1 : 0), T: tournTeams(g) ? 1 : 0 };
+  const A = g.tArenas || [], L = livesOf(g);
+  let h = L * 7, n = 0, k = 0, hd = A.length * 31 + (tournTeams(g) ? 1 : 0);
+  for (const p of g.players) if (p.kind === 'hero') { k++; h = (Math.imul(h, 16777619) ^ ((p.arena ?? -1) * 4099 + (p.tLives ?? L) * 3 + (p.tko ? 1 : 0))) | 0; }
+  for (let i = 0; i < A.length; i++) if (A[i].done) hd = (Math.imul(hd, 16777619) ^ (i + 1)) | 0; else n++;
+  const sp = h + ':' + k, sig = sp + '/' + hd + ':' + n, old = g._tnRows;
+  if (old && old.sig === sig) return old;
+  const rows = old && old.p.sig === sp ? old.p : sigOf(g.players.filter(p => p.kind === 'hero').map(p => [p.id, p.arena ?? -1, p.tLives ?? L, p.tko ? 1 : 0]), sp);
+  return g._tnRows = sigOf({ p: rows, n, a: A.length, L, d: A.map(x => x.done ? 1 : 0), T: tournTeams(g) ? 1 : 0 }, sig);
+}
+// the snapshot's halves: the arenas (tn) and the player rows (tq)
+export function tournSnap(g) {
+  const T = tournRows(g); if (!T) return [null, null];
+  if (g._tnSnap && g._tnSnap[2] === T) return g._tnSnap;
+  const { p, ...rest } = T;
+  return g._tnSnap = [sigOf(rest, T.sig), p, T];
 }
 
 // ---- card trades between allies during the pick (teams): offer one card from your draw; the ally answers with one of theirs

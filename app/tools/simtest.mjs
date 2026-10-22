@@ -2182,5 +2182,34 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
     }
   }
 }
+{ // v1.2.35 (Devin): 1000-player lobbies. The tournament keeps each arena to itself: per-arena lists for everything a fighter
+  // touches, and each screen / joiner gets only the arena it shows
+  const { HostSim } = await J('hostsim.js'); const NC = await J('netcodec.js'); const T = await J('tourn.js');
+  const r = roster(200).map((x, i) => ({ ...x, isBot: i > 1 }));
+  const dec = new NC.AckDecoder(); let last = null, evOther = 0, evMine = 0, frames = 0;
+  const hs = new HostSim({ roster: r, settings: { pickTime: 1, mode: 'tourn', startPick: false }, cards, localId: 'p0', host: true }, (k, v) => {
+    if (k === 'ui' && v.k === 'offer') hs.cmd({ t: 'pick', from: 'p0', card: v.offer[0] });
+    if (k === 'net' && v.msg && v.msg.k === 'offer') hs.cmd({ t: 'pick', from: v.id, card: v.msg.offer[0] });
+    if (k === 'net' && v.msg && v.msg.k === 'snap') { const o = dec.decode(JSON.parse(JSON.stringify(v.msg.s))); if (o) { last = o; const a = hs.g.player('p1').arena; for (const e of o.ev) if (e.t === 'shoot') { const q = hs.g.player(e.p); if (q && q.arena != null && q.arena !== a) evOther++; else evMine++; } } }
+    if (k === 'frame') frames++;
+  });
+  hs.start();
+  let t = 1000;
+  for (let i = 0; i < 60 * 24; i++) { t += 1000 / 60; hs.cmd({ t: 'input', from: 'p1', i: { q: i + 1, mx: 1, mz: 0, t: t - 40, a: dec.ack() || undefined }, now: t }); hs.cmd({ t: 'frame', dt: 1 / 60, ts: 1, paused: false, t0: t, hostFps: 60, peers: [['p1', 80]], pz: [] }); }
+  const g = hs.g, p1 = g.player('p1');
+  check('1000p: the tournament is playing (200 here)', g.phase === 'play' && g.tArenas && g.tArenas.length === 100, g.phase);
+  check('1000p: a fighter\'s pool is just its arena', g.pool(p1).every(q => (q.arena ?? null) === p1.arena) && g.pool(p1).includes(p1) && g.pool(p1).length < 10, g.pool(p1).length);
+  check('1000p: bots only target their own arena', g.heroes().filter(p => p.isBot && p.ai && p.ai.target).every(p => p.ai.target.arena === p.arena));
+  check('1000p: a joiner gets only its arena\'s fighters, but the whole table', last && last.pl.length <= g.pool(p1).length + 1 && last.pl.some(x => x[0] === 'p1') && last.tq && last.tq.length === 200, last && [last.pl.length, last.tq && last.tq.length]);
+  check('1000p: other arenas\' shots don\'t reach the joiner', evOther === 0 && evMine > 0, [evOther, evMine]);
+  check('1000p: the table is the same object while nothing in it changed', T.tournRows(g) === T.tournRows(g));
+  // a joiner moving to another group (arena) gets a keyframe of the lists from the same encoder: events keep their order
+  const enc = new NC.AckEncoder(), d2 = new NC.AckDecoder();
+  enc.push(new Map([[1, { ph: 'play', pl: [['a', 1]] }]]), [{ t: 'kill', p: 'a' }]);
+  let o1 = d2.decode(JSON.parse(JSON.stringify(enc.encodeFor(0, 1, 0, 2, 1))));
+  enc.push(new Map([[1, { ph: 'play', pl: [['a', 2]] }], [2, { ph: 'play', pl: [['b', 5]] }]]), [{ t: 'kill', p: 'b' }]);
+  const m2 = enc.encodeFor(d2.ack()[1], 1, d2.ack()[2], 2, 2), o2 = d2.decode(JSON.parse(JSON.stringify(m2)));
+  check('1000p: switching arena sends a keyframe of the lists, events carry on', o1 && o2 && m2.kf === 1 && o2.pl.length === 1 && o2.pl[0][0] === 'b' && o2.ev.some(e => e.p === 'b') && !o2.ev.some(e => e.p === 'a'), JSON.stringify(m2).slice(0, 160));
+}
 console.log(`baseline: ${passes} passed, ${fails} failed, ${(Date.now() - t0) / 1000}s`);
 if (fails) process.exitCode = 1;
