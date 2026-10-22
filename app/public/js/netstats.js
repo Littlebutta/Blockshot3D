@@ -17,7 +17,7 @@ const now = () => performance.now();
 export class RateMeter {
   constructor(win = 2000) { this.win = win; this.t = []; }
   tick(t = now()) { this.t.push(t); if (this.t.length > 600 || t - this.t[0] > this.win * 2) this.t.splice(0, this.t.findIndex(x => t - x <= this.win) >>> 0); }
-  hz(t = now()) { let n = 0; for (let i = this.t.length - 1; i >= 0 && t - this.t[i] <= this.win; i--) n++; return n * 1000 / this.win; }
+  hz(t = now(), win = this.win) { let n = 0; for (let i = this.t.length - 1; i >= 0 && t - this.t[i] <= win; i--) n++; return n * 1000 / win; }
 }
 
 // v1.2.9: hitch readouts for the network window: the worst value over the last ~5 s (1 s buckets) and what came with it

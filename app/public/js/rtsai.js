@@ -4,7 +4,7 @@
 // A bot keeps its Riggers mining, builds depots before it gets supply blocked, follows a loose build order,
 // expands, pulls research cards, keeps its buildings training a mixed army and attacks in waves that grow.
 // =====================================================================
-import { RTS, UNITS, BUILDINGS, pullCost } from './rtsdata.js';
+import { RTS, UNITS, BUILDINGS, pullCost, facOf, costFor } from './rtsdata.js';
 
 const LEVELS = {
   easy:   { think: 2.2, workers: 14, waveAt: 22, waveGrow: 6, expandAt: 420, maxBarracks: 1, pulls: 1, micro: false },
@@ -18,6 +18,8 @@ class RtsBot {
     this.g = g; this.p = p; this.L = LEVELS[p.difficulty] || LEVELS.normal;
     this.t = 1 + g.rnd() * this.L.think; this.wave = this.L.waveAt; this.attacking = false; this.defendT = 0; this.defendAt = null;
     this.expanded = 0; this.lastBuild = 0; this.scouted = false; this.derT = 20 + g.rnd() * 20;
+    // v1.2.32: which of its faction's buildings plays each part of the build order (roles), and its worker
+    this.F = facOf(p); this.R = this.F.roles; this.W = this.F.worker; this.hive = p.fac === 'hive';
   }
   act(a) { this.g.action(this.p.id, a); }
   mine(type) { return this.g.units.filter(u => u.owner === this.p.id && (!type || u.type === type)); }
@@ -25,7 +27,7 @@ class RtsBot {
   onHit(t, src) {
     if (!src || src.team === this.p.team) return;
     // anything of ours hit near our buildings: defend there
-    const home = this.myB('hub')[0];
+    const home = this.myB(this.R.hub)[0];
     if (t.kind === 'b' || (home && Math.hypot(t.x - home.x, t.z - home.z) < 40)) { this.defendAt = { x: src.x, z: src.z }; this.defendT = 8; }
   }
   onOffer() { this.pickT = 0.8; }
@@ -39,19 +41,19 @@ class RtsBot {
   }
   think() {
     const g = this.g, p = this.p, L = this.L;
-    const workers = this.mine('rigger'), army = g.units.filter(u => u.owner === p.id && !u.def.worker);
-    const hubs = this.myB('hub', true), allHubs = this.myB('hub');
+    const R = this.R, workers = this.mine(this.W), army = g.units.filter(u => u.owner === p.id && !u.def.worker);
+    const hubs = this.myB(R.hub, true), allHubs = this.myB(R.hub);
     if (!allHubs.length) {   // every Command Hub lost: a surviving Rigger builds a new one at the closest free base
       const w = workers.find(u => !(u.order && u.order.k === 'build'));
-      if (w && p.crystal >= BUILDINGS.hub.cost[0] && !workers.some(u => u.order && u.order.k === 'build' && u.order.type === 'hub')) {
-        const spot = g.M.bases.filter(b => g.canPlace(p, 'hub', b.x, b.z) === true).sort((a, b) => Math.hypot(a.x - w.x, a.z - w.z) - Math.hypot(b.x - w.x, b.z - w.z))[0];
-        if (spot) this.act({ t: 'build', ids: [w.id], type: 'hub', x: spot.x, z: spot.z });
+      if (w && p.crystal >= BUILDINGS[R.hub].cost[0] && !workers.some(u => u.order && u.order.k === 'build' && u.order.type === R.hub)) {
+        const spot = g.M.bases.filter(b => g.canPlace(p, R.hub, b.x, b.z) === true).sort((a, b) => Math.hypot(a.x - w.x, a.z - w.z) - Math.hypot(b.x - w.x, b.z - w.z))[0];
+        if (spot) this.act({ t: 'build', ids: [w.id], type: R.hub, x: spot.x, z: spot.z });
       }
       return;
     }
     const home = hubs[0] || allHubs[0];
     // 1) idle workers go mining; refineries get three each
-    const refs = this.myB('refinery', true);
+    const refs = R.refinery ? this.myB(R.refinery, true) : [];
     for (const r of refs) {
       const n = workers.filter(w => w.order && w.order.k === 'harvest' && w.order.ref === r.id).length;
       if (n < 3) { const w = workers.find(w2 => w2.order && w2.order.k === 'harvest' && w2.order.res && !w2.carry && Math.hypot(w2.x - r.x, w2.z - r.z) < 30); if (w) this.act({ t: 'cmd', ids: [w.id], o: { k: 'harvest', ref: r.id, x: r.x, z: r.z } }); }
@@ -65,19 +67,20 @@ class RtsBot {
     // 2) supply first: a depot before the cap is close (money is saved for it)
     const building = t => g.units.some(u => u.owner === p.id && u.order && u.order.k === 'build' && u.order.type === t) || this.myB(t).some(b => !b.done);
     const prodN = this.myB(null, true).filter(b => b.def.trains).length;
-    const needDepot = p.supCap < p.capMax && p.supCap - p.supply < 3 + prodN * 2 && this.myB('depot').filter(b => !b.done).length + g.units.filter(u => u.owner === p.id && u.order && u.order.k === 'build' && u.order.type === 'depot' && !u.order.bid).length < (p.supply > 60 ? 2 : 1);
-    if (needDepot) { if (p.crystal >= 100) this.build('depot', home); else return; }
+    const needDepot = p.supCap < p.capMax && p.supCap - p.supply < 3 + prodN * 2 && this.myB(R.depot).filter(b => !b.done).length + g.units.filter(u => u.owner === p.id && u.order && u.order.k === 'build' && u.order.type === R.depot && !u.order.bid).length < (p.supply > 60 ? 2 : 1);
+    if (needDepot) { if (p.crystal >= BUILDINGS[R.depot].cost[0]) this.build(R.depot, home); else return; }
     // workers
     const wantW = Math.min(L.workers * Math.max(1, hubs.length) + refs.length * 3, 60);
-    for (const h of hubs) if (workers.length < wantW && h.queue.length < 1 && p.crystal >= 50) { this.act({ t: 'train', b: h.id, u: 'rigger' }); break; }
+    for (const h of hubs) if (workers.length < wantW && h.queue.length < 1 && p.crystal >= UNITS[this.W].cost[0]) { this.act({ t: 'train', b: h.id, u: this.W }); break; }
     // 4) the build order (a loose one: each step once its supply count is reached)
-    const steps = [['barracks', 13], ['refinery', 15], ['archive', 22], ['factory', 24], ['refinery', 28], ['barracks', 30], ['airfield', 38], ['reclaimer', 44], ['barracks', 50], ['factory', 60]];
+    const steps = [['barracks', 13], ['refinery', 15], ['archive', 22], ['factory', 24], ['refinery', 28], ['barracks', 30], ['airfield', 38], ['reclaimer', 44], ['barracks', 50], ['factory', 60]]
+      .map(([r, n]) => [R[r], n]).filter(([t]) => t);   // (v1.2.32: by role: the Hive has no refinery or reclaimer)
     const have = {}; for (const b of this.myB()) have[b.type] = (have[b.type] || 0) + 1;
     for (const u of g.units) if (u.owner === p.id && u.order && u.order.k === 'build' && !u.order.bid) have[u.order.type] = (have[u.order.type] || 0) + 1;
     const want = {};
     for (const [t, s] of steps) {
       want[t] = (want[t] || 0) + 1;
-      if (t === 'barracks' && want[t] > L.maxBarracks) continue;
+      if (t === R.barracks && want[t] > L.maxBarracks) continue;
       if (p.supply < s || (have[t] || 0) >= want[t]) continue;
       if (!g.hasTech(p, BUILDINGS[t].needs)) continue;
       if (g.time - this.lastBuild < 3) break;
@@ -85,27 +88,27 @@ class RtsBot {
       break;
     }
     // expand to the natural (and later more bases)
-    if (g.time > L.expandAt * (1 + this.expanded * 1.2) && p.crystal >= 400 && !building('hub') && this.expanded < 3) this.expand();
+    if (g.time > L.expandAt * (1 + this.expanded * 1.2) && p.crystal >= BUILDINGS[R.hub].cost[0] + 50 && !building(R.hub) && this.expanded < 3) this.expand();
     // research cards (before the army, so training doesn't eat every crystal: v1.2.28)
-    const arch = this.myB('archive', true)[0];
-    if (arch && !arch.queue.length && (p.pulls < L.pulls * (1 + Math.floor(g.time / 400)) || p.flux > 600) && p.crystal >= pullCost(p.pulls)[0] && p.flux >= pullCost(p.pulls)[1]) this.act({ t: 'pull', ids: [arch.id] });
+    const arch = this.myB(R.archive, true)[0], pc = costFor(p, pullCost(p.pulls));
+    if (arch && !arch.queue.length && (p.pulls < L.pulls * (1 + Math.floor(g.time / 400)) || p.flux > 600) && p.crystal >= pc[0] && p.flux >= pc[1]) this.act({ t: 'pull', ids: [arch.id] });
     for (const c of p.hand.slice()) this.act({ t: 'fit', c, u: this.bestType() });
     // 5) army production
     for (const b of this.myB(null, true)) {
-      if (!b.def.trains || b.type === 'hub' || b.queue.length >= 2) continue;
+      if (!b.def.trains || b.def.drop || b.queue.length >= 2) continue;
       const pick = this.armyPick(b);
       if (pick) this.act({ t: 'train', b: b.id, u: pick });
     }
     // rally new units to the front of the base
     const rally = this.rallyPoint(home);
-    for (const b of this.myB(null, true)) if (b.def.trains && b.type !== 'hub' && (!b.rally || Math.hypot(b.rally.x - rally.x, b.rally.z - rally.z) > 4)) this.act({ t: 'cmd', ids: [b.id], o: { k: 'rally', x: rally.x, z: rally.z } });
+    for (const b of this.myB(null, true)) if (b.def.trains && !b.def.drop && (!b.rally || Math.hypot(b.rally.x - rally.x, b.rally.z - rally.z) > 4)) this.act({ t: 'cmd', ids: [b.id], o: { k: 'rally', x: rally.x, z: rally.z } });
     // a trooper or two takes derricks now and then
     this.derT -= this.L.think;
     if (this.derT <= 0) {
       this.derT = 45 + g.rnd() * 30;
       const free = g.derricks.filter(d => !d.owner || g.player(d.owner).team !== p.team).sort((a, b) => Math.hypot(a.x - home.x, a.z - home.z) - Math.hypot(b.x - home.x, b.z - home.z))[0];
       const t = army.find(u => u.def.tags.includes('bio') && !u.order);
-      if (free && t) this.act({ t: 'cmd', ids: [t.id], o: { k: 'capture', der: free.id, x: free.x, z: free.z } });
+      if (free && t && (!this.hive || g.inNet(p, free.x, free.z))) this.act({ t: 'cmd', ids: [t.id], o: { k: 'capture', der: free.id, x: free.x, z: free.z } });
     }
     // 6) the army: defend, gather, attack in waves
     const fighters = army.filter(u => u.def.weapons.length || u.def.heal);
@@ -114,10 +117,11 @@ class RtsBot {
       const ids = fighters.filter(u => Math.hypot(u.x - this.defendAt.x, u.z - this.defendAt.z) < 70).map(u => u.id);
       if (ids.length) this.act({ t: 'cmd', ids, o: { k: 'amove', x: this.defendAt.x, z: this.defendAt.z } });
       // towers go up when a base keeps getting hit
-      if (g.hasTech(p, ['barracks']) && p.crystal > 150 && this.myB('sentry').length < 2 + hubs.length && !building('sentry')) this.build('sentry', home, 8);
+      if (g.hasTech(p, [R.barracks]) && p.crystal > 150 && this.myB(R.sentry).length < 2 + hubs.length && !building(R.sentry)) this.build(R.sentry, home, 8);
     } else if (!this.attacking && armySup >= this.wave) {
       this.attacking = true; this.wave += L.waveGrow;
     }
+    if (this.attacking && this.hive) this.creep(this.attackTarget(), building);
     if (this.attacking) {
       const tgt = this.attackTarget();
       if (tgt && !tgt.kind && g.units.some(u => u.owner === p.id && !u.def.worker && Math.hypot(u.x - tgt.x, u.z - tgt.z) < 10) && !g.blds.some(b => b.team !== p.team && Math.hypot(b.x - tgt.x, b.z - tgt.z) < 30)) {
@@ -126,8 +130,9 @@ class RtsBot {
       }
       if (!tgt || armySup < Math.max(6, this.wave * 0.25 - L.waveGrow)) { this.attacking = false; }
       else {
-        const ids = fighters.filter(u => !u.order || u.order.k !== 'amove' || Math.hypot(u.order.x - tgt.x, u.order.z - tgt.z) > 8).map(u => u.id);
-        if (ids.length) this.act({ t: 'cmd', ids, o: { k: 'amove', x: tgt.x, z: tgt.z } });
+        const go = this.hive ? this.staging(tgt) : tgt;   // (v1.2.32: the Hive waits at the edge of its network until it reaches close enough)
+        const ids = fighters.filter(u => !u.order || u.order.k !== 'amove' || Math.hypot(u.order.x - go.x, u.order.z - go.z) > 8).map(u => u.id);
+        if (ids.length) this.act({ t: 'cmd', ids, o: { k: 'amove', x: go.x, z: go.z } });
       }
     } else if (this.defendT <= 0) {
       const idle = fighters.filter(u => !u.order && Math.hypot(u.x - rally.x, u.z - rally.z) > 14).map(u => u.id);
@@ -149,10 +154,11 @@ class RtsBot {
     const opts = (b.def.trains || []).filter(t => g.hasTech(p, UNITS[t].needs) && p.crystal >= UNITS[t].cost[0] && p.flux >= UNITS[t].cost[1]);
     if (!opts.length) return null;
     const rich = p.flux > 300;
-    const w = { trooper: rich ? 3 : 6, lancer: rich ? 5 : 3, medic: n('trooper') + n('lancer') > 8 + n('medic') * 6 ? 2 : 0, vaulter: 1, strider: 2, crawler: rich ? 5 : 3, spotter: n('spotter') < 1 ? 2 : 0, hornet: 2, gunship: rich ? 4 : 2 };
+    const w = { trooper: rich ? 3 : 6, lancer: rich ? 5 : 3, medic: n('trooper') + n('lancer') > 8 + n('medic') * 6 ? 2 : 0, vaulter: 1, strider: 2, crawler: rich ? 5 : 3, spotter: n('spotter') < 1 ? 2 : 0, hornet: 2, gunship: rich ? 4 : 2,
+      skitter: 6, spitter: 4, ravager: 4, crusher: 3, wasp: 3 };
     // keep some anti-air if the enemy flies
     const enemyAir = g.units.some(u => u.team !== p.team && u.air && g.seenBy(p.team, u));
-    if (enemyAir) { w.hornet = 5; w.trooper += 3; }
+    if (enemyAir) { w.hornet = 5; w.trooper += 3; w.spitter += 4; w.wasp += 2; }
     let tot = 0; for (const t of opts) tot += w[t] || 0;
     if (!tot) return null;
     let r = g.rnd() * tot; for (const t of opts) { r -= w[t] || 0; if (r <= 0) return t; }
@@ -161,7 +167,7 @@ class RtsBot {
   bestType() {   // (v1.2.28: only unit types with room for another card; Riggers take any number)
     const cnt = {}; for (const u of this.g.units) if (u.owner === this.p.id && !u.def.worker) cnt[u.type] = (cnt[u.type] || 0) + u.def.supply;
     const ok = t => this.g.roomFor(this.p, t, true);
-    return Object.entries(cnt).sort((a, b) => b[1] - a[1]).map(x => x[0]).find(ok) || ['trooper', 'lancer', 'medic'].find(ok) || 'rigger';
+    return Object.entries(cnt).sort((a, b) => b[1] - a[1]).map(x => x[0]).find(ok) || (this.hive ? ['skitter', 'spitter', 'ravager'] : ['trooper', 'lancer', 'medic']).find(ok) || this.W;
   }
   pickCard() {
     const off = this.p.offers[0]; if (!off) return;
@@ -170,17 +176,41 @@ class RtsBot {
     off.forEach((id, i) => { const c = this.g.cardById.get(id); if (!c) return; const s = Object.values(c.up).reduce((a, v) => a + v, 0) + this.g.rnd() * 0.2; if (s > bs) { bs = s; best = i; } });
     this.act({ t: 'pick', i: best, u: this.bestType() });
   }
+  staging(tgt) {
+    const src = this.g.netOf(this.p); let best = null, bd = Infinity;
+    for (const s of src) { const d = Math.hypot(s[0] - tgt.x, s[1] - tgt.z); if (d < bd) { bd = d; best = s; } }
+    if (!best) return tgt;
+    const r = Math.sqrt(best[2]); if (bd < r + 12) return tgt;   // close enough: go for it
+    return { x: best[0] + (tgt.x - best[0]) / bd * (r - 3), z: best[1] + (tgt.z - best[1]) / bd * (r - 3) };
+  }
+  // v1.2.32 the Hive: a Hive Node at the edge of the network, toward where the army is going
+  creep(tgt, building) {
+    const g = this.g, p = this.p; if (!tgt || building('node') || p.crystal < BUILDINGS.node.cost[0] + 40) return;
+    const src = g.netOf(p); if (!src.length) return;
+    let best = null, bd = Infinity; for (const s of src) { const d = Math.hypot(s[0] - tgt.x, s[1] - tgt.z); if (d < bd) { bd = d; best = s; } }
+    if (!best || bd < Math.sqrt(best[2]) - 2) return;   // the target is inside already
+    const r = Math.sqrt(best[2]) - 3, ux = (tgt.x - best[0]) / bd, uz = (tgt.z - best[1]) / bd;
+    for (const da of [0, 0.35, -0.35, 0.7, -0.7]) {
+      const c = Math.cos(da), sn = Math.sin(da), x = best[0] + (ux * c - uz * sn) * r, z = best[1] + (ux * sn + uz * c) * r;
+      if (g.canPlace(p, 'node', x, z) !== true) continue;
+      const w = this.pickWorker({ x, z }); if (!w) return;
+      this.act({ t: 'build', ids: [w.id], type: 'node', x, z });
+      this.lastBuild = g.time; return;
+    }
+  }
   nearest(list, e) { let b = null, bd = Infinity; for (const x of list) { const d = Math.hypot(x.x - e.x, x.z - e.z); if (d < bd) { bd = d; b = x; } } return b; }
   rallyPoint(home) {
     const s = this.g.M.starts[this.p.start] || home;
     const ra = s.rampAt || home;
-    return { x: ra.x + (ra.x - home.x) * 0.25, z: ra.z + (ra.z - home.z) * 0.25 };
+    const pt = { x: ra.x + (ra.x - home.x) * 0.25, z: ra.z + (ra.z - home.z) * 0.25 };
+    if (this.hive) { const d = Math.hypot(pt.x - home.x, pt.z - home.z), m = 14; if (d > m) { pt.x = home.x + (pt.x - home.x) / d * m; pt.z = home.z + (pt.z - home.z) / d * m; } }   // (inside the Nest's network)
+    return pt;
   }
   attackTarget() {
     const g = this.g, p = this.p;
     // the nearest enemy building we know about, else an enemy start location
     let best = null, bd = Infinity;
-    const home = this.myB('hub')[0] || { x: 0, z: 0 };
+    const home = this.myB(this.R.hub)[0] || { x: 0, z: 0 };
     for (const b of g.blds) { if (b.team === p.team || (!b.pl.revealed && !g.explored.get(p.team)[Math.max(0, cellOfB(g, b))])) continue; const d = Math.hypot(b.x - home.x, b.z - home.z); if (d < bd) { bd = d; best = b; } }
     if (best) return best;
     // nothing known: sweep the enemy starts, then every base spot, in turn
@@ -195,7 +225,7 @@ class RtsBot {
     const cost = BUILDINGS[type].cost; if (p.crystal < cost[0] || p.flux < cost[1]) return false;
     let spot = null;
     if (type === 'refinery') {
-      for (const h of this.myB('hub')) { for (const r of g.res.values()) if (r.k === 'f' && !r.ref && Math.hypot(r.x - h.x, r.z - h.z) < 16) { spot = { x: r.x, z: r.z }; break; } if (spot) break; }
+      for (const h of this.myB(this.R.hub)) { for (const r of g.res.values()) if (r.k === 'f' && !r.ref && Math.hypot(r.x - h.x, r.z - h.z) < 16) { spot = { x: r.x, z: r.z }; break; } if (spot) break; }
     } else spot = this.findSpot(type, home, minR);
     if (!spot) return false;
     this.act({ t: 'build', ids: [worker.id], type, x: spot.x, z: spot.z, q: false });
@@ -205,7 +235,7 @@ class RtsBot {
     return true;
   }
   pickWorker(near) {
-    const ws = this.mine('rigger').filter(w => !w.carry && !w.inside && (!w.order || (w.order.k === 'harvest' && w.order.res)));
+    const ws = this.mine(this.W).filter(w => !w.carry && !w.inside && (!w.order || (w.order.k === 'harvest' && w.order.res)));
     return this.nearest(ws, near);
   }
   findSpot(type, home, minR) {
@@ -227,13 +257,13 @@ class RtsBot {
     return null;
   }
   expand() {
-    const g = this.g, p = this.p, home = this.myB('hub')[0]; if (!home) return;
-    const taken = b => g.blds.some(x => x.type === 'hub' && Math.hypot(x.x - b.x, x.z - b.z) < 10);
+    const g = this.g, p = this.p, H = this.R.hub, home = this.myB(H)[0]; if (!home) return;
+    const taken = b => g.blds.some(x => x.def.drop && Math.hypot(x.x - b.x, x.z - b.z) < 10);
     const free = g.M.bases.filter(b => !taken(b)).sort((a, b) => Math.hypot(a.x - home.x, a.z - home.z) - Math.hypot(b.x - home.x, b.z - home.z));
     for (const b of free) {
-      if (g.canPlace(p, 'hub', b.x, b.z) !== true) continue;
+      if (g.canPlace(p, H, b.x, b.z) !== true) continue;
       const w = this.pickWorker(home); if (!w) return;
-      this.act({ t: 'build', ids: [w.id], type: 'hub', x: b.x, z: b.z });
+      this.act({ t: 'build', ids: [w.id], type: H, x: b.x, z: b.z });
       this.expanded++; this.lastBuild = g.time;
       return;
     }

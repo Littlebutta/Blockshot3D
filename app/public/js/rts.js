@@ -8,20 +8,19 @@
 // Vision: per team, StarCraft rules (stampVision): fog of war, explored ground, can't see up cliffs, air sees all.
 // Each player is only sent what their team sees (viewFor) through its own AckEncoder stream (rtsui.js sendViews).
 // =====================================================================
-import { RTS, UNITS, BUILDINGS, UNIT_IDS, BUILDING_IDS, ABILITIES, supplyCap, researchCards, sumUps, pullCost, PULL_ODDS, cardCap } from './rtsdata.js';
+import { RTS, UNITS, BUILDINGS, UNIT_IDS, BUILDING_IDS, ABILITIES, supplyCap, researchCards, sumUps, pullCost, PULL_ODDS, cardCap, facOf, facUnits, costFor } from './rtsdata.js';
 import { generateRtsMap, CELL, LEVEL_H, STEP_MAX, ROCK, cellOf, cellX, cellZ, groundAt, stampVision, resCells, mulberry } from './rtsmap.js';
 import { rtsBot } from './rtsai.js';
+import { INF, D8X, D8Z, D8C, Heap, flowField } from './rtsnav.js';
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
-const INF = 0x3fffffff;
-const D8X = [1, -1, 0, 0, 1, 1, -1, -1], D8Z = [0, 0, 1, -1, 1, -1, 1, -1], D8C = [10, 10, 10, 10, 14, 14, 14, 14];
 export const TYPE_LIST = [...UNIT_IDS, ...BUILDING_IDS];   // type index on the wire
 export const typeIndex = new Map(TYPE_LIST.map((t, i) => [t, i]));
 const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; };
 
 // v1.2.27 entity budget for the RTS (same idea as the shooter's shot budget, budget.js): the unit cap adapts to how
 // well the game runs. When it's near, the players with the most units are held from training more, first.
-export const RTS_BUDGET = { msSlow: 22, msGood: 12, fpsSlow: 30, fpsGood: 36, every: 1, down: 0.92, up: 1.04, press: 0.8, minPer: 24 };
+export const RTS_BUDGET = { msSlow: 22, msGood: 12, fpsSlow: 30, fpsGood: 36, every: 1, down: 0.92, up: 1.04, press: 0.8, minPer: 40 };   // (v1.2.32: minPer was 24)
 
 export class RtsGame {
   constructor({ roster, settings, cards, seed }) {
@@ -35,7 +34,7 @@ export class RtsGame {
     this.time = 0; this.tickN = 0; this.acc = 0; this.nextId = 1; this.events = []; this.phase = 'play'; this.winner = null; this.dirty = true;
     const N = this.M.N;
     this.occ = new Int32Array(N * N);   // building on each cell (id), 0 = none
-    this.navVer = 1; this.fields = new Map(); this.fieldBudget = 0;
+    this.navVer = 1; this.fields = new Map(); this.fieldBudget = 0; this.nav = null;   // (nav: v1.2.30 NavPool, fields on other cores)
     this.ents = new Map(); this.units = []; this.blds = [];
     this.res = new Map(this.M.res.map(r => [r.id, { ...r, busy: 0, ref: 0 }]));
     for (const r of this.res.values()) for (const k of resCells(r, N, this.M.H)) if (k >= 0) this.occ[k] = -r.id;   // (negative: a resource)
@@ -45,6 +44,7 @@ export class RtsGame {
     const cap = supplyCap(roster.length);
     this.players = roster.map((r, i) => ({
       id: r.id, name: r.name, color: r.color || '#8fd0ff', team: settings.mode === 'rts' && this.teamsOn(roster) ? (r.team || 0) : i, idx: i,
+      fac: r.fac === 'hive' || r.fac === 'steel' ? r.fac : r.fac === 'random' || (r.isBot && !r.fac) ? (this.rnd() < 0.5 ? 'hive' : 'steel') : 'steel',   // v1.2.32 factions (bots with no pick: either)
       isBot: !!r.isBot, difficulty: r.difficulty || 'normal', connected: true, out: false, spectator: false,
       crystal: RTS.startCrystal, flux: RTS.startFlux, supply: 0, supCap: 0, capMax: cap, inc: 0, incAcc: 0, incT: 0, trickle: 0,
       ups: {}, hand: [], offer: null, offers: [], pulls: 0, flareT: 0, alertT: {}, held: false, heldT: 0,
@@ -56,16 +56,16 @@ export class RtsGame {
     this.visT = 0; this.bud = { cap: Infinity, total: 0, ms: 0, fps: 0, acc: 0, n: 0, t: 0 };
     this.hash = new Map(); this.hashSize = 6;
     this.bots = new Map();
-    // starting bases: a Command Hub and 12 Riggers already mining
+    // starting bases: a Command Hub (Brood Nest) and 12 Riggers (Mites) already mining
     this.players.forEach((p, i) => {
-      const s = this.M.starts[i];
-      const hub = this.addBuilding(p, 'hub', s.x, s.z, true);
+      const s = this.M.starts[i], F = facOf(p);
+      const hub = this.addBuilding(p, F.roles.hub, s.x, s.z, true);
       const base = this.M.bases.find(b => b.main === i);
       const patches = base ? base.patches.map(id => this.res.get(id)).filter(Boolean) : [];
       for (let w = 0; w < RTS.startWorkers; w++) {
         const r = patches[w % Math.max(1, patches.length)];
         const a = Math.atan2((r ? r.z : s.z + 1) - s.z, (r ? r.x : s.x) - s.x) + (w - 5.5) * 0.12;
-        const u = this.addUnit(p, 'rigger', s.x + Math.cos(a) * 5.4, s.z + Math.sin(a) * 5.4);
+        const u = this.addUnit(p, F.worker, s.x + Math.cos(a) * 5.4, s.z + Math.sin(a) * 5.4);
         if (r) this.order(u, { k: 'harvest', res: r.id }, false);
       }
       this.recount(p);
@@ -160,7 +160,7 @@ export class RtsGame {
     for (const b of this.blds) {
       if (b.owner !== p.id) continue;
       if (b.done && b.def.gives) cap += b.def.gives;
-      for (const q of b.queue) if (q.u && q.started) sup += UNITS[q.u].supply;
+      for (const q of b.queue) if (q.u && q.started) sup += UNITS[q.u].supply * (UNITS[q.u].n || 1);   // (v1.2.32: a Hive brood is several units)
     }
     p.supply = sup; p.supCap = Math.min(p.capMax, cap);
   }
@@ -185,7 +185,7 @@ export class RtsGame {
     if (a.t === 'surrender') { if (!p.out) this.eliminate(p, 'surrender'); return; }
     if (p.out || this.phase !== 'play') return;
     p.stats.apm++;
-    const mine = ids => (Array.isArray(ids) ? ids : []).slice(0, 400).map(id => this.ents.get(id)).filter(e => e && e.owner === p.id);
+    const mine = ids => (Array.isArray(ids) ? ids : []).slice(0, 1000).map(id => this.ents.get(id)).filter(e => e && e.owner === p.id);
     switch (a.t) {
       case 'cmd': {   // orders for a group of units: { ids, o: { k, x, z, id, type }, q: queue (shift) }
         const us = mine(a.ids).filter(e => e.kind === 'u'), bs = mine(a.ids).filter(e => e.kind === 'b');
@@ -257,15 +257,16 @@ export class RtsGame {
       case 'pick': {   // { i }: take one of the cards a pull offered
         const off = p.offers[0]; if (!off) break;
         const id = off[a.i | 0]; if (!id) break;
+        if (a.u && !this.ownType(p, a.u)) a = { ...a, u: null };
         if (a.u && UNITS[a.u] && !this.roomFor(p, a.u)) { if (!a.keep || p.hand.length >= RTS.pull.hand) break; a = { ...a, u: null }; }   // (full: v1.2.28)
-        if (!a.u && p.hand.length >= RTS.pull.hand) { const t = UNIT_IDS.find(u => this.roomFor(p, u, true)); if (!t) break; a = { ...a, u: t }; }
+        if (!a.u && p.hand.length >= RTS.pull.hand) { const t = facUnits(p.fac).find(u => this.roomFor(p, u, true)); if (!t) break; a = { ...a, u: t }; }
         p.offers.shift();
         if (a.u && UNITS[a.u]) this.fitCard(p, id, a.u); else p.hand.push(id);
         this.dirty = true;
         break;
       }
       case 'fit': {   // { c, u }: put a card from your hand on a unit type
-        const i = p.hand.indexOf(a.c); if (i < 0 || !UNITS[a.u] || !this.roomFor(p, a.u)) break;
+        const i = p.hand.indexOf(a.c); if (i < 0 || !this.ownType(p, a.u) || !this.roomFor(p, a.u)) break;
         p.hand.splice(i, 1); this.fitCard(p, a.c, a.u); break;
       }
       case 'unfit': {   // v1.2.28 { c, u }: take a card off a unit type, back into your hand (to fit it somewhere else)
@@ -279,6 +280,7 @@ export class RtsGame {
       case 'discard': { const i = p.hand.indexOf(a.c); if (i >= 0) p.hand.splice(i, 1); this.dirty = true; break; }
     }
   }
+  ownType(p, type) { return !!UNITS[type] && UNITS[type].fac === (p.fac || 'steel'); }   // (v1.2.32: cards go on your own faction's units)
   // v1.2.28 (Devin): each unit type holds up to RTS.pull.perUnit cards (workers any number)
   roomFor(p, type, quiet) {
     if ((p.ups[type] || []).length < cardCap(type)) return true;
@@ -314,7 +316,7 @@ export class RtsGame {
   queuePull(p, b) {
     if (!b.done || b.queue.length >= RTS.queueMax) return false;
     if (p.offers.length + p.hand.length + b.queue.length >= RTS.pull.hand + 2) { this.alert(p, 'hand', b.x, b.z, 'Fit some of your cards first.', 1); return false; }
-    const cost = pullCost(p.pulls);
+    const cost = costFor(p, pullCost(p.pulls));   // (v1.2.32: the Hive pays it all in crystal)
     if (!this.afford(p, cost)) return false;
     this.pay(p, cost); p.pulls++;
     b.queue.push({ card: 1, cost, dur: RTS.pull.time });
@@ -330,6 +332,7 @@ export class RtsGame {
   }
   canPlace(p, type, x, z, explain) {
     const d = BUILDINGS[type]; if (!d) return 'Unknown building.';
+    if (d.fac !== (p.fac || 'steel')) return 'Your faction can\'t build that.';
     if (!this.hasTech(p, d.needs)) return `Needs ${d.needs.map(t => BUILDINGS[t].name).join(', ')}.`;
     const N = this.M.N, M = this.M;
     if (d.vent) {
@@ -351,8 +354,10 @@ export class RtsGame {
     }
     // no enemy units in the way (yours step aside)
     for (const u of this.units) if (!u.air && u.team !== p.team && Math.abs(u.x - f.x) < f.s + u.r && Math.abs(u.z - f.z) < f.s + u.r) return 'Something is in the way.';
+    // v1.2.32: Hive buildings (but the Nest) go up inside the hive network
+    if (d.fac === 'hive' && !d.drop && !this.inNet(p, f.x, f.z)) return 'Hive buildings go inside your network (near a Brood Nest or Hive Node).';
     // hubs keep their distance from crystal and vents (StarCraft's rule)
-    if (type === 'hub') for (const r of this.res.values()) if (Math.abs(r.x - f.x) < 6.5 + (r.k === 'f' ? 1 : 0) && Math.abs(r.z - f.z) < 6.5 + (r.k === 'f' ? 1 : 0)) return 'Too close to crystal or flux.';
+    if (d.drop) for (const r of this.res.values()) if (Math.abs(r.x - f.x) < 6.5 + (r.k === 'f' ? 1 : 0) && Math.abs(r.z - f.z) < 6.5 + (r.k === 'f' ? 1 : 0)) return 'Too close to crystal or flux.';
     return true;
   }
   ventAt(x, z) { for (const r of this.res.values()) if (r.k === 'f' && Math.abs(r.x - x) < 2.6 && Math.abs(r.z - z) < 2.6) return r; return null; }
@@ -450,6 +455,7 @@ export class RtsGame {
     this.visT -= dt;
     if (this.visT <= 0) { this.visT = 0.2; this.updateVision(); }
     if (this.tickN % 10 === 0) { this.checkStranded(); this.checkOver(); }
+    if (this.tickN % 20 === 0) this.hiveTick();
     const t1 = typeof performance !== 'undefined' ? performance.now() : Date.now();
     this.budgetTick(dt, t1 - t0);
   }
@@ -487,7 +493,7 @@ export class RtsGame {
       const q = b.queue[0];
       if (q.u && !q.started) {
         const d = UNITS[q.u];
-        if (p.supply + d.supply > p.supCap) { this.alert(p, 'supply', b.x, b.z, p.supCap >= p.capMax ? 'You\'re at the supply limit.' : 'Not enough supply: build Supply Depots.', 8); return; }
+        if (p.supply + d.supply * (d.n || 1) > p.supCap) { this.alert(p, 'supply', b.x, b.z, p.supCap >= p.capMax ? 'You\'re at the supply limit.' : 'Not enough supply: build Supply Depots.', 8); return; }
         if (this.held(p)) { this.alert(p, 'held', b.x, b.z, 'Training held to keep the game smooth: you have the most units (right-click the unit bar to learn more).', 10); p.held = true; p.heldT = 1; return; }
         q.started = true; q.t0 = this.time; this.recount(p); this.dirty = true;
       }
@@ -495,7 +501,7 @@ export class RtsGame {
       b.qT += dt;
       if (b.qT >= q.dur) {
         b.qT = 0; b.queue.shift(); this.dirty = true;
-        if (q.u) { this.spawnFrom(b, q.u); if (b.pl.ups[q.u] && this.rnd() < sumUps((p.ups[q.u] || []).map(id => (this.cardById.get(id) || {}).up)).twin && p.supply + UNITS[q.u].supply <= p.supCap) { this.spawnFrom(b, q.u); this.alert(p, 'twin', b.x, b.z, `Twin! A free ${UNITS[q.u].name}.`, 2); } this.recount(p); }
+        if (q.u) { for (let k = 0; k < (UNITS[q.u].n || 1); k++) this.spawnFrom(b, q.u); if (b.pl.ups[q.u] && this.rnd() < sumUps((p.ups[q.u] || []).map(id => (this.cardById.get(id) || {}).up)).twin && p.supply + UNITS[q.u].supply <= p.supCap) { this.spawnFrom(b, q.u); this.alert(p, 'twin', b.x, b.z, `Twin! A free ${UNITS[q.u].name}.`, 2); } this.recount(p); }
         if (q.card) this.offerCards(p);
       }
     }
@@ -566,7 +572,7 @@ export class RtsGame {
     if (u.def.heal) this.medic(u, dt);
     const o = u.order;
     // auto-acquire targets: idle, attack-moving, holding or patrolling units (and anyone who's being shot)
-    const canFight = u.def.weapons.length > 0 && !u.def.worker;
+    const canFight = u.def.weapons.length > 0 && (!u.def.worker || u.pl.feral);   // (feral workers bite too)
     if (canFight && (!o || o.k === 'amove' || o.k === 'hold' || o.k === 'patrol')) {
       u.acqT -= dt;
       if (u.acqT <= 0) { u.acqT = 0.25 + this.rnd() * 0.1; const t = this.acquire(u, o && o.k === 'hold' ? 0 : 1); if (t && (!u.tgt || u.tgtAuto)) { u.tgt = t.id; u.tgtAuto = true; } }
@@ -815,10 +821,10 @@ export class RtsGame {
     for (const p of this.players) {
       if (p.out || p.spectator) continue;
       // no Command Hub for 2 minutes: everyone sees your buildings (so a hidden last building can't drag a game on forever)
-      if (this.blds.some(b => b.owner === p.id && b.type === 'hub')) { p.noHubT = null; p.revealed = false; }
-      else { if (p.noHubT == null) p.noHubT = this.time; if (!p.revealed && this.time - p.noHubT > 120) { p.revealed = true; this.ev({ t: 'msg', text: `${p.name} has no Command Hub left: their buildings are revealed.` }); } }
+      if (this.blds.some(b => b.owner === p.id && b.def.drop)) { p.noHubT = null; p.revealed = false; }
+      else { if (p.noHubT == null) p.noHubT = this.time; if (!p.revealed && this.time - p.noHubT > 120) { p.revealed = true; this.ev({ t: 'msg', text: `${p.name} has no ${BUILDINGS[facOf(p).roles.hub].name} left: their buildings are revealed.` }); } }
       if (this.units.some(u => u.owner === p.id)) continue;
-      if (this.blds.some(b => b.owner === p.id && ((b.done && b.def.trains) || (!b.done && b.type === 'hub')))) continue;
+      if (this.blds.some(b => b.owner === p.id && ((b.done && b.def.trains) || (!b.done && b.def.drop)))) continue;
       this.eliminate(p, 'stranded');
     }
   }
@@ -1121,14 +1127,22 @@ export class RtsGame {
     }
     if (cliff) key += 'c';
     let F = this.fields.get(key);
+    if (this.nav) {   // v1.2.30: worked out on other CPU cores (rtsnav.js NavPool); until it's back, the old one (or a straight line)
+      if (F && F.ver === this.navVer) { F.used = this.time; return F.d; }
+      if (!F) { F = { d: null, ver: -1, want: -1, used: this.time }; this.fields.set(key, F); this.trimFields(); }
+      F.used = this.time;
+      if (F.want !== this.navVer && this.nav.request(this.navVer, this.occ, goals, cliff, (d, ver) => { if (ver >= F.ver) { F.d = d; F.ver = ver; } })) F.want = this.navVer;
+      return F.d;
+    }
     if (F && (F.ver === this.navVer || this.fieldBudget <= 0)) { F.used = this.time; return F.d; }
     if (this.fieldBudget <= 0 && !F) return null;
     this.fieldBudget--;
     const d = this.computeField(goals, cliff);
     if (!F) { F = { d, ver: this.navVer, used: this.time }; this.fields.set(key, F); } else { F.d = d; F.ver = this.navVer; F.used = this.time; }
-    if (this.fields.size > 64) { let ok = null, ot = Infinity; for (const [k2, v] of this.fields) if (v.used < ot) { ot = v.used; ok = k2; } this.fields.delete(ok); }
+    this.trimFields();
     return d;
   }
+  trimFields() { if (this.fields.size > 64) { let ok = null, ot = Infinity; for (const [k2, v] of this.fields) if (v.used < ot) { ot = v.used; ok = k2; } this.fields.delete(ok); } }
   nearestOpen(k) {
     const N = this.M.N, cx = k % N, cz = (k / N) | 0;
     for (let r = 1; r < 8; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
@@ -1139,30 +1153,7 @@ export class RtsGame {
     return -1;
   }
   computeField(goals, cliff) {
-    const M = this.M, N = M.N, NN = N * N, h = M.h;
-    const d = this._fd && this._fd.length === NN ? new Uint32Array(NN) : new Uint32Array(NN);
-    d.fill(INF);
-    const heap = this._heap || (this._heap = new Heap(NN * 2));
-    heap.clear();
-    for (const k of goals) { d[k] = 0; heap.push(k, 0); }
-    while (heap.n) {
-      const c = heap.pop(), dc = heap.lastKey;
-      if (dc > d[c]) continue;
-      const cx = c % N, cz = (c / N) | 0, open = this.passable(c);
-      for (let i = 0; i < 8; i++) {
-        const ex = cx + D8X[i], ez = cz + D8Z[i]; if (ex < 0 || ez < 0 || ex >= N || ez >= N) continue;
-        const j = ez * N + ex;
-        if (!this.passable(j)) continue;
-        if (open) {
-          const dh = Math.abs(h[j] - h[c]);
-          if (dh > STEP_MAX && !(cliff && dh <= LEVEL_H * 1.25 && M.lv[j] !== ROCK)) continue;
-          if (i >= 4 && (!this.passable(cz * N + ex) || !this.passable(ez * N + cx))) continue;
-        }
-        const nd = dc + D8C[i];
-        if (nd < d[j]) { d[j] = nd; heap.push(j, nd); }
-      }
-    }
-    return d;
+    return flowField(this.M, this.occ, goals, cliff, this._heap ||= new Heap(this.M.N * this.M.N * 2));
   }
 
   // ---------------------------------------------------------------- crowds
@@ -1224,7 +1215,7 @@ export class RtsGame {
   derrickTick(dt) {
     for (const d of this.derricks) {
       const teams = new Map();
-      this.near(d.x, d.z, RTS.towerReach, e => { if (e.kind === 'u' && !e.air && e.def.tags.includes('bio') && Math.hypot(e.x - d.x, e.z - d.z) <= RTS.towerReach + e.r) { if (!teams.has(e.team)) teams.set(e.team, e.owner); } }, false);
+      this.near(d.x, d.z, RTS.towerReach, e => { if (e.kind === 'u' && !e.air && !e.pl.feral && e.def.tags.includes('bio') && Math.hypot(e.x - d.x, e.z - d.z) <= RTS.towerReach + e.r) { if (!teams.has(e.team)) teams.set(e.team, e.owner); } }, false);
       const ownerTeam = d.owner ? (this.player(d.owner) || {}).team : -1;
       if (teams.size === 1) {
         const [team, pid] = [...teams][0];
@@ -1266,6 +1257,50 @@ export class RtsGame {
       for (const f of this.flares) if (f.team === team) { stampVision(M, v.g, f.x, f.z, RTS.flare.r, 9, true); stampVision(M, v.a, f.x, f.z, RTS.flare.r, 9, true); }
       for (let k = 0; k < v.g.length; k++) if (v.g[k]) ex[k] = 1;
     }
+  }
+
+  // ---------------------------------------------------------------- v1.2.32 the Hive's network, feral units
+  // network sources: [x, z, r^2] for each of this player's Nests and Nodes (small while still going up)
+  netOf(p) {
+    if (this._netT !== this.tickN) { this._netT = this.tickN; this._net = new Map(); }
+    let L = this._net.get(p.id);
+    if (!L) { L = []; for (const b of this.blds) if (b.owner === p.id && b.def.net) { const r = b.done ? b.def.net : RTS.hive.siteR; L.push([b.x, b.z, r * r]); } this._net.set(p.id, L); }
+    return L;
+  }
+  inNet(p, x, z) { for (const [bx, bz, r2] of this.netOf(p)) if ((x - bx) ** 2 + (z - bz) ** 2 <= r2) return true; return false; }
+  // once a second: Hive units outside their network may go feral; feral units go after whatever is near
+  hiveTick() {
+    for (const u of this.units.slice()) {
+      if (u.def.fac !== 'hive' || u.pl.feral || !this.ents.has(u.id)) continue;
+      if (u.inside || this.inNet(u.pl, u.x, u.z)) { u.stray = false; continue; }
+      u.stray = true;
+      this.alert(u.pl, 'stray', u.x, u.z, 'Your units are outside the hive network: they may go feral! Build Hive Nodes to reach further.', 12);
+      if (this.rnd() < RTS.hive.defect) this.goFeral(u);
+    }
+    const F = this.feral; if (!F) return;
+    for (const u of this.units) {
+      if (u.pl !== F || u.order || u.tgt || !u.def.weapons.length) continue;
+      let best = null, bd = 30;
+      this.near(u.x, u.z, 30, e => { if (e.team === F.team || e.inside || (e.air && !this.weaponFor(u, e))) return; const d = Math.hypot(e.x - u.x, e.z - u.z); if (d < bd) { bd = d; best = e; } });
+      if (best) this.order(u, { k: 'amove', x: best.x, z: best.z, gr: 1.5 }, false);
+    }
+  }
+  feralPlayer() {
+    if (this.feral) return this.feral;
+    const F = this.feral = { id: '__feral', name: 'Feral', color: '#8c7a5c', team: -999, idx: this.players.length, fac: 'hive', feral: true, isBot: true, difficulty: 'normal', connected: true, out: true, spectator: true,
+      crystal: 0, flux: 0, supply: 0, supCap: 0, capMax: 0, ups: {}, hand: [], offers: [], pulls: 0, alertT: {}, stats: { built: 0, lost: 0, killed: 0, mined: 0, razed: 0, cards: 0, apm: 0 }, start: -1 };
+    this.players.push(F); this.dirty = true;
+    return F;
+  }
+  goFeral(u) {
+    const old = u.pl, F = this.feralPlayer();
+    if (u.order && u.order.k === 'build' && u.order.paid && !u.order.bid) this.refund(old, u.order.paid, 1);
+    for (const q of u.queue) if (q.k === 'build' && q.paid && !q.bid) this.refund(old, q.paid, 1);
+    if (u.harvRes) { const r = this.res.get(u.harvRes); if (r && r.busy === u.id) r.busy = 0; u.harvRes = 0; }
+    u.owner = F.id; u.pl = F; u.team = F.team; u.order = null; u.queue = []; u.tgt = 0; u.carry = null; u.homeX = null; u.stray = false; u.ghost = false;
+    this.recount(old); this.dirty = true;
+    this.ev({ t: 'feral', id: u.id, x: Math.round(u.x * 10) / 10, z: Math.round(u.z * 10) / 10 });
+    this.alert(old, 'feral', u.x, u.z, `A ${u.def.name} strayed too far from the network and went feral!`, 3);
   }
 
   // ---------------------------------------------------------------- entity budget
@@ -1320,7 +1355,7 @@ export class RtsGame {
   publicState() {
     return {
       ph: this.phase, tm: Math.round(this.time * 10) / 10, seed: this.seed, n: this.M.players, size: this.settings.rtsSize || 'normal', sum: this.mapSum, win: this.winner,
-      pl: this.players.map(p => ({ id: p.id, name: p.name, color: p.color, team: p.team, idx: p.idx, out: p.out, spec: !!p.spectator, bot: p.isBot, on: p.connected, st: this.phase === 'over' ? p.stats : null })),
+      pl: this.players.map(p => ({ id: p.id, name: p.name, color: p.color, team: p.team, idx: p.idx, out: p.out, spec: !!p.spectator, fac: p.fac || 'steel', feral: p.feral ? 1 : 0, bot: p.isBot, on: p.connected, st: this.phase === 'over' ? p.stats : null })),
     };
   }
   // per player: the units / buildings / resources their team sees, their own economy and research
@@ -1331,7 +1366,7 @@ export class RtsGame {
     const ob = [], bc = [], mn = [], R1 = x => Math.round(x * 10) / 10;
     for (const u of this.units) {
       if (u.inside || !seen(u)) continue;
-      const fl = (u.siege ? 1 : 0) | (u.sT > 0 ? 2 : 0) | (u.carry ? (u.carry.k === 'c' ? 4 : 8) : 0) | (u.odT > 0 ? 16 : 0) | (u.firing > 0 ? 64 : 0) | (u.spd > 0.2 ? 256 : 0) | (u.barrier > 1 ? 512 : 0) | (u.slowT > 0 ? 1024 : 0) | ((u.burnT > this.time || u.poisonT > this.time) ? 2048 : 0) | (u.def.worker && !u.order && !u.queue.length ? 4096 : 0);
+      const fl = (u.siege ? 1 : 0) | (u.sT > 0 ? 2 : 0) | (u.carry ? (u.carry.k === 'c' ? 4 : 8) : 0) | (u.odT > 0 ? 16 : 0) | (u.firing > 0 ? 64 : 0) | (u.spd > 0.2 ? 256 : 0) | (u.barrier > 1 ? 512 : 0) | (u.slowT > 0 ? 1024 : 0) | ((u.burnT > this.time || u.poisonT > this.time) ? 2048 : 0) | (u.def.worker && !u.order && !u.queue.length ? 4096 : 0) | (u.stray ? 8192 : 0);
       ob.push([u.id, typeIndex.get(u.type), u.pl.idx, R1(u.x), R1(u.z), Math.round(((u.face % 6.2832) + 6.2832) % 6.2832 * 10) / 10, Math.ceil(u.hp), u.maxHp, fl, u.tgt || 0]);
     }
     for (const b of this.blds) {
@@ -1342,7 +1377,7 @@ export class RtsGame {
     const out = { tm: Math.round(this.time * 1000), ob, bc, mn };
     // own side blocks (sticky: only sent when they change)
     if (p && !p.spectator) {
-      out.sc = [Math.floor(p.crystal), Math.floor(p.flux), p.supply, p.supCap, p.inc, p.trickle, Math.max(0, Math.ceil(p.flareT - this.time)), p.held && p.heldT > 0 ? 1 : 0];
+      out.sc = [Math.floor(p.crystal), Math.floor(p.flux), Math.ceil(p.supply), p.supCap, p.inc, p.trickle, Math.max(0, Math.ceil(p.flareT - this.time)), p.held && p.heldT > 0 ? 1 : 0];
       const bo = {};
       for (const b of this.blds) if (b.owner === pid && (b.queue.length || b.rally)) bo[b.id] = [b.queue.map(q => q.u || '#card'), b.queue.length && b.queue[0].started ? Math.round((this.time - b.qT) * 10) / 10 : -1, b.queue.length ? b.queue[0].dur : 0, b.rally ? [R1(b.rally.x), R1(b.rally.z)] : null];
       out.bo = bo;
@@ -1371,25 +1406,6 @@ export class RtsGame {
   }
 }
 
-// a binary min-heap of cell ids keyed by distance (flow fields)
-class Heap {
-  constructor(cap) { this.k = new Uint32Array(cap); this.v = new Int32Array(cap); this.n = 0; this.lastKey = 0; }
-  clear() { this.n = 0; }
-  push(v, key) {
-    if (this.n >= this.k.length) { const k = new Uint32Array(this.k.length * 2), vv = new Int32Array(this.k.length * 2); k.set(this.k); vv.set(this.v); this.k = k; this.v = vv; }
-    let i = this.n++; const K = this.k, V = this.v;
-    while (i > 0) { const p = (i - 1) >> 1; if (K[p] <= key) break; K[i] = K[p]; V[i] = V[p]; i = p; }
-    K[i] = key; V[i] = v;
-  }
-  pop() {
-    const K = this.k, V = this.v, top = V[0]; this.lastKey = K[0];
-    const n = --this.n; if (n <= 0) return top;
-    const key = K[n], val = V[n]; let i = 0;
-    for (;;) { let c = i * 2 + 1; if (c >= n) break; if (c + 1 < n && K[c + 1] < K[c]) c++; if (K[c] >= key) break; K[i] = K[c]; V[i] = V[c]; i = c; }
-    K[i] = key; V[i] = val;
-    return top;
-  }
-}
 export function mapChecksum(M) {
   let h = 2166136261 >>> 0;
   for (let k = 0; k < M.lv.length; k++) { h ^= M.lv[k] * 3 + M.walk[k] + M.ramp[k] * 7; h = Math.imul(h, 16777619); }

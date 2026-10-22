@@ -8,7 +8,7 @@ export const RTS = {
   tick: 0.05,                 // host simulation step (20 a second)
   send: 1 / 15,               // snapshots to each player
   startCrystal: 50, startFlux: 0, startWorkers: 12,
-  supplyMax: 200,             // fewer with many players (supplyCap)
+  supplyMax: 300,             // fewer with many players (supplyCap) (v1.2.32 (Devin): more units: was 200)
   mineTime: 2.6, crystalTrip: 5, fluxTime: 1.4, fluxTrip: 4, maxPerVent: 3,
   derrickRate: 1.5,           // crystal a second from a held derrick (infinite)
   derrickCapture: 3,          // seconds an infantry unit stands next to a derrick to take it
@@ -18,7 +18,10 @@ export const RTS = {
   queueMax: 5,
   dropRange: 1.2,             // meters from a building's edge to drop off cargo / build
 };
-export const supplyCap = n => n <= 4 ? RTS.supplyMax : n <= 6 ? 160 : 130;
+export const supplyCap = n => n <= 4 ? RTS.supplyMax : n <= 6 ? 240 : 200;   // (v1.2.32: was 200 / 160 / 130)
+// v1.2.32 (Devin): the Hive's rules. Their units only stay loyal inside the hive network (around Brood Nests and Hive
+// Nodes); out of it, every second each unit has this chance to go feral (a neutral that attacks everyone).
+RTS.hive = { defect: 0.05, siteR: 6 };   // siteR: network radius of a Nest / Node still being built
 
 // Attribute tags: light / armored (damage bonuses), bio / mech (who medics heal and riggers repair), air.
 // Weapons: dmg, bonus { tag: extra }, cd (s), range (m), ga = 'g' ground only, 'a' air only, 'ga' both,
@@ -56,6 +59,31 @@ export const UNITS = {
     cost: [150, 100], supply: 3, time: 36, hp: 180, armor: 1, speed: 3.8, r: 1.0, sight: 10, tags: ['mech', 'armored'], air: true, from: 'airfield', needs: ['archive'],
     weapons: [W(9, 0.6, 6, 'g', { fx: 'bullet' })] },
 };
+// v1.2.32 (Devin): the Steelborne's units are cheaper (about 30% off what 1.2.27-1.2.31 charged)
+for (const d of Object.values(UNITS)) { d.fac = 'steel'; d.cost = d.cost.map(c => Math.round(c * 0.7 / 5) * 5); }
+// v1.2.32 (Devin): the second faction, the Hive: bugs from somewhere else. Crystal only (no flux), and their troops
+// hatch in broods (n units per order; cost and time are for the whole brood, supply is each).
+const HIVE_UNITS = {
+  mite: { name: 'Mite', icon: '🪲', role: 'Worker', desc: 'Hive worker. Mines crystal (the Hive has no use for flux), builds and mends. Keep it inside the hive network.',
+    cost: [35, 0], supply: 1, time: 11, hp: 40, armor: 0, speed: 4.4, r: 0.42, sight: 9, tags: ['bio', 'light'], worker: true, from: 'nest',
+    weapons: [W(5, 1.1, 0.6, 'g', { fx: 'melee' })] },
+  skitter: { name: 'Skitter', icon: '🦗', role: 'Swarm', desc: 'Fast biting swarmers. Hatch 4 at a time. Ground only.',
+    cost: [60, 0], supply: 0.5, n: 4, time: 18, hp: 32, armor: 0, speed: 5.4, r: 0.36, sight: 8, tags: ['bio', 'light'], from: 'pit',
+    weapons: [W(5, 0.65, 0.5, 'g', { fx: 'melee' })] },
+  spitter: { name: 'Spitter', icon: '🐛', role: 'Ranged', desc: 'Spits acid at ground and air. Hatch 3 at a time.',
+    cost: [90, 0], supply: 1, n: 3, time: 22, hp: 48, armor: 0, speed: 4.0, r: 0.42, sight: 10, tags: ['bio', 'light'], from: 'pit',
+    weapons: [W(7, 1.0, 6, 'ga', { fx: 'acid' })] },
+  ravager: { name: 'Ravager', icon: '🦂', role: 'Artillery', desc: 'Armored bug that lobs bursting acid at the ground (splash, extra against armor). Hatch 2 at a time.',
+    cost: [175, 0], supply: 2, n: 2, time: 30, hp: 150, armor: 1, speed: 3.6, r: 0.8, sight: 11, tags: ['bio', 'armored'], from: 'chamber', needs: ['vault'],
+    weapons: [W(14, 1.4, 7, 'g', { bonus: { armored: 8 }, splash: 1.6, fx: 'shell' })] },
+  crusher: { name: 'Crusher', icon: '🦏', role: 'Heavy', desc: 'Huge horned beetle. Very tough; smashes buildings and armor up close. Hatch 2 at a time.',
+    cost: [200, 0], supply: 3, n: 2, time: 34, hp: 260, armor: 2, speed: 3.5, r: 0.95, sight: 9, tags: ['bio', 'armored'], from: 'chamber',
+    weapons: [W(18, 1.3, 1.0, 'g', { bonus: { structure: 16, armored: 6 }, fx: 'melee' })] },
+  wasp: { name: 'Wasp', icon: '🐝', role: 'Air swarm', desc: 'Flying stingers that hit ground and air. Hatch 3 at a time.',
+    cost: [120, 0], supply: 1, n: 3, time: 26, hp: 55, armor: 0, speed: 5.6, r: 0.55, sight: 10, tags: ['bio', 'light'], air: true, from: 'roost',
+    weapons: [W(6, 0.85, 4.5, 'ga', { fx: 'acid' })] },
+};
+for (const [k, d] of Object.entries(HIVE_UNITS)) UNITS[k] = { ...d, fac: 'hive' };
 export const UNIT_IDS = Object.keys(UNITS);
 // v1.2.28 (Devin): how many cards a unit type can hold (workers: no limit)
 export const cardCap = type => UNITS[type] && UNITS[type].worker ? Infinity : RTS.pull.perUnit;
@@ -75,9 +103,36 @@ export const BUILDINGS = {
   factory: { name: 'Factory', icon: '🏭', desc: 'Builds vehicles.', cost: [150, 100], time: 43, hp: 1250, armor: 1, s: 3, sight: 9, needs: ['barracks'], trains: ['strider', 'crawler'] },
   airfield: { name: 'Airfield', icon: '🛫', desc: 'Builds aircraft.', cost: [150, 100], time: 36, hp: 1300, armor: 1, s: 3, sight: 9, needs: ['factory'], trains: ['spotter', 'hornet', 'gunship'] },
 };
+for (const d of Object.values(BUILDINGS)) d.fac = 'steel';
+// net: how far the hive network reaches around it (m). Every Hive building but the Nest goes up inside the network.
+const HIVE_BUILDINGS = {
+  nest: { name: 'Brood Nest', icon: '🪺', desc: 'The Hive\'s main building. Hatches Mites; workers bring crystal here. Its network reaches 22 m: your units are only safe inside the network.',
+    cost: [300, 0], time: 60, hp: 1400, armor: 1, s: 4, gives: 15, sight: 12, trains: ['mite'], drop: true, net: 22 },
+  node: { name: 'Hive Node', icon: '🕸', desc: 'Spreads the hive network 16 m around it and gives 8 supply. Build a chain of them to take your swarm further. Goes up inside the network.',
+    cost: [75, 0], time: 18, hp: 350, armor: 0, s: 2, gives: 8, sight: 9, needs: ['nest'], net: 16 },
+  pit: { name: 'Spawning Pit', icon: '🥚', desc: 'Hatches Skitters and Spitters.', cost: [125, 0], time: 40, hp: 900, armor: 1, s: 3, sight: 9, needs: ['node'], trains: ['skitter', 'spitter'] },
+  spire: { name: 'Acid Spire', icon: '🌵', desc: 'Defense: spits acid at ground and air.', cost: [90, 0], time: 24, hp: 320, armor: 1, s: 1, sight: 11, needs: ['pit'],
+    weapons: [W(11, 0.85, 8, 'ga', { fx: 'acid' })] },
+  vault: { name: 'Gene Vault', icon: '🧬', desc: 'Research: pull a card and fit it to a unit type, like the Archive (paid in crystal only). Each unit type holds up to 4 cards (Mites any number).', cost: [150, 0], time: 36, hp: 700, armor: 1, s: 3, sight: 9, needs: ['pit'], research: true },
+  chamber: { name: 'Brood Chamber', icon: '🐚', desc: 'Hatches Ravagers and Crushers.', cost: [200, 0], time: 42, hp: 1200, armor: 1, s: 3, sight: 9, needs: ['pit'], trains: ['ravager', 'crusher'] },
+  roost: { name: 'Sky Roost', icon: '🪶', desc: 'Hatches Wasps.', cost: [175, 0], time: 36, hp: 1100, armor: 1, s: 3, sight: 9, needs: ['chamber'], trains: ['wasp'] },
+};
+for (const [k, d] of Object.entries(HIVE_BUILDINGS)) BUILDINGS[k] = { ...d, fac: 'hive' };
 export const BUILDING_IDS = Object.keys(BUILDINGS);
 export const BUILD_MENU = ['hub', 'depot', 'refinery', 'reclaimer', 'barracks', 'sentry', 'archive', 'factory', 'airfield'];
-export const FACTION = { id: 'steelborne', name: 'The Steelborne', desc: 'Frontier engineers in blocky iron. Workers build on site, buildings research with cards.' };
+// v1.2.32: factions. roles: which building of theirs does what (the bots and a few rules go by role)
+export const FACTIONS = {
+  steel: { id: 'steel', name: 'The Steelborne', desc: 'Frontier engineers in blocky iron. Workers build on site, buildings research with cards.', worker: 'rigger', menu: BUILD_MENU,
+    roles: { hub: 'hub', depot: 'depot', refinery: 'refinery', reclaimer: 'reclaimer', barracks: 'barracks', sentry: 'sentry', archive: 'archive', factory: 'factory', airfield: 'airfield' } },
+  hive: { id: 'hive', name: 'The Hive', desc: 'Bugs from beyond. Crystal only, troops hatch in broods, and units only stay loyal inside the hive network (Brood Nests and Hive Nodes): outside it, each second a unit may go feral.', worker: 'mite',
+    menu: ['nest', 'node', 'pit', 'spire', 'vault', 'chamber', 'roost'],
+    roles: { hub: 'nest', depot: 'node', refinery: null, reclaimer: null, barracks: 'pit', sentry: 'spire', archive: 'vault', factory: 'chamber', airfield: 'roost' } },
+};
+export const FACTION = FACTIONS.steel;
+export const facOf = p => FACTIONS[p && p.fac] || FACTIONS.steel;
+export const facUnits = fac => UNIT_IDS.filter(t => UNITS[t].fac === (fac || 'steel'));
+// what something costs this player: the Hive pays flux prices in crystal (card pulls)
+export const costFor = (p, c) => p && p.fac === 'hive' && c[1] ? [c[0] + c[1], 0] : c;
 
 export const ABILITIES = {
   overdrive: { name: 'Overdrive', key: 'KeyT', icon: '💉', desc: 'Costs 10 health (20 for Lancers): 50% faster attacks and +50% speed for 9 s.', hp: 10, dur: 9 },
@@ -88,8 +143,8 @@ export const ABILITIES = {
 // The 3x5 command card: [row][col] key letters (StarCraft grid layout)
 export const GRID_KEYS = [['KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyT'], ['KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG'], ['KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB']];
 // Hotkeys for training / building (each building's trains list in order; the build menu)
-export const TRAIN_KEYS = { rigger: 'KeyQ', trooper: 'KeyQ', lancer: 'KeyW', medic: 'KeyE', vaulter: 'KeyR', strider: 'KeyQ', crawler: 'KeyW', spotter: 'KeyQ', hornet: 'KeyW', gunship: 'KeyE' };
-export const BUILD_KEYS = { hub: 'KeyQ', depot: 'KeyW', refinery: 'KeyE', reclaimer: 'KeyR', barracks: 'KeyA', sentry: 'KeyS', archive: 'KeyD', factory: 'KeyZ', airfield: 'KeyX' };
+export const TRAIN_KEYS = { rigger: 'KeyQ', trooper: 'KeyQ', lancer: 'KeyW', medic: 'KeyE', vaulter: 'KeyR', strider: 'KeyQ', crawler: 'KeyW', spotter: 'KeyQ', hornet: 'KeyW', gunship: 'KeyE', mite: 'KeyQ', skitter: 'KeyQ', spitter: 'KeyW', ravager: 'KeyQ', crusher: 'KeyW', wasp: 'KeyQ' };
+export const BUILD_KEYS = { hub: 'KeyQ', depot: 'KeyW', refinery: 'KeyE', reclaimer: 'KeyR', barracks: 'KeyA', sentry: 'KeyS', archive: 'KeyD', factory: 'KeyZ', airfield: 'KeyX', nest: 'KeyQ', node: 'KeyW', pit: 'KeyA', spire: 'KeyS', vault: 'KeyD', chamber: 'KeyZ', roost: 'KeyX' };
 
 // ---------------------------------------------------------------- research: cards -> unit upgrades
 // The shooter's cards already have an AMON translation (amondata cardTactics: hp / atk / rate / ... shares). Research

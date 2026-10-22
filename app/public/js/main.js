@@ -12,7 +12,7 @@ import { loadCards, cardLines, hasDownside, validateCard, rarityOf, cardWeight }
 import { CRITTER_MAX, MOUNT } from './sim.js';
 import { AmonGame } from './amon.js';
 import { AmonClient } from './amonui.js';
-import { RtsGame } from './rts.js';
+import { makeRtsHost } from './rtshost.js';
 import { threadCount, coreCount } from './threads.js';
 import { SimLink } from './simlink.js';
 import { kcPackInto, kcHas, kcExpand } from './viewpack.js';
@@ -24,9 +24,10 @@ import { prepareLevel, accel, movePlayer, groundBelow, wallSegments, seedThru, u
 import { AckDecoder } from './netcodec.js';
 import { PeerNetStats, HostNetStats, pingClass, RateMeter, Worst } from './netstats.js';
 const NR = { frame: new RateMeter(), sim: new RateMeter(), send: new RateMeter() };
-// v1.2.31: the frame rate the shot budget goes by: an average over the last few frames (NR.frame looks back 2 s, which
-// let a heavy fight sink to a few fps before the budget even saw it)
-const FR = { ms: 16.7 }, fastFps = () => 1000 / FR.ms;
+// v1.2.31: the frame rate the shot budget goes by: frames in the last half second (NR.frame looks back 2 s, which let a
+// heavy fight sink to a few fps before the budget saw it). v1.2.32: a count, not an average of frame times, so one
+// long frame on its own doesn't read as a slow game (in 1.2.31 every hitch made the budget cut shots)
+const fastFps = () => NR.frame.hz(undefined, 500);
 // v1.2.9: hitch readout (network window): worst frame over the last 5 s with its [game, draw] ms, slowest snapshot handling, longest gap between sends (host)
 const HM = { frame: new Worst(), msg: new Worst(), send: new Worst(), sendAt: 0 };   // v1.2.9: frames drawn, host sim runs and snapshots sent per second (network window)
 import { gpuInfo, GFX_TIERS, TIER_LABEL } from './gfxdetect.js';
@@ -994,7 +995,7 @@ function openSolo() {
   leaveSession(true);
   S = newSession('solo'); S.localId = 'you';
   S.lobby.players = [
-    { id: 'you', name: cleanName(settings.name, 'You'), team: 0, isBot: false, cosmetics: myCos(), prefColor: settings.color },
+    { id: 'you', name: cleanName(settings.name, 'You'), team: 0, isBot: false, cosmetics: myCos(), prefColor: settings.color, fac: settings.rtsFac || null },
     { id: 'b1', name: 'Bot 1', team: 1, isBot: true, difficulty: 'normal', cosmetics: randomCos() },
   ];
   S.botCounter = 1;
@@ -1019,7 +1020,7 @@ async function openHost(transport = 'lan') {
   const net = transport === 'steam' ? new SteamNet() : new Net();
   try { await net.connect(); } catch (e) { $('mpError').textContent = e.message; return; }
   S = newSession('host'); S.net = net; S.localId = 'host';
-  S.lobby.players = [{ id: 'host', name, team: 0, isBot: false, cosmetics: myCos(), prefColor: settings.color, token: settings.clientId }];
+  S.lobby.players = [{ id: 'host', name, team: 0, isBot: false, cosmetics: myCos(), prefColor: settings.color, token: settings.clientId, fac: settings.rtsFac || null }];
   S.departed = new Map();
   attachCommon(net);
   net.on('hosted', m => { S.code = m.code; renderLobby(); show('lobby'); });
@@ -1047,6 +1048,7 @@ async function joinRoom(code, transport = 'lan') {
       if (S && S.net === net && !S.helloOk) { leaveSession(); toast(`The host has an older version of Blockshot3D (you have ${appVersion()}). Everyone needs the same version to play together.`); toastT = 7; }
     }, 10000);
     net.send({ t: 'toHost', msg: { k: 'setCos', cos: myCos() } });
+    if (settings.rtsFac === 'hive') net.send({ t: 'toHost', msg: { k: 'setFac', fac: 'hive' } });   // (v1.2.32: your RTS faction)
     if (settings.color) net.send({ t: 'toHost', msg: { k: 'setColor', color: settings.color } });
   });
   net.on('error', m => { $('mpError').textContent = m.message; leaveSession(true); show('browser'); });
@@ -1147,7 +1149,9 @@ function renderLobby() {
     // Your own swatch opens the color picker (free-for-all; teams use team shades).
     const sw = (me || (p.isBot && host)) && !tdm ? `<button class="sw pickable" data-color="${esc(p.id)}" style="background:${colors[i]}" title="${me ? 'Pick your color' : 'Pick this bot\'s color'}"></button>` : `<span class="sw" style="background:${colors[i]}"></span>`;
     const drag = tdm && (host || me) ? ` draggable="true" data-drag="${esc(p.id)}" title="Drag onto a team to move ${me ? 'yourself' : 'this player'}"` : '';
-    return `<div class="prow${drag ? ' dragrow' : ''}"${drag}>${sw}<span><span data-noi18n>${esc(p.name)}</span> <span class="tag">${tag}</span></span>${diff}${team}${rm}</div>`;
+    // v1.2.32 RTS: each player's faction (yours, or a bot's when you host)
+    const fac = L.settings.mode !== 'rts' ? '' : (me || (p.isBot && host)) ? ` <select data-fac="${esc(p.id)}" title="Faction">${p.isBot ? '<option value="random">Random faction</option>' : ''}<option value="steel">Steelborne</option><option value="hive">Hive</option></select>` : ` <span class="tag">${p.fac === 'hive' ? 'Hive' : p.fac === 'random' || (p.isBot && !p.fac) ? 'Random' : 'Steelborne'}</span>`;
+    return `<div class="prow${drag ? ' dragrow' : ''}"${drag}>${sw}<span><span data-noi18n>${esc(p.name)}</span> <span class="tag">${tag}</span>${fac}</span>${diff}${team}${rm}</div>`;
   };
   // v1.2.27 (Devin): people first, then bots, so friends joining a room are easy to spot
   const ordered = L.players.map((p, i) => [p, i]).sort((a, b) => (a[0].isBot ? 1 : 0) - (b[0].isBot ? 1 : 0) || a[1] - b[1]);
@@ -1161,6 +1165,7 @@ function renderLobby() {
   for (const p of L.players) {
     const d = document.querySelector(`[data-diff="${p.id}"]`); if (d) d.value = p.difficulty || 'normal';
     const tt = document.querySelector(`[data-team="${p.id}"]`); if (tt) tt.value = p.team || 0;
+    const ff = document.querySelector(`[data-fac="${p.id}"]`); if (ff) ff.value = p.fac || (p.isBot ? 'random' : 'steel');
   }
   // Your color: 20 swatches (taken ones greyed out). Team deathmatch uses team shades instead.
   {
@@ -1288,6 +1293,12 @@ function bindLobby() {
   $('playerList').addEventListener('change', e => {
     const t = e.target;
     if (t.dataset.diff && isHostSide()) { const p = S.lobby.players.find(q => q.id === t.dataset.diff); if (p) p.difficulty = t.value; lobbyChanged(); }
+    if (t.dataset.fac) {   // v1.2.32 RTS faction
+      const fac = ['steel', 'hive', 'random'].includes(t.value) ? t.value : 'steel';
+      if (t.dataset.fac === S.localId) { settings.rtsFac = fac; saveSettings(settings); }
+      if (isHostSide()) { const p = S.lobby.players.find(q => q.id === t.dataset.fac); if (p) p.fac = fac; lobbyChanged(); }
+      else if (t.dataset.fac === S.localId) S.net.send({ t: 'toHost', msg: { k: 'setFac', fac } });
+    }
     if (t.dataset.team) {
       const team = +t.value;
       if (isHostSide()) { const p = S.lobby.players.find(q => q.id === t.dataset.team); if (p) p.team = team; lobbyChanged(); }
@@ -1514,6 +1525,7 @@ function onHostMsg(m) {
     case 'setTeam': if (!S.inGame) { const p = S.lobby.players.find(q => q.id === from); if (p) { p.team = Math.max(0, Math.min(ART.teamNames.length - 1, msg.team | 0)); lobbyChanged(); } } break;
     case 'setCos': if (!S.hello || !S.hello.has(from)) { if (!(S.dropped && S.dropped.has(from))) dropPeer(from, `The host has ${appVersion()} and your game is older. Everyone needs the same version to play together.`); break; }
       if (!S.inGame) { const p = S.lobby.players.find(q => q.id === from); if (p) { p.cosmetics = cleanCos(msg.cos); lobbyChanged(); } } break;
+    case 'setFac': if (!S.inGame) { const p = S.lobby.players.find(q => q.id === from); if (p) { p.fac = msg.fac === 'hive' ? 'hive' : 'steel'; lobbyChanged(); } } break;
     case 'setName': if (!S.inGame) { const p = S.lobby.players.find(q => q.id === from); if (p) { p.name = cleanName(msg.name); lobbyChanged(); } } break;
     case 'emote': if (S.inGame) emoteFrom(from, msg); break;
     case 'bet': if (S.inGame && +msg.a > 0) { const ev = { t: 'bet', p: from, a: Math.floor(+msg.a) }; hostEv(ev); handleEvent(ev); } break;
@@ -1644,7 +1656,7 @@ function startMatch() {
   if (S.lobby.settings.mode === 'brawl' && !S.fselPicks) { startFighterSelect(); return; }   // brawl: everyone picks a fighter first
   const colors = assignColors(S.lobby.players, owSquads(S.lobby.settings) || teamPlay(S.lobby.settings) ? 'tdm' : S.lobby.settings.mode === 'core' ? 'waves' : S.lobby.settings.mode);
   const waves = S.lobby.settings.mode === 'waves' || S.lobby.settings.mode === 'core' || (S.lobby.settings.mode === 'open' && !owSquads(S.lobby.settings));
-  let roster = S.lobby.players.map((p, i) => ({ id: p.id, name: p.name, team: waves ? 0 : (p.team || 0), isBot: !!p.isBot, difficulty: p.difficulty || 'normal', color: colors[i], cosmetics: p.cosmetics || null, kind: 'hero' }));
+  let roster = S.lobby.players.map((p, i) => ({ id: p.id, name: p.name, team: waves ? 0 : (p.team || 0), isBot: !!p.isBot, difficulty: p.difficulty || 'normal', color: colors[i], cosmetics: p.cosmetics || null, kind: 'hero', fac: p.fac || null }));
   if (S.lobby.settings.mode === 'practice') roster = practiceRoster(roster.find(r => r.id === S.localId) || roster[0]);
   if (S.lobby.settings.mode === 'brawl') {   // brawl: players fight as their chosen character; bots take the fighters nobody has
     const fp = S.fselPicks || {}; S.fselPicks = null;
@@ -1654,7 +1666,9 @@ function startMatch() {
     roster = roster.map(r => r.isBot && !fp[r.id] ? { ...r, cosmetics: { ...(r.cosmetics || {}), model: free.length ? free.pop() : FIGHTER_IDS[Math.floor(Math.random() * FIGHTER_IDS.length)] } } : r);
   }
   if (S.lobby.settings.mode === 'rts') {   // v1.2.27 RTS (rts.js): its own simulation, no shooter Game
-    if (S.game) S.game.close(); S.game = null; S.rtsGame = new RtsGame({ roster, settings: { ...S.lobby.settings }, cards: CARDS });
+    // v1.2.30: on its own CPU thread (+ helper threads for pathing) when Settings > CPU threads allows (rtshost.js)
+    if (S.rtsGame) S.rtsGame.close();
+    if (S.game) S.game.close(); S.game = null; S.rtsGame = makeRtsHost({ roster, settings: { ...S.lobby.settings }, cards: CARDS, seed: (Math.random() * 1e9) >>> 0 }, threadCount(settings.cpuThreads), why => toast('The RTS thread stopped: ' + String(why).slice(0, 120)));
     S.rtsSeat = new Map(S.lobby.players.filter(p => p.token && !p.isBot).map(p => [p.token, p.id]));
     S.pausers = new Set();
     if (S.role === 'host') { S.net.send({ t: 'toAll', msg: { k: 'start', roster, settings: S.lobby.settings } }); sendMeta({ started: true }); }
@@ -1842,7 +1856,7 @@ function endToLobby() {
   renderer.applySettings(settings);
   S.inGame = false; if (S.game) S.game.close(); S.game = null; S.offer = null;
   if (S.amon) { S.amon.dispose(); S.amon = null; } S.amonGame = null;
-  if (S.rts) { S.rts.dispose(); S.rts = null; } S.rtsGame = null; S.rtsSeat = null;
+  if (S.rts) { S.rts.dispose(); S.rts = null; } if (S.rtsGame) S.rtsGame.close(); S.rtsGame = null; S.rtsSeat = null;
   if (S.lobby.settings.mode === 'practice') S.lobby.settings.mode = 'ffa';   // the practice range lives on the title screen only
   $('practice').classList.add('hidden'); $('statsWin').classList.add('hidden'); $('hoverTip').classList.add('hidden');
   renderer.clearAll();
@@ -2713,7 +2727,7 @@ function handleEvent0(e) {
       sound.play('death', vol(e.x, e.z)); killFeed(e);
       if (e.p === me && e.dl) showDeathLog(e);
       if (e.k === me && e.p !== me) { hitMarker(true); sound.play('kill', 0.9); renderer.addShake(0.22); }
-      if (hero) { S.lastDeath = { x: e.x, y: e.y, z: e.z }; KC.death = { t: performance.now(), p: e.p, k: e.k, x: e.x, y: e.y, z: e.z }; if (duelMode()) hitStop(0.075); }
+      if (hero) { S.lastDeath = { x: e.x, y: e.y, z: e.z }; KC.death = { t: performance.now(), p: e.p, k: e.k, x: e.x, y: e.y, z: e.z }; if (duelMode() && (e.p === me || e.k === me || S.roster.size <= 8)) hitStop(0.075); }   // (v1.2.32: in big lobbies only your own kills and deaths pause time: 100 bots dying froze the match over and over)
       break;
     }
     // ---- co-op: Game Master, elites, boss
@@ -4401,7 +4415,7 @@ function frameBody(now) {
   // frame rate limit (Settings > Graphics): skip animation frames that come too soon
   const cap = +settings.fpsCap || 0;
   if (cap && now - last < 1000 / cap - 1) return;
-  fpsTick(now - last); gfxTick(now - last); loadGuard(now - last, now); NR.frame.tick(); FR.ms += (Math.min(2000, now - last) - FR.ms) * 0.2;
+  fpsTick(now - last); gfxTick(now - last); loadGuard(now - last, now); NR.frame.tick();
   const gap = now - last, j0 = performance.now();
   renderNetHud();
   const rawDt = Math.min(0.25, Math.max(0, now - last) / 1000), dt = Math.min(0.035, rawDt); last = now;   // (v1.2.6: the host sim runs on rawDt; drawing, effects and joiners on dt)

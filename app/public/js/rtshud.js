@@ -4,7 +4,7 @@
 // alerts, tooltips, the drawn cursor used while the mouse is locked (fullscreen), and the end screen.
 // Every button works with the real cursor and with the locked (drawn) one: clicks go through press().
 // =====================================================================
-import { RTS, UNITS, BUILDINGS, UNIT_IDS, BUILD_MENU, ABILITIES, GRID_KEYS, TRAIN_KEYS, BUILD_KEYS, researchCards, upLines, sumUps, pullCost, FACTION, cardCap } from './rtsdata.js';
+import { RTS, UNITS, BUILDINGS, UNIT_IDS, BUILD_MENU, ABILITIES, GRID_KEYS, TRAIN_KEYS, BUILD_KEYS, researchCards, upLines, sumUps, pullCost, FACTION, cardCap, facOf, facUnits, costFor } from './rtsdata.js';
 import { CELL } from './rtsmap.js';
 import { thumbOf } from './rtsart.js';
 import { RARITY } from './config.js';
@@ -282,7 +282,7 @@ export class HUD {
     const c = this.c, pub = c.pub; if (!pub) return;
     const teams = new Set(pub.pl.map(p => p.team)).size < pub.pl.filter(p => !p.spec).length;
     const h = pub.pl.filter(p => !p.spec).map(p => `<div class="${p.out ? 'out' : ''} ${p.id === c.localId ? 'me' : ''}"><i style="background:${esc(p.color)}"></i>${esc(p.name)}${p.bot ? ' <small>bot</small>' : ''}${!p.on && !p.bot ? ' <small>(left: bot playing)</small>' : ''}${teams ? ` <small>team ${p.team + 1}</small>` : ''}</div>`).join('');
-    const html = h + `<div class="fac">${esc(FACTION.name)}${c.spectating() ? ' · watching' : ''}</div>`;
+    const html = h + `<div class="fac">${esc(facOf(c.me()).name)}${c.spectating() ? ' · watching' : ''}</div>`;
     if (html !== this.plH) { this.plH = html; this.$('rtsPl').innerHTML = html; }
   }
   groupsBar() {
@@ -339,7 +339,7 @@ export class HUD {
     if (d.gives) st.push(`Supply <b>+${d.gives}</b>`);
     h += `<div class="st">${st.map(s => `<span>${s}</span>`).join('')}</div>`;
     const tags = [...(d.tags || [])];
-    if (e.kind === 'u') { if (e.fl & 1) tags.push('sieged'); if (e.fl & 2) tags.push('changing mode'); if (e.fl & 4) tags.push('carrying crystal'); if (e.fl & 8) tags.push('carrying flux'); if (e.fl & 16) tags.push('overdrive'); if (e.fl & 512) tags.push('barrier'); if (e.fl & 1024) tags.push('slowed'); if (e.fl & 2048) tags.push('burning'); if (e.fl & 4096) tags.push('idle'); }
+    if (e.kind === 'u') { if (e.fl & 1) tags.push('sieged'); if (e.fl & 2) tags.push('changing mode'); if (e.fl & 4) tags.push('carrying crystal'); if (e.fl & 8) tags.push('carrying flux'); if (e.fl & 16) tags.push('overdrive'); if (e.fl & 512) tags.push('barrier'); if (e.fl & 1024) tags.push('slowed'); if (e.fl & 2048) tags.push('burning'); if (e.fl & 4096) tags.push('idle'); if (e.fl & 8192) tags.push('outside the network: may go feral!'); }
     if (tags.length) h += `<div>${tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>`;
     if (up.ids.length) {
       const lines = upLines(S);
@@ -380,12 +380,12 @@ export class HUD {
     if (first.kind === 'u') {
       const units = mine.filter(e => e.kind === 'u'), workers = first.def.worker;
       if (this.buildMenu && workers) {
-        for (const t of BUILD_MENU) {
+        for (const t of facOf(c.me()).menu) {   // (v1.2.32: your faction's buildings)
           const d = BUILDINGS[t], key = BUILD_KEYS[t], pos = this.posOf(key), miss = this.missing(d.needs);
           put(pos[0], pos[1], { key, img: thumbOf(t, c.me() ? c.me().color : '#5aa0ff'), name: `Build ${d.name}`, cost: d.cost, time: d.time, desc: d.desc, need: miss, dis: miss.length > 0,
             fn: () => { if (miss.length) { this.err(`Needs ${miss.map(x => BUILDINGS[x].name).join(', ')}.`); return; } if (this.poor(d.cost)) { this.err(c.my.sc[0] < d.cost[0] ? 'Not enough crystal.' : 'Not enough flux.'); return; } this.buildMenu = false; c.setMode({ k: 'place', type: t }); } });
         }
-        put(2, 4, { key: 'KeyB', icon: '↩', name: 'Back', desc: 'Back to the Rigger\'s commands (Esc).', fn: () => { this.buildMenu = false; this.dirty = true; } });
+        put(2, 4, { key: 'KeyB', icon: '↩', name: 'Back', desc: 'Back to the worker\'s commands (Esc).', fn: () => { this.buildMenu = false; this.dirty = true; } });
         return L;
       }
       const md = c.mode && c.mode.k;
@@ -397,10 +397,10 @@ export class HUD {
       if (units.some(u => (u.def.ab || []).includes('overdrive'))) put(1, 4, { key: 'KeyT', icon: ABILITIES.overdrive.icon, name: ABILITIES.overdrive.name, desc: ABILITIES.overdrive.desc, fn: () => c.act({ t: 'ab', ab: 'overdrive', ids: units.filter(u => (u.def.ab || []).includes('overdrive')).map(u => u.id) }) });
       if (units.some(u => u.def.siege)) { const sg = units.some(u => u.def.siege && (u.fl & 1)); put(1, 2, { key: 'KeyE', icon: ABILITIES.siege.icon, name: sg ? 'Leave siege mode' : ABILITIES.siege.name, desc: ABILITIES.siege.desc, on: sg, fn: () => c.act({ t: 'ab', ab: 'siege', ids: units.filter(u => u.def.siege).map(u => u.id) }) }); }
       if (workers) {
-        put(1, 0, { key: 'KeyG', icon: '⛏', name: 'Gather', desc: 'Click crystal, or one of your Refineries for flux.', on: md === 'gather', fn: () => c.setMode({ k: 'gather' }) });
-        put(1, 1, { key: 'KeyC', icon: '⤺', name: 'Return cargo', desc: 'Bring what they carry to the nearest Command Hub.', fn: () => c.act({ t: 'cmd', ids: units.filter(u => u.def.worker).map(u => u.id), o: { k: 'ret' } }) });
+        put(1, 0, { key: 'KeyG', icon: '⛏', name: 'Gather', desc: first.def.fac === 'hive' ? 'Click crystal (the Hive has no use for flux).' : 'Click crystal, or one of your Refineries for flux.', on: md === 'gather', fn: () => c.setMode({ k: 'gather' }) });
+        put(1, 1, { key: 'KeyC', icon: '⤺', name: 'Return cargo', desc: 'Bring what they carry to the nearest Command Hub (Brood Nest).', fn: () => c.act({ t: 'cmd', ids: units.filter(u => u.def.worker).map(u => u.id), o: { k: 'ret' } }) });
         put(1, 3, { key: 'KeyR', icon: '🔧', name: 'Repair', desc: 'Repair a damaged machine or building of yours (costs a little crystal).', on: md === 'repair', fn: () => c.setMode({ k: 'repair' }) });
-        put(2, 0, { key: 'KeyB', icon: '🏗', name: 'Build', desc: 'Open the build menu. The Rigger builds it on the spot; more Riggers can help by right-clicking the site.', fn: () => { this.buildMenu = true; this.dirty = true; } });
+        put(2, 0, { key: 'KeyB', icon: '🏗', name: 'Build', desc: first.def.fac === 'hive' ? 'Open the build menu. The Mite builds it on the spot. Hive buildings (but the Nest) go inside your network.' : 'Open the build menu. The Rigger builds it on the spot; more Riggers can help by right-clicking the site.', fn: () => { this.buildMenu = true; this.dirty = true; } });
       }
       return L;
     }
@@ -412,11 +412,11 @@ export class HUD {
     }
     for (const u of d.trains || []) {
       const ud = UNITS[u], key = TRAIN_KEYS[u], pos = this.posOf(key), miss = this.missing(ud.needs);
-      put(pos[0], pos[1], { key, img: thumbOf(u, c.me() ? c.me().color : '#5aa0ff'), name: `Train ${ud.name}`, cost: ud.cost, time: ud.time, supply: ud.supply, desc: ud.desc, need: miss, dis: miss.length > 0, n: this.queued(bs, u),
+      put(pos[0], pos[1], { key, img: thumbOf(u, c.me() ? c.me().color : '#5aa0ff'), name: ud.n ? `Hatch ${ud.n} ${ud.name}s` : `Train ${ud.name}`, cost: ud.cost, time: ud.time, supply: ud.supply * (ud.n || 1), desc: ud.desc, need: miss, dis: miss.length > 0, n: this.queued(bs, u),
         fn: (btn, ev) => { if (miss.length) { this.err(`Needs ${miss.map(x => BUILDINGS[x].name).join(', ')}.`); return; } const n = ev && ev.shiftKey ? 5 : 1; for (let i = 0; i < n; i++) { if (bs.length > 1) c.act({ t: 'trainAny', ids: bs.map(b => b.id), u }); else c.act({ t: 'train', b: first.id, u }); } c.sfx('ui', 0.3, 0.05); } });
     }
     if (d.research) {
-      const pc = pullCost(c.my.co.pulls || 0);
+      const pc = costFor(c.me(), pullCost(c.my.co.pulls || 0));
       put(0, 0, { key: 'KeyQ', icon: '🃏', name: 'Pull a card', cost: pc, time: RTS.pull.time, desc: `Research: after ${RTS.pull.time} s you get ${RTS.pull.offer} cards from the shooter's pool to choose from. Fit the one you take to any unit type (every card works on every unit). Each pull costs a bit more.`, n: this.queued(bs, '#card'),
         fn: () => c.act({ t: 'pull', ids: bs.map(b => b.id) }) });
       put(0, 1, { key: 'KeyW', icon: '📚', name: 'Open research (F3)', desc: 'Your pulled cards, your hand and every upgrade fitted so far.', fn: () => this.openCards(true) });
@@ -583,11 +583,11 @@ export class HUD {
     const key = JSON.stringify([off, co.offN, hand, ups, this.cardSel, selType, co.pulls]);
     if (key === this.cardKey) return; this.cardKey = key;
     const col = c.me() ? c.me().color : '#5aa0ff';
-    let h = `<h3><span>📚 Research <small style="opacity:.6;font-weight:400">· every card works on every unit type · up to ${RTS.pull.perUnit} cards per unit (Riggers: any number) · click ✕ on a fitted card to take it back</small></span><button class="rb" data-a="cClose">✕ Close (Esc)</button></h3>`;
+    let h = `<h3><span>📚 Research <small style="opacity:.6;font-weight:400">· every card works on every unit type · up to ${RTS.pull.perUnit} cards per unit (workers: any number) · click ✕ on a fitted card to take it back</small></span><button class="rb" data-a="cClose">✕ Close (Esc)</button></h3>`;
     this.acts.set('cClose', () => this.openCards(false));
     const fitRow = (onFit, keep) => {
       let r = `<div class="fit"><span>Fit to:</span>`;
-      for (const u of UNIT_IDS) {
+      for (const u of facUnits(c.me() && c.me().fac)) {
         const n = (ups[u] || []).length, cap = cardCap(u), full = n >= cap;   // (v1.2.28: 4 cards per unit type)
         r += `<button class="rb ${u === selType ? 'hl' : ''}${full ? ' off' : ''}" data-a="fit_${u}" data-tip="fit_${u}"${full ? ' style="opacity:.45"' : ''}><img src="${thumbOf(u, col)}">${esc(UNITS[u].name)} <small>${cap === Infinity ? (n || '') : `${n}/${cap}`}</small></button>`;
         this.acts.set('fit_' + u, () => { if (full) { this.c.sfx && this.c.sfx('ui', 0.4); this.note(`${UNITS[u].name}s already have ${cap} cards. Take one off below first.`, 'err'); return; } onFit(u); });

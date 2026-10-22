@@ -1996,6 +1996,8 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
   BG.budgetTick(g3, 0.6, 5);
   check('shot budget: 30+ fps keeps it uncapped', B2.cap === Infinity);
   g3.hostFps = 25; BG.budgetTick(g3, 0.6, 5);
+  check('shot budget: one slow check alone doesn\'t cut (v1.2.32)', B2.cap === Infinity);
+  BG.budgetTick(g3, 0.6, 5);
   check('shot budget: under 30 fps a cap appears below the current shot count', B2.cap < 200 && B2.cap >= BG.BUDGET.capMin, B2.cap);
   g3.hostFps = 60; g3.bullets.length = 20; for (let k = 0; k < 20; k++) BG.budgetTick(g3, 0.6, 5);
   check('shot budget: smooth again for a few seconds drops the cap', B2.cap === Infinity, B2.cap);
@@ -2088,7 +2090,7 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
   const rc = RD.researchCards(cards);
   check('rts research: shooter cards turn into unit upgrades (any card, any unit)', rc.length >= 60 && rc.every(c => Object.keys(c.up).length), rc.length);
   { // a 2 bot game: economy, infinite income, army, research, someone wins
-    const g = new R.RtsGame({ roster: roster(2).map((r, i) => ({ ...r, team: i, isBot: true, difficulty: 'hard' })), settings: { mode: 'rts' }, cards, seed: 5 });
+    const g = new R.RtsGame({ roster: roster(2).map((r, i) => ({ ...r, team: i, isBot: true, difficulty: 'hard', fac: 'steel' })), settings: { mode: 'rts' }, cards, seed: 5 });
     let bad = 0, maxT = 0; const t1 = Date.now();
     for (let i = 0; i < 20 * 60 * 18 && g.phase === 'play'; i++) { const a = performance.now(); g.tick(0.05); maxT = Math.max(maxT, performance.now() - a); g.takeEvents(); if (i % 200 === 0) for (const u of g.units) if (!Number.isFinite(u.x) || !Number.isFinite(u.z)) bad++; }
     const st = g.players.map(p => p.stats);
@@ -2097,7 +2099,7 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
     check('rts bots: a 2 player game ends with a winner', g.phase === 'over' && g.winner != null, `${g.phase} ${Math.round(g.time)}s ${Date.now() - t1}ms max tick ${maxT.toFixed(1)}`);
   }
   { // orders: your own units only; derricks give crystal forever; the unit budget holds the biggest army first
-    const g = new R.RtsGame({ roster: roster(2, { human: true }).map((r, i) => ({ ...r, team: i, isBot: i > 0 })), settings: { mode: 'rts' }, cards, seed: 9 });
+    const g = new R.RtsGame({ roster: roster(2, { human: true }).map((r, i) => ({ ...r, team: i, isBot: i > 0, fac: 'steel' })), settings: { mode: 'rts' }, cards, seed: 9 });
     const theirs = g.units.find(u => u.owner === 'p1'); const o0 = theirs.order && theirs.order.k;
     g.action('p0', { t: 'cmd', ids: [theirs.id], o: { k: 'move', x: 0, z: 0 } });
     check('rts orders: you can\'t order someone else\'s units', (theirs.order && theirs.order.k) === o0);
@@ -2107,6 +2109,35 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
     check('rts unit budget: near the cap, training is held', held === true);
     g.setConnected('p0', false); check('rts: a player who leaves is replaced by a bot', p.isBot && g.bots.has('p0'));
     check('rts: they get their base back on return', g.rebind('p0', 'p0b') && !g.player('p0b').isBot && g.units.some(u => u.owner === 'p0b'));
+  }
+  { // v1.2.32 (Devin): cheaper Steelborne, more supply; the Hive: crystal only, broods, network, feral units
+    check('rts v1.2.32: Steelborne units cost less (Trooper 35, was 50)', RD.UNITS.trooper.cost[0] === 35 && RD.supplyCap(4) === 300);
+    check('rts hive: every Hive unit and building costs crystal only', Object.values(RD.UNITS).concat(Object.values(RD.BUILDINGS)).filter(d => d.fac === 'hive').every(d => d.cost[1] === 0));
+    const g = new R.RtsGame({ roster: roster(2, { human: true }).map((r, i) => ({ ...r, team: i, isBot: i > 0, fac: i ? 'steel' : 'hive' })), settings: { mode: 'rts' }, cards, seed: 11 });
+    const p = g.player('p0'), nest = g.blds.find(b => b.owner === 'p0');
+    check('rts hive: starts with a Brood Nest and Mites', nest && nest.type === 'nest' && g.units.filter(u => u.owner === 'p0').every(u => u.type === 'mite'));
+    p.crystal = 5000;
+    const far = g.M.bases.map(b => b).sort((a, b) => Math.hypot(b.x - nest.x, b.z - nest.z) - Math.hypot(a.x - nest.x, a.z - nest.z))[0];
+    const ex = g.explored.get(p.team); ex.fill(1);
+    const spot = (() => { for (let k = 0; k < g.M.N * g.M.N; k += 7) { const x = RM.cellX(g.M, k), z = RM.cellZ(g.M, k); if (Math.hypot(x - nest.x, z - nest.z) > 40 && g.canPlace(g.player('p1'), 'depot', x, z) === true) return { x, z }; } return null; })();
+    check('rts hive: buildings outside the network are refused', spot && String(g.canPlace(p, 'node', spot.x, spot.z)).includes('network'), spot && g.canPlace(p, 'node', spot.x, spot.z));
+    const pit = g.addBuilding(p, 'pit', nest.x + 9, nest.z, true); g.recount(p);
+    g.queueTrain(p, pit, 'skitter'); const n0 = g.units.filter(u => u.type === 'skitter').length;
+    for (let i = 0; i < 20 * 20 && g.units.filter(u => u.type === 'skitter').length === n0; i++) g.tick(0.05);
+    check('rts hive: one order hatches a brood (4 Skitters)', g.units.filter(u => u.type === 'skitter').length - n0 === 4);
+    const pc = RD.costFor(p, RD.pullCost(0));
+    check('rts hive: card pulls are paid in crystal', pc[1] === 0 && pc[0] === RD.pullCost(0)[0] + RD.pullCost(0)[1]);
+    const out = g.units.filter(u => u.type === 'skitter'); for (const u of out) { u.x = far.x; u.z = far.z; u.order = { k: 'hold' }; }
+    for (let i = 0; i < 20 * 60; i++) g.tick(0.05);
+    const feral = out.filter(u => g.ents.has(u.id) && u.pl.feral);
+    check('rts hive: units left outside the network go feral', feral.length >= 2 && feral.every(u => u.team !== p.team), feral.length);
+    check('rts hive: feral units are hidden from the player list', g.publicState().pl.filter(q => !q.spec).length === 2);
+    const inside = g.units.filter(u => u.owner === 'p0' && u.type === 'mite');
+    check('rts hive: units inside the network stay loyal', inside.length >= 10);
+    const b2 = new R.RtsGame({ roster: roster(2).map((r, i) => ({ ...r, team: i, isBot: true, difficulty: 'hard', fac: 'hive' })), settings: { mode: 'rts' }, cards, seed: 6 });
+    for (let i = 0; i < 20 * 60 * 6 && b2.phase === 'play'; i++) { b2.tick(0.05); b2.takeEvents(); }
+    const st = b2.players.filter(q => !q.feral).map(q => q.stats);
+    check('rts hive bots: mine, build and hatch an army', st.every(s => s.mined > 1000 && s.built > 6) && b2.units.some(u => !u.def.worker && !u.pl.feral), JSON.stringify(st));
   }
 }
 { // v1.2.30: the host's match on its own thread (hostsim.js): every shooter mode runs through it, what it sends the page can be

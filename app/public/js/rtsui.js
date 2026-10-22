@@ -10,7 +10,7 @@ import * as THREE from '/vendor/three/build/three.module.js';
 import { RTS, UNITS, BUILDINGS } from './rtsdata.js';
 import { generateRtsMap, CELL, cellOf, stampVision, resCells } from './rtsmap.js';
 import { TYPE_LIST, mapChecksum } from './rts.js';
-import { AckEncoder, AckDecoder } from './netcodec.js';
+import { AckDecoder } from './netcodec.js';
 import { FOW, makeFow, fowMat, UNIT_LOOK, BUILD_LOOK, UNIT_AIR_H, bakeParts, Inst, buildTerrain, buildDoodads, makeSurface } from './rtsart.js';
 import { HUD } from './rtshud.js';
 
@@ -18,8 +18,6 @@ const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const angLerp = (a, b, k) => { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * k; };
 const PITCH = 0.98;          // camera tilt (radians below horizontal)
 const SKY = '#9cc0dc';
-let streamId = 0;
-const nextStream = () => (streamId = Math.max(streamId + 1, Math.floor(Date.now() / 100)));
 
 export class RtsClient {
   constructor(ctx) {
@@ -41,13 +39,17 @@ export class RtsClient {
     R.scene.background = new THREE.Color(SKY); R.scene.fog = new THREE.Fog(SKY, 260, 620);
     this.hud = new HUD(this);
     this.bindInput();
-    if (this.isHost && this.game) { this.game.onAck = (from, a) => this.onAck(from, a); this.applyPub(this.game.publicState()); }
+    // v1.2.30: the host's game runs through a driver (rtshost.js): on its own thread when the PC has cores to spare
+    if (this.isHost && this.game) this.game.start(this.localId, {
+      pub: s => { if (!this.disposed) this.applyPub(s); },
+      view: (v, ev) => { if (this.disposed) return; this.tm = v.tm; this.tmAt = performance.now(); this.applyView(v, ev, RTS.tick); },
+      send: m => { if (this.net && !this.disposed) this.net.send(m); },
+    }, this.net);
   }
   dispose() {
     this.disposed = true;
     this.unbindInput();
     this.hud.dispose();
-    if (this.game && this.game.onAck) this.game.onAck = null;
     const R = this.renderer;
     R.scene.remove(this.root);
     this.root.traverse(o => { if (o.geometry && !o.geometry.shared) o.geometry.dispose(); });
@@ -87,64 +89,13 @@ export class RtsClient {
   }
   fpsTick(dt) {
     this.fpsAcc = (this.fpsAcc || 0) + 1; this.fpsT += dt;
-    if (this.fpsT >= 2) { const fps = document.hidden ? 0 : this.fpsAcc / this.fpsT; this.fps = fps; this.fpsAcc = 0; this.fpsT = 0; if (this.isHost && this.game) this.game.hostFps = fps; else if (this.net) this.sendU({ t: 'fps', v: Math.round(fps) }); }
+    if (this.fpsT >= 2) { const fps = document.hidden ? 0 : this.fpsAcc / this.fpsT; this.fps = fps; this.fpsAcc = 0; this.fpsT = 0; if (!this.isHost && this.net) this.sendU({ t: 'fps', v: Math.round(fps) }); }
   }
   hostTick(dt, paused) {
-    const g = this.game;
-    const tk = g.tickN;
-    if (!paused) g.step(dt);
-    const evs = g.takeEvents();
-    if (evs.length) { (this.pendEv ||= []).push(...evs); if (this.peerSeq.size) for (const k of this.peerSeq.values()) k.ev.push(...evs); }
-    this.pubT -= dt;
-    if (g.dirty || this.pubT <= 0) {
-      if (this.pubT <= 0 || g.dirty) { g.dirty = false; this.pubT = 1; }
-      const s = g.publicState();
-      this.applyPub(s);
-      if (this.net) this.net.send({ t: 'toAll', msg: { k: 'rpub', s } });
-    }
-    if (g.tickN !== tk || !this.viewed) {   // the host's own view: every tick
-      this.viewed = true;
-      const v = g.viewFor(this.localId), ev = g.eventsFor(this.localId, this.pendEv || []);
-      this.pendEv = [];
-      this.tm = v.tm; this.tmAt = performance.now();
-      this.applyView(v, ev, RTS.tick);
-    }
-    if (this.net) {
-      this.sendT -= dt;
-      if (this.sendT <= 0) { this.sendT = Math.max(0, this.sendT + RTS.send); this.sendN = (this.sendN || 0) + 1; this.sendViews(g); }
-    }
-  }
-  // each joiner gets its own stream (what its team sees), deltas against the last update it confirmed (netcodec AckEncoder)
-  sendViews(g) {
-    const backlog = typeof this.net.backlog === 'function' ? this.net.backlog() : 0;
-    if (backlog > 256 * 1024) return;
-    for (const p of g.players) {
-      if (p.id === this.localId || (p.isBot && !p.wasHuman) || !p.connected) { if (!p.connected) this.peerSeq.delete(p.id); continue; }
-      if (p.wasHuman) continue;
-      let k = this.peerSeq.get(p.id);
-      if (!k) this.peerSeq.set(p.id, k = { enc: new AckEncoder(), ack: 0, ek: 0, since: 0, ev: [] });
-      if (!k.enc.e0) { k.enc.e = nextStream(); k.enc.e0 = 1; }
-      const thin = this.rttOf ? (this.rttOf(p.id) > 400 ? 3 : this.rttOf(p.id) > 220 ? 2 : 1) : 1;
-      if (this.sendN % thin) continue;
-      const v = g.viewFor(p.id), ev = g.eventsFor(p.id, k.ev); k.ev = [];
-      const q = k.enc.push(v, ev);
-      if (!k.since) k.since = q;
-      const rtt = this.rttOf ? this.rttOf(p.id) || 150 : 150, rs = Math.min(4, Math.max(2, Math.ceil((rtt + 40) / 66)));
-      const m = k.enc.encodeFor(k.ack, k.since, k.ek, rs);
-      if (m) this.net.send({ t: 'toPeerU', id: p.id, msg: { k: 'rsnap', s: m } });
-    }
-  }
-  onAck(from, a) {
-    const k = this.peerSeq.get(from); if (!k) return;
-    if (a.need) { this.sendMap(from); return; }
-    if (!Array.isArray(a.a)) { k.ack = 0; return; }
-    if (a.a[0] !== k.enc.e) return;
-    if (a.a[1] > k.ack && a.a[1] <= k.enc.n) k.ack = a.a[1];
-    if (a.a[2] > k.ek && a.a[2] <= k.enc.n) k.ek = a.a[2];
-  }
-  sendMap(to) {   // a joiner built a different map from the seed (should never happen): it gets the real one
-    const M = this.game.M, b64 = arr => { let s = ''; const u = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength); for (let i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192)); return btoa(s); };
-    this.net.send({ t: 'toPeer', id: to, msg: { k: 'rmap', m: { ...M, lv: b64(M.lv), h: b64(M.h), walk: b64(M.walk), ramp: b64(M.ramp) } } });
+    const rtt = {};
+    if (this.net && this.rttOf && this.pub) for (const p of this.pub.pl) if (p.id !== this.localId && !p.bot) rtt[p.id] = this.rttOf(p.id);
+    const backlog = this.net && typeof this.net.backlog === 'function' ? this.net.backlog() : 0;
+    this.game.frame(dt, paused, { rtt, backlog, fps: this.fps || 0 });
   }
   sendU(a) { if (this.net && !this.isHost) this.net.send({ t: 'toHostU', msg: { k: 'rts', a } }); }
   onMsg(msg) {
@@ -315,6 +266,7 @@ export class RtsClient {
       case 'shoot': this.shotFx(e); break;
       case 'splash': this.boom(e.x, e.z, e.r); break;
       case 'die': this.deathFx(e); break;
+      case 'feral': this.renderer.burst(e.x, this.groundY(e.x, e.z) + 0.6, e.z, '#9aff4a', 10, 4); break;   // (v1.2.32: a Hive unit went feral)
       case 'heal': { const b = ent(e.b); if (b) this.renderer.glowSprite(b.x, this.yOf(b) + 0.8, b.z, '#7fff9a', 0.7, 0.3); break; }
       case 'chain': this.tracer(e.x1, this.groundY(e.x1, e.z1) + 0.8, e.z1, e.x2, this.groundY(e.x2, e.z2) + 0.8, e.z2, '#9ad8ff', 0.12, 'laser'); break;
       case 'meteor': this.meteorFx(e.x, e.z); break;
@@ -447,7 +399,7 @@ export class RtsClient {
       G.ringMat.color.set(d.cap === 1 ? '#7fff9a' : d.cap === 2 ? '#ff5a4a' : p ? p.color : '#ffffff'); G.ringMat.opacity = d.cap ? 0.5 + 0.4 * Math.sin(t * 8) : 0.35;
     }
     this.towG.forEach((T, i) => { const st = this.towersSt[i] || 0; T.eyeMat.color.set(st === 1 ? '#7fff9a' : st === 2 ? '#ff5a4a' : '#888888'); T.eye.rotation.y = t; });
-    this.drawPlacement(); this.drawRally();
+    this.drawPlacement(); this.drawRally(); this.drawNet();
   }
   viewRect() {   // the ground the camera can see (a generous box), for skipping far entities
     const c = this.cam, w = c.h * 2.6 + 20;
@@ -462,6 +414,22 @@ export class RtsClient {
     p.setXYZ(0, b.x, this.groundY(b.x, b.z) + 0.4, b.z); p.setXYZ(1, r[0], this.groundY(r[0], r[1]) + 0.4, r[1]); p.needsUpdate = true;
     this.rallyLine.computeLineDistances(); this.rallyLine.visible = true;
     this.flagMesh.position.set(r[0], this.groundY(r[0], r[1]) + 0.8, r[1]); this.flagMesh.visible = true;
+  }
+  // v1.2.32 the Hive: your network drawn on the ground (a ring around each Brood Nest and Hive Node)
+  netList() { const L = []; for (const e of this.ents.values()) if (e.kind === 'b' && e.def.net && this.isMine(e)) L.push([e.x, e.z, e.prog >= 100 ? e.def.net : RTS.hive.siteR]); return L; }
+  inNet(x, z) { for (const [bx, bz, r] of this.netList()) if (Math.hypot(x - bx, z - bz) <= r) return true; return false; }
+  drawNet() {
+    const seen = new Set(), M = this.netM || (this.netM = new Map());
+    for (const [x, z, r] of this.netList()) {
+      const k = x + ':' + z; seen.add(k);
+      let o = M.get(k);
+      if (!o || o.r !== r) {
+        if (o) { this.root.remove(o.m); o.m.geometry.dispose(); }
+        const m = new THREE.Mesh(new THREE.RingGeometry(r - 0.35, r, 72).rotateX(-Math.PI / 2), this.netMat || (this.netMat = new THREE.MeshBasicMaterial({ color: '#b07aff', transparent: true, opacity: 0.4, depthWrite: false })));
+        m.position.set(x, this.groundY(x, z) + 0.15, z); this.root.add(m); M.set(k, o = { m, r });
+      }
+    }
+    for (const [k, o] of M) if (!seen.has(k)) { this.root.remove(o.m); o.m.geometry.dispose(); M.delete(k); }
   }
   drawPlacement() {
     const P = this.mode && this.mode.k === 'place' ? this.mode : null;
@@ -490,7 +458,8 @@ export class RtsClient {
       const wx = kx * CELL - M.H + 1, wz = kz * CELL - M.H + 1;
       m.compose(v.set(wx, this.groundY(wx, wz) + 0.1, wz), q0, sc); this.cellI.add(m, c.set(good ? '#5aff7a' : '#ff4a3a'));
     }
-    if (!d.vent && type === 'hub') for (const r of this.res.values()) if (Math.abs(r.x - fx) < 6.5 && Math.abs(r.z - fz) < 6.5) ok = false;
+    if (!d.vent && d.drop) for (const r of this.res.values()) if (Math.abs(r.x - fx) < 6.5 && Math.abs(r.z - fz) < 6.5) ok = false;
+    if (d.fac === 'hive' && !d.drop && !this.inNet(fx, fz)) ok = false;   // (v1.2.32: inside your network)
     this.cellI.end();
     P.ok = ok;
     this.ghostMat.color.set(ok ? '#7fff9a' : '#ff6a5a');
@@ -546,6 +515,7 @@ export class RtsClient {
     switch (e.fx) {
       case 'melee': if (near) this.renderer.burst(tx, ty, tz, '#ffd166', 2, 2); this.sfx('cut', 0.12, 0.25); break;
       case 'bullet': this.tracer(m.x, m.y, m.z, tx, ty, tz, '#ffe08a', 0.07, 'bullet'); if (near) this.renderer.glowSprite(m.x, m.y, m.z, '#ffe08a', 0.4, 0.05); this.sfx('shoot', 0.12, 0.07); break;
+      case 'acid': this.tracer(m.x, m.y, m.z, tx, ty, tz, '#9aff4a', 0.14, 'laser'); if (near) this.renderer.burst(tx, ty, tz, '#9aff4a', 2, 1.5); this.sfx('hiss', 0.12, 0.2); break;
       case 'laser': this.tracer(m.x, m.y, m.z, tx, ty, tz, '#ff6a6a', 0.1, 'laser'); this.sfx('zap', 0.2, 0.12); break;
       case 'rocket': this.tracer(m.x, m.y, m.z, tx, ty, tz, '#ffb04a', 0.32, 'rocket'); this.sfx('whoosh', 0.18, 0.15); break;
       case 'flame': { if (near) for (let i = 1; i <= 4; i++) { const k = i / 4; this.renderer.burst(m.x + (tx - m.x) * k, m.y + (ty - m.y) * k, m.z + (tz - m.z) * k, i % 2 ? '#ff8a2a' : '#ffd166', 2, 1.5); } this.sfx('hiss', 0.2, 0.3); break; }
@@ -865,7 +835,7 @@ export class RtsClient {
     }
     if (code === 'F1') { this.idleWorker(); e.stopImmediatePropagation(); return; }
     if (code === 'F2') { this.setSel([...this.ents.values()].filter(x => this.isMine(x) && x.kind === 'u' && !x.def.worker).map(x => x.id)); e.stopImmediatePropagation(); return; }
-    if (code === 'Backspace') { const hubs = [...this.ents.values()].filter(x => this.isMine(x) && x.type === 'hub'); if (hubs.length) { this.hubI = ((this.hubI || 0) + 1) % hubs.length; this.lookAt(hubs[this.hubI].x, hubs[this.hubI].z); } return; }
+    if (code === 'Backspace') { const hubs = [...this.ents.values()].filter(x => this.isMine(x) && x.kind === 'b' && x.def.drop); if (hubs.length) { this.hubI = ((this.hubI || 0) + 1) % hubs.length; this.lookAt(hubs[this.hubI].x, hubs[this.hubI].z); } return; }
     if (code === 'Space') { if (this.lastAlert) this.lookAt(this.lastAlert.x, this.lastAlert.z); e.stopImmediatePropagation(); return; }
     if (e.repeat) return;
     if (this.hud.hotkey(code, e)) { e.stopImmediatePropagation(); e.preventDefault(); }

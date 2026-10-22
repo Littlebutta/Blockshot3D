@@ -1,6 +1,6 @@
 {
- "version": "1.2.31",
- "built": "2026-10-22T20:44:28.351Z",
+ "version": "1.2.33",
+ "built": "2026-10-22T21:21:52.582Z",
  "files": {
   ".gitignore": [
    "0068ba7ed54e738118cfb5244ca651fe18f44c4ef3e5236241677de513dfaa9d",
@@ -2119,7 +2119,7 @@
    554
   ],
   "package.json": [
-   "a1938f190da86c6610f7449e26a71a63a799e1907b0c0c463838e0f292b9f2ad",
+   "258d36d9fbf36449abb5a0192fef1d64a892dd116ae1c259eff227e472a4c0b2",
    749
   ],
   "public/css/style.css": [
@@ -2171,8 +2171,8 @@
    22535
   ],
   "public/js/budget.js": [
-   "7e66477bbf365ca54a3a32efb1f4de9c8e345de4b8787d65fba352caa81d0af3",
-   7265
+   "87c96918e654afdc78c1c56b0d57ebe7d0ae9394a0cc9957fd58308204c58ed7",
+   7503
   ],
   "public/js/cardinfo.js": [
    "6c40ba0d38aed9466502f7763afeb7c954de8954d3c2de00825473d7051dcc44",
@@ -2231,8 +2231,8 @@
    43307
   ],
   "public/js/main.js": [
-   "8fee7afc3371b35af3b51beaa365759292bee397ba1772c9fc0ad79ba3f0c6c6",
-   340365
+   "b410df97bdbe7b553613f9d01880a497a3baf3f2ac0310fbe72f3eab701d4054",
+   342417
   ],
   "public/js/net.js": [
    "d415f683a93c1c3320d56977ba98fe00506efc8dacc6d989f8826a6d8c86a2de",
@@ -2243,8 +2243,8 @@
    22035
   ],
   "public/js/netstats.js": [
-   "0b5ac56604563fb184337790136aaf7f4bc7227ec1a248fec0d4b05faf091280",
-   9443
+   "609607ab78726897551858e1c5be9b8ec575a85fe198453ce2a5746c835d6621",
+   9449
   ],
   "public/js/openworld.js": [
    "1050071b38cee1b09a057b214e08d5f21b2f46fe64cfb44058bfc1f845785ef8",
@@ -2255,8 +2255,8 @@
    27697
   ],
   "public/js/patchnotes.js": [
-   "2f9746a3828370597c3eee9ac830f7e9bbe2407f9a736c72b29f9de0dc1db31a",
-   25675
+   "dbac3c6430c56cf92d2cdbf7547516ecd22dbe660e4af54d5d56d9cdb4621e5d",
+   27751
   ],
   "public/js/physics.js": [
    "349c6151380f842e12e4a1aae299634bce6d4a913dc0af8eb47914864e5d8086",
@@ -2275,32 +2275,48 @@
    10124
   ],
   "public/js/rts.js": [
-   "52eb46bff639ea85001b6f473e86e14a94aa8c4463c46fabaed7cd4342a97bf2",
-   86272
+   "dbf01bed77117a49579adbbca081d13895bb0c8d4f753f53ae437acbd9f068ed",
+   89186
   ],
   "public/js/rtsai.js": [
-   "bd30d8eaf49d4c1da4c78102e5327c41c62bffd0ca56b7ccba3c26d46d2b5713",
-   17191
+   "1542b3c3ef458625929d2fc18437e2a84055e81999b6406cc6a9beb2b47ae5dc",
+   19728
   ],
   "public/js/rtsart.js": [
-   "4cb443f17d143babec6da44a62234e34a9c0ff06cbcb5e0c5f1bf1bd68def8a7",
-   25031
+   "0f42c7d2de2d3a00ec6d6abf5bb6e58ac11d54404dec3d56e9eb243de69b9557",
+   30414
   ],
   "public/js/rtsdata.js": [
-   "0aa2d454274ffb6b8c4474275a9c3573e82017870abdedb574459a688e7d4868",
-   14921
+   "f975ac50edd70bd23b3af02577d394c7381cd1dbd79ad5f1ead9699a644e871b",
+   21361
+  ],
+  "public/js/rtshost.js": [
+   "09b94cdac3472e751555b6d1e5d2ef27d8f2327f1947affd278a8dff0e8b2a54",
+   9064
   ],
   "public/js/rtshud.js": [
-   "bbf335b917b0069bc52f4a622518924d1bd1dafcaded55fd2befcbab719bbfb2",
-   54815
+   "8f626e96af723c7c30a290db536961d55ba572aa19e779cb42efdcbb605eed4c",
+   55280
   ],
   "public/js/rtsmap.js": [
    "ac5eab2e4a098dd3703b794200b5306f5d7c9c37264466c94c8c3ba5713e50b2",
    24977
   ],
+  "public/js/rtsnav.js": [
+   "6afa926a97049cc53957159eb4d0526d8c2c72a1f3df12b916ca30576996bf26",
+   3648
+  ],
+  "public/js/rtsnavworker.js": [
+   "a32952f4f834c87a333026c5371f8d5cff83b78cbfb5bd6d375e1ca98eb86562",
+   554
+  ],
   "public/js/rtsui.js": [
-   "58f9848758d4db4c5479b48d2fa3cbdf393fe31400a883dd33c2a9fcc2d264d2",
-   61291
+   "574b3fe6b5ad801f32abd0186fae364799c747cb4dd01f93cb1074206b141685",
+   60269
+  ],
+  "public/js/rtsworker.js": [
+   "230a609e5420eb7ef1dddee1d72152ca2abb36bcf5e9fe7e3b3cd92f9c971894",
+   1825
   ],
   "public/js/scenery.js": [
    "14b0030fd9ea016b658179f9d5b43f770af21d249268300b5b39264435e3ff6c",
@@ -2407,8 +2423,8 @@
    2422
   ],
   "tools/simtest.mjs": [
-   "d085f4e663113443b68503d7df715478cafe8461691b25608f6d82184122edc9",
-   182821
+   "705fe7fd13904bd043aaa17c5bcd1292ae7daf33c8b7e72703a98460fa57c38b",
+   186260
   ],
   "tools/trim-build.cjs": [
    "f14cc62bb2ab8633c47b31e660b4a38c3774977e6e95d099f8a71b9b6c4d288d",

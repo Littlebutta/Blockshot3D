@@ -1,6 +1,24 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.33', date: 'Oct 22', notes: {
+    Added: [
+      'RTS: a second faction, the Hive. Pick it next to your name in the lobby (bots can be set to Steelborne, Hive or Random). Bug-like aliens that only use crystal (the blue one): no flux, no refineries.',
+      'The Hive\'s troops hatch in broods: one order gives 4 Skitters, 3 Spitters, 2 Ravagers, 2 Crushers or 3 Wasps. Buildings: Brood Nest, Hive Node, Spawning Pit, Acid Spire, Gene Vault (card research, paid in crystal), Brood Chamber, Sky Roost.',
+      'The hive network: each Brood Nest (22 m) and Hive Node (16 m) shows a purple ring on the ground. Hive buildings (except a new Nest) go up inside it. Units outside the network have a 5% chance every second to go feral: they leave you and attack anyone who isn\'t feral. Chain Hive Nodes to take your swarm further.',
+    ],
+    Changed: [
+      'RTS runs on its own CPU threads now (like the other modes since 1.2.30), with path finding on any spare cores: in an 8-bot game the drawing thread went from about 10 to 2.6 ms a frame, and the long pauses when big armies moved are gone. Settings > Graphics > CPU threads = 1 keeps the old way.',
+      'RTS: more units: the supply cap is 300 (was 200; 240 and 200 in 5-6 and 7+ player games, were 160 and 130), and the unit budget lets each player keep at least 40 units (was 24).',
+      'RTS: every Steelborne unit costs about 30% less (Trooper 35 crystal, was 50).',
+    ],
+  } },
+  { v: '1.2.32', date: 'Oct 22', notes: {
+    Changed: [
+      'Big solo matches no longer run in slow motion: every bot death paused time for a moment (the hit-stop meant for duels), which with 100 bots slowed the whole match to about 75% speed. In lobbies over 8 players only your own kills and deaths do it now.',
+      'Shot budget is calmer: it goes by how many frames you actually got in the last half second (one long frame no longer counts as a slow game), waits half a second of real slowness before cutting (unless under 20 fps), and cuts less at once. In 1.2.31 every hitch made it hold back shots.',
+    ],
+  } },
   { v: '1.2.31', date: 'Oct 22', notes: {
     Added: [
       'No player limit: add as many bots and players as you like (new +100 bots button in the lobby). Steam lobbies hold up to 250 people, Steam\'s own maximum.',
