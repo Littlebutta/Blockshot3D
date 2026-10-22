@@ -1,6 +1,15 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.30', date: 'Oct 22', notes: {
+    Added: [
+      'Settings > Graphics > CPU threads: how many CPU threads the game may use. Auto (the default) uses every core your PC has; 1 runs everything on one thread like before.',
+    ],
+    Changed: [
+      'Multithreading: when you host (or play solo), the match itself now runs on its own CPU thread: the simulation, the bots\' thinking and the updates sent to everyone. Your main thread only draws, so the frame rate holds up much better in big matches (100 players: about 40% less work per frame on the drawing thread). Works in every mode except AMON and the RTS (those come later). Your own view of the match is about one frame behind your inputs when it\'s on; set CPU threads to 1 if you\'d rather not have that.',
+      'Network window (N / F2) shows whether the game thread is on and how long the match takes to come back.',
+    ],
+  } },
   { v: '1.2.29', date: 'Oct 22', notes: {
     Added: [
       'Tournament: a Ready button on the matchup screen, next to the timer (Enter still works, now from any menu too).',

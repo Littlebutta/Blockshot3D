@@ -24,6 +24,7 @@ export const DEFAULT_SETTINGS = {
   upscaler: 'off',      // v27: 'off' | 'quality' | 'balanced' | 'performance' (FSR 1-style upscale + sharpen)
   vsync: true,          // desktop app: off unlocks the frame rate (after a restart); browsers always sync
   fpsCap: 0,            // 0 = no limit
+  cpuThreads: 0,        // v1.2.30: CPU threads the game may use (0 = Auto: every core; 1 = one thread, as before) (threads.js)
   showFps: false,
   showPing: true,       // v30: live ping readout + connection warnings in multiplayer matches
   netPredict: true,     // v30: move your own character instantly when you join someone's game (client-side prediction)
