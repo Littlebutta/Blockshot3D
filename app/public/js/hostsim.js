@@ -18,6 +18,7 @@ import { coreRows } from './core.js';
 import { bItemRows, BRAWL } from './brawl.js';
 import { budgetRow } from './budget.js';
 import { tournRows, giftOffer, giftAccept, giftDecline } from './tourn.js';
+import { ViewPacker } from './viewpack.js';
 
 // Co-op wave bots (raiders, Elites, wave turrets and drones; not anyone's commander units) wear raider markings.
 export const isRaider = (kind, transient, ownerId) => !!transient && !ownerId && ['wave', 'elite', 'turret', 'drone'].includes(kind);
@@ -84,6 +85,7 @@ export class HostSim {
     this.emit = emit; this.localId = o.localId; this.host = !!o.host; this.inline = !!o.inline;
     this.outEvents = []; this.sendT = 0; this.snapN = 0; this.acks = null; this.enc = null; this.peerE = new Map(); this.levelVersion = -1;
     this.nsRows = null; this.hf = null;
+    this.packer = this.inline ? null : new ViewPacker();   // (v1.2.31: on its own thread, the view crosses packed: viewpack.js)
     const g = this.g = new Game({ roster: o.roster, settings: o.settings, cards: o.cards, onOffer: p => this.onOffer(p), onCombo: (p, C) => this.toPlayer(p, { k: 'comboAsk', combo: C.id }), onBreak: (p, opts) => this.toPlayer(p, { k: 'breakAsk', opts }) });
     this.practice = o.settings.mode === 'practice' ? o.practiceCards || null : null;
     if (this.practice) g.practiceSetCards(this.localId, this.practice);
@@ -205,6 +207,7 @@ export class HostSim {
       bitems: g.isBrawl() ? bItemRows(g) : null, bud: budgetRow(g),
     };
     const sent = this.host ? this.send(c, dt, ts, t0) : 0;
+    if (this.packer) this.packer.pack(view);
     this.emit('frame', { view, evs, level, levelObj: level && this.inline ? g.level : null, tn: tournRows(g), brawlRows: g.isBrawl() ? g.brawlRows() : null, brawlT: g.isBrawl() ? Math.max(0, Math.ceil(BRAWL.suddenT - g.time)) : null, mirror: this.mirror(), sent });
   }
   // snapshots for joiners: returns how many went out this frame (0 or 1)

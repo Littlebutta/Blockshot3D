@@ -66,7 +66,7 @@ const giveCard = (g, p, id) => { p.cards.push(id); g.recompute(p); };
 const flat = (g) => { g.level.boxes = g.level.boxes.filter(b => b.wall); g.level.dynamic = []; g.level.solids = g.level.solids.filter(s => s.wall); g.dyn = []; g.refreshSolids(); g.bullets = []; g.hazard = null; };
 
 // Player cap and colors
-check('maxPlayers is 100 (v1.2.25)', C.RULES.maxPlayers === 100);
+check('no player limit (v1.2.31)', C.RULES.maxPlayers === Infinity);
 check('20 distinct FFA colors', new Set(C.assignColors(Array.from({ length: 20 }, () => ({})), 'ffa')).size === 20);
 check('10 distinct shades per team', new Set(C.assignColors(Array.from({ length: 20 }, (_, i) => ({ team: i % 2 })), 'tdm')).size === 20);
 
@@ -588,7 +588,7 @@ const pickAll = g => { for (const p of g.players) if (!p.picked && p.offer) g.pi
   // Clone shield mod
   const g = freshGame(); flat(g); const [p, e] = g.players; for (const q of g.players.slice(2)) q.alive = false;
   giveCard(g, p, 'sandbag-barricade'); giveCard(g, p, 'shield-clone'); giveCard(g, p, 'phoenix-protocol');
-  check('clone: long block cooldown', p.stats.blockCooldown > 10);
+  check('clone: longer block cooldown (v1.2.31: x1.6, was x3.2)', p.stats.blockCooldown > 4 && p.stats.blockCooldown < 10, p.stats.blockCooldown);
   p.pos = { x: 0, y: 0, z: 0 }; p.aim = { x: 1, y: 0, z: 0 }; p.blockCdT = 0; g.tryBlock(p);
   const clone = g.players.find(u => u.kind === 'clone' && u.ownerId === p.id);
   check('clone: block spawns a clone with your stats', clone && clone.stats.health === p.stats.health && clone.stats.damage === p.stats.damage);
@@ -1049,6 +1049,7 @@ const { prepareLevel: prepLevel } = await J('physics.js');
   check('clone split: second clone halves again', Math.abs(p.stats.health - s0.health / 4) < 1e-6 && Math.abs(p.stats.damage - s0.damage) < 1e-6 && Math.abs(p.hp - 20) < 1e-6);
   const c2 = g.players.filter(u => u.kind === 'clone' && u.ownerId === p.id && u.alive).pop();
   check('clone split: newest clone at quarter health, full damage', c2 && Math.abs(c2.stats.health - s0.health / 4) < 1e-6 && Math.abs(c2.stats.damage - s0.damage) < 1e-6);
+  { const n0 = g.players.filter(u => u.kind === 'clone').length; if (c2) { c2.blockCdT = 0; g.tryBlock(c2); } check('clone split: clones can\'t make clones (v1.2.31)', c2 && g.players.filter(u => u.kind === 'clone').length === n0); }
   // gun effects on the clone still work: its bullet ignites
   const e = g.players[1]; e.alive = true; e.hp = g.maxHp(e); e.fx = {}; c2.pos = { x: -3, y: 0, z: 0 }; e.pos = { x: 0, y: 0, z: 0 };
   const b = g.spawnBullet(c2, { x: c2.pos.x + 1, y: 0.9, z: c2.pos.z }, { x: 1, y: 0, z: 0 }, 28, false); b.grav = 0;
@@ -1968,7 +1969,7 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
   let bad = 0;
   for (let k = 0; k < 4000; k++) { const a = { x: Math.random() * 100 - 50, y: Math.random() * 3, z: Math.random() * 100 - 50 }, b = { x: Math.random() * 100 - 50, y: Math.random() * 3, z: Math.random() * 100 - 50 }; if (P.segBlocked(L.solids, a, b) !== P.segBlocked(flat, a, b) || !!P.pointInSolid(L.solids, a.x, a.y, a.z, 0.2) !== !!P.pointInSolid(flat, a.x, a.y, a.z, 0.2)) bad++; }
   check('perf: arenas get the collision grid and it gives the same answers as checking every box', !!L.solids.grid && bad === 0, bad);
-  check('100 players: lobby cap', C.RULES.maxPlayers === 100);
+  check('no lobby cap (v1.2.31)', !Number.isFinite(C.RULES.maxPlayers));
   const g = new Game({ roster: roster(100), settings: { mode: 'ffa', pickTime: 2, startPick: false }, cards }); g.start();
   let crash = null; try { for (let i = 0; i < 60 * 8; i++) { g.step(1 / 60); g.takeEvents(); } } catch (err) { crash = err; }
   check('100 players: a match runs', !crash && g.players.filter(p => p.kind === 'hero').length === 100, crash);

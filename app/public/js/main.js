@@ -15,6 +15,7 @@ import { AmonClient } from './amonui.js';
 import { RtsGame } from './rts.js';
 import { threadCount, coreCount } from './threads.js';
 import { SimLink } from './simlink.js';
+import { kcPackInto, kcHas, kcExpand } from './viewpack.js';
 import { extFields, isRaider } from './hostsim.js';
 import { RtsClient } from './rtsui.js';
 import { openGallery } from './gallery.js';
@@ -23,6 +24,9 @@ import { prepareLevel, accel, movePlayer, groundBelow, wallSegments, seedThru, u
 import { AckDecoder } from './netcodec.js';
 import { PeerNetStats, HostNetStats, pingClass, RateMeter, Worst } from './netstats.js';
 const NR = { frame: new RateMeter(), sim: new RateMeter(), send: new RateMeter() };
+// v1.2.31: the frame rate the shot budget goes by: an average over the last few frames (NR.frame looks back 2 s, which
+// let a heavy fight sink to a few fps before the budget even saw it)
+const FR = { ms: 16.7 }, fastFps = () => 1000 / FR.ms;
 // v1.2.9: hitch readout (network window): worst frame over the last 5 s with its [game, draw] ms, slowest snapshot handling, longest gap between sends (host)
 const HM = { frame: new Worst(), msg: new Worst(), send: new Worst(), sendAt: 0 };   // v1.2.9: frames drawn, host sim runs and snapshots sent per second (network window)
 import { gpuInfo, GFX_TIERS, TIER_LABEL } from './gfxdetect.js';
@@ -203,16 +207,37 @@ function setRmodTag(id) {
 }
 // ---- v1.2.15 kill cam: the last few seconds of views are kept; when the host says the round ended on a kill
 // (roundEnd e.kc), the 2 s around the winning kill are replayed from the killer's view (v1.2.17: e.kc.v), then the round splash.
-const KC = { buf: [], death: null, dur: 2000, lead: 330 };
-const kcCopy = o => { const c = { ...o }; for (const k in c) { const v = c[k]; if (v && typeof v === 'object' && !Array.isArray(v)) c[k] = { ...v }; } return c; };
+const KC = { buf: [], free: [], death: null, dur: 2000, lead: 330 };
+// v1.2.31: the replay buffer reuses its copies (frames older than 3 s are refilled) instead of copying every fighter and
+// bullet anew each frame: with 100 players that was ~2/3 of everything the page allocated, and the clean-ups it forced
+// were the hitch every 0.25-0.5 s. kcInto copies o into d (one level deep, like a fresh copy), reusing d's objects.
+function kcInto(d, o) {
+  if (!d) d = {};
+  for (const k in o) {
+    const v = o[k];
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      let t = d[k];
+      if (!t || typeof t !== 'object' || Array.isArray(t)) t = d[k] = {};
+      else for (const j in t) if (!(j in v)) delete t[j];
+      for (const j in v) t[j] = v[j];
+    } else d[k] = v;
+  }
+  return d;
+}
+const kcFill = (dst, src) => { for (let i = 0; i < src.length; i++) dst[i] = kcInto(dst[i], src[i]); dst.length = src.length; return dst; };
+const kcView = fr => { if (!fr.players) { kcExpand(fr); const kv = tournView({ ...S.view, players: fr.players, bullets: fr.bullets }); fr.players = kv.players; fr.bullets = kv.bullets; } return fr; };   // (a packed frame, the first time the replay shows it)
 const kcMode = () => duelMode() && S.matchSettings.mode !== 'brawl' && !S.matchSettings.side && settings.killCam !== false;
 function kcRecord() {
   if (!kcMode() || !S.view || !S.view.players) { KC.buf.length = 0; return; }
   if (S.killCam) return;
   const now = performance.now();
-  const kv = tournView(S.view);
-  KC.buf.push({ t: now, players: kv.players.map(kcCopy), bullets: (kv.bullets || []).map(kcCopy) });
-  while (KC.buf.length && now - KC.buf[0].t > 3000) KC.buf.shift();
+  if (KC.buf.length && now - KC.buf[KC.buf.length - 1].t < 25) return;   // (v1.2.31: up to 40 a second is plenty for the replay; on a 144 Hz screen this was most of the page's garbage)
+  while (KC.buf.length && now - KC.buf[0].t > 3000) KC.free.push(KC.buf.shift());
+  const u = S.game && S.game.unpacker, f = KC.free.pop() || { t: 0, players: [], bullets: [] };
+  f.t = now;
+  if (u && u.lastView === S.view && (!S.view.bullets || u.last.bf)) { f.packed = true; kcPackInto(f, u); }   // (v1.2.31: the match runs on its own thread: viewpack.js)
+  else { const kv = tournView(S.view); f.packed = false; kcFill(f.players || (f.players = []), kv.players); kcFill(f.bullets || (f.bullets = []), kv.bullets || []); }
+  KC.buf.push(f);
 }
 // v1.2.20 (Devin): a wipe into and out of the replay so it reads apart from live play; the view switches while the band
 // covers the screen (KC.wipe ms in)
@@ -222,7 +247,7 @@ function kcStart() {
   const w = S.kcWait; S.kcWait = null;
   if (!w.wiped) { w.wiped = true; S.kcWait = { ...w, at: performance.now() + KC.wipe }; kcWipe(); sound.play('whoosh', 0.6); return; }
   const d = KC.death, t1 = d ? Math.min(performance.now(), d.t + KC.lead) : 0, t0 = t1 - KC.dur;
-  const frames = d ? KC.buf.filter(f => f.t >= t0 && f.t <= t1 && f.players.some(p => p.id === w.k)) : [];
+  const frames = d ? KC.buf.filter(f => f.t >= t0 && f.t <= t1 && (f.packed ? kcHas(f, w.k) : f.players.some(p => p.id === w.k))) : [];
   if (frames.length < 8) { sound.play(w.mine ? 'roundWin' : 'roundLose'); roundSplash(w.w); return; }
   S.killCam = { ...w, frames, t: 0, t0: frames[0].t, span: frames[frames.length - 1].t - frames[0].t, dt: d.t, d, popped: false };
   const el = $('killCam'), r = rosterOf(w.k), o = r.transient && r.ownerId != null ? rosterOf(r.ownerId) : r;
@@ -233,7 +258,7 @@ function kcFrame(dt) {
   const K = S.killCam, at = K.t0 + K.t;
   K.t += dt * 1000 * (Math.abs(at - K.dt) < 260 ? 0.4 : 1);   // slow motion around the killing hit
   let i = 0; while (i < K.frames.length - 1 && K.frames[i + 1].t <= at) i++;
-  const f = K.frames[i], v = f.players.find(p => p.id === K.k);
+  const f = K.frames[i].packed ? kcView(K.frames[i]) : K.frames[i], v = f.players.find(p => p.id === K.k);
   if (!K.popped && at >= K.dt) { K.popped = true; const r = rosterOf(K.p); renderer.burst(K.d.x, K.d.y, K.d.z, r.color, 48, 11); renderer.deathPop(K.d.x, K.d.y, K.d.z, r.color || '#fff', true); sound.play('kill', 0.9); sound.play('slowmo', 0.6); }
   // v1.2.17 (Devin): from the winner's own view: first person, over the shoulder, or the overhead view (bots: overhead)
   const rs = renderer.settings, keep = [rs.view, rs.ots, renderer.yaw, renderer.pitch], fpv = K.v === 'first' || K.v === 'shoulder';
@@ -248,7 +273,7 @@ function kcFrame(dt) {
 }
 function kcEnd(splash) {
   const K = S && S.killCam; $('killCam').classList.add('hidden'); if (!K) return;
-  S.killCam = null; KC.buf.length = 0;
+  S.killCam = null; KC.buf.length = 0; KC.free.length = 0;
   if (splash) { sound.play(K.mine ? 'roundWin' : 'roundLose'); roundSplash(K.w); }
 }
 function hideSplash() {
@@ -919,7 +944,7 @@ function gatherInput(local) {
     use: !blocked && held('use'),         // extraction: hold on a fallen teammate to revive them
     reload: !blocked && held('reload'),   // v1.2.15 Blood Volley: hold Reload
     blockSeq: I.blockSeq, reloadSeq: I.reloadSeq, useSeq: I.useSeq, jumpSeq: I.jumpSeq, shotSeq: I.shotSeq, ready: I.ready, rot: I.rot, aim: aim ? aim.aim : null, aimPoint: aim ? aim.aimPoint : null, fp, ots: fp && !!settings.ots,
-    fps: document.hidden ? 0 : Math.round(NR.frame.hz()),   // v1.2.25: the host's shot budget eases off when anyone's frame rate drops (v1.2.27: not while alt-tabbed)
+    fps: document.hidden ? 0 : Math.round(fastFps()),   // v1.2.25: the host's shot budget eases off when anyone's frame rate drops (v1.2.27: not while alt-tabbed)
   };
 }
 
@@ -1076,7 +1101,7 @@ function sendMeta(extra = {}) {
   if (S.inGame && S.game) { // in a match, seats that are already taken by late joiners count too
     const heroes = S.game.heroes().filter(p => p.connected && !p.retireNext);
     m.players = heroes.filter(p => !p.isBot).length; m.bots = heroes.filter(p => p.isBot).length;
-    m.open = Math.max(0, RULES.maxPlayers - m.players);
+    m.open = Math.max(0, RULES.steamSeats - m.players);
   }
   S.net.send({ t: 'meta', meta: { ...m, ...extra } });
 }
@@ -1096,7 +1121,7 @@ function validateLobby() {
 function lobbyOpenSeats() {
   // Open seats = empty slots + bots a human can replace. Advertised to Steam friends and the LAN room list.
   const L = S.lobby, humans = L.players.filter(p => !p.isBot).length, bots = L.players.filter(p => p.isBot).length;
-  return { players: humans, bots, open: Math.max(0, RULES.maxPlayers - humans), max: RULES.maxPlayers };
+  return { players: humans, bots, open: Math.max(0, RULES.steamSeats - humans), max: RULES.steamSeats };   // (v1.2.31: no cap of our own; Steam's lobby limit)
 }
 function renderLobby() {
   if (!S || S.inGame) return;
@@ -1145,7 +1170,7 @@ function renderLobby() {
     $('colorStrip').classList.toggle('off', tdm);
     $('colorNote').textContent = tdm ? t('Team deathmatch uses team shades; your color comes back in other modes.') : '';
   }
-  $('playerCount').textContent = `${L.players.length}/${RULES.maxPlayers}`;
+  $('playerCount').textContent = Number.isFinite(RULES.maxPlayers) ? `${L.players.length}/${RULES.maxPlayers}` : String(L.players.length);
   const practice = mode === 'practice';
   $('botRow').classList.toggle('hidden', !host || L.players.length >= RULES.maxPlayers || practice);
   $('botColorHint').classList.toggle('hidden', !host || practice || tdm);
@@ -1303,6 +1328,7 @@ function bindLobby() {
   };
   $('addBot').onclick = () => addBots(1);
   $('addBot10').onclick = () => addBots(10);   // v1.2.25: 100-player lobbies
+  $('addBot100').onclick = () => addBots(100);   // v1.2.31: no player limit
   $('clearBots').onclick = () => { if (!isHostSide()) return; S.lobby.players = S.lobby.players.filter(p => !p.isBot); sound.play('ui'); lobbyChanged(); };
   const set = (k, f) => e => { if (!isHostSide()) return; S.lobby.settings[k] = f(e.target); lobbyChanged(); };
   $('modeBtns').addEventListener('click', e => {
@@ -1855,7 +1881,7 @@ function hostFrame(dt, ts = 1) {
     }
     if (S.hostNet && t0 - (S.nsAt || 0) > 900) { S.nsAt = t0; g.cmd({ t: 'netRows', ns: S.hostNet.rows(), hf: [Math.round(NR.frame.hz()), Math.round(NR.sim.hz()), Math.round(NR.send.hz()), Math.round((HM.frame.get() || { v: 0 }).v), Math.round((HM.send.get() || { v: 0 }).v)] }); }   // (everyone's connection, once a second: network window)
   }
-  g.frame({ dt, ts, paused: !!S.paused, t0, hostFps: document.hidden ? 0 : NR.frame.hz(), peers, pz: [...(S.pausers || [])].map(id => rosterOf(id).name) });
+  g.frame({ dt, ts, paused: !!S.paused, t0, hostFps: document.hidden ? 0 : fastFps(), peers, pz: [...(S.pausers || [])].map(id => rosterOf(id).name) });
 }
 // what the match sends back (simlink.js handlers)
 function simHandlers() {
@@ -4375,7 +4401,7 @@ function frameBody(now) {
   // frame rate limit (Settings > Graphics): skip animation frames that come too soon
   const cap = +settings.fpsCap || 0;
   if (cap && now - last < 1000 / cap - 1) return;
-  fpsTick(now - last); gfxTick(now - last); loadGuard(now - last, now); NR.frame.tick();
+  fpsTick(now - last); gfxTick(now - last); loadGuard(now - last, now); NR.frame.tick(); FR.ms += (Math.min(2000, now - last) - FR.ms) * 0.2;
   const gap = now - last, j0 = performance.now();
   renderNetHud();
   const rawDt = Math.min(0.25, Math.max(0, now - last) / 1000), dt = Math.min(0.035, rawDt); last = now;   // (v1.2.6: the host sim runs on rawDt; drawing, effects and joiners on dt)

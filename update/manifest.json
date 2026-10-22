@@ -1,6 +1,6 @@
 {
- "version": "1.2.30",
- "built": "2026-10-22T18:57:40.763Z",
+ "version": "1.2.31",
+ "built": "2026-10-22T20:44:28.351Z",
  "files": {
   ".gitignore": [
    "0068ba7ed54e738118cfb5244ca651fe18f44c4ef3e5236241677de513dfaa9d",
@@ -1167,8 +1167,8 @@
    10499
   ],
   "cards/shield-clone/card.json": [
-   "f909419041984355e37e9d0996797b7650b70b0e3bbc129bae2853b0157d38be",
-   968
+   "6fd01638421061d4737b11ac2f026d698f8b0be010466fc69a698739c3fcbd86",
+   1016
   ],
   "cards/shield-grove/art.png": [
    "cf9af4998236f79630931830a1d7501029f09777b5c2e1f743bd5d7116f32e12",
@@ -1567,8 +1567,8 @@
    28753
   ],
   "electron/main.cjs": [
-   "0f1cea06a049a27d6beee4d43a68138c1b6670e28492ed651b041b4a59928ccc",
-   21826
+   "bb7aa589b6700cebdbfb32c93364fad8d8724c2f88d6e6d6ea6e466203e257f6",
+   21885
   ],
   "electron/p2pwire.cjs": [
    "7129454bf1074232898eda71047b5695656bc2a40dacf0c549b0db4a3a25367c",
@@ -2119,7 +2119,7 @@
    554
   ],
   "package.json": [
-   "6ba3df9e9be25b23bd0528578fd55a39ccc0f54d6360c5fba66af3259c1bc8a9",
+   "a1938f190da86c6610f7449e26a71a63a799e1907b0c0c463838e0f292b9f2ad",
    749
   ],
   "public/css/style.css": [
@@ -2127,8 +2127,8 @@
    93069
   ],
   "public/index.html": [
-   "70a60ac656bf20059dfa3c5dd9b233d59c22a55da25d37a906bfa009a26c7062",
-   44390
+   "bba21878bab643fb6fbadd2202a7fa68ef620ffc02de724d9d6b2db121e2e62f",
+   44520
   ],
   "public/js/a11y.js": [
    "01493123a592d8868fe91a15be7a72b6c8687f8deac62c1aff7898c1aca4b8c3",
@@ -2171,8 +2171,8 @@
    22535
   ],
   "public/js/budget.js": [
-   "e363868fe35fc0889422c7ff14b8c25593c6900e778cd2ceecac94f304d5721a",
-   6596
+   "7e66477bbf365ca54a3a32efb1f4de9c8e345de4b8787d65fba352caa81d0af3",
+   7265
   ],
   "public/js/cardinfo.js": [
    "6c40ba0d38aed9466502f7763afeb7c954de8954d3c2de00825473d7051dcc44",
@@ -2183,8 +2183,8 @@
    13476
   ],
   "public/js/config.js": [
-   "1f8e5a38009078148b527535bdb3a636af634f173a8508e8e0f3aef09df9db3e",
-   35982
+   "aee5b219462d4cd008d22385353947a37971184a5dc0a8d699df30ebe948ab24",
+   36126
   ],
   "public/js/coop.js": [
    "9282d7cdc1bf3eb0ee1708719083a3a8adca2a71c6c7248e6f63b21dea9b4400",
@@ -2215,8 +2215,8 @@
    1650
   ],
   "public/js/hostsim.js": [
-   "221bc398afad5f5bb7f3b2c591be40bde77c6492bb0f7e5a3a8ef88141cd5544",
-   18461
+   "3c0d7c596dad9123d1a3ae10af5163dca1800216dbb5eafa61aafd38cf4d82b0",
+   18679
   ],
   "public/js/i18n.js": [
    "b19b0ac560aea9052c23347084008dd35382771ee513edc81ced11c1f59f5bcf",
@@ -2231,8 +2231,8 @@
    43307
   ],
   "public/js/main.js": [
-   "f5d94a3d937042325395a0218dcae162bf50f3b0c37c503ac79db8a6550fc747",
-   338219
+   "8fee7afc3371b35af3b51beaa365759292bee397ba1772c9fc0ad79ba3f0c6c6",
+   340365
   ],
   "public/js/net.js": [
    "d415f683a93c1c3320d56977ba98fe00506efc8dacc6d989f8826a6d8c86a2de",
@@ -2255,8 +2255,8 @@
    27697
   ],
   "public/js/patchnotes.js": [
-   "0ba3b3580b22f5d2683c9ac39b57781ac5374eb346799965844bcc23a6e379a0",
-   24580
+   "2f9746a3828370597c3eee9ac830f7e9bbe2407f9a736c72b29f9de0dc1db31a",
+   25675
   ],
   "public/js/physics.js": [
    "349c6151380f842e12e4a1aae299634bce6d4a913dc0af8eb47914864e5d8086",
@@ -2319,12 +2319,12 @@
    17528
   ],
   "public/js/sim.js": [
-   "ce76ccf623f418aac909382a522e5ccfeab4b3f6835cb1853cc1958e81ba8bfa",
-   285138
+   "38563a63b5a204668d05c6b6c433a4405bbe557d1452a461cb7bb1a004ed8c43",
+   285295
   ],
   "public/js/simlink.js": [
-   "2e13a7f83c08757d7b25255d5c4b704b4e8d7ea05c2253187b8bdff870ec6fd4",
-   4746
+   "5341ae796e0bc99388bdda239a25bf117c1f23312e7a611d2a46af411d2083b7",
+   4889
   ],
   "public/js/simworker.js": [
    "0be69d234a72d070561a65475ac887aea7536814a6b1e5bbb3f855c1ab3b66cf",
@@ -2353,6 +2353,10 @@
   "public/js/unitart.js": [
    "eeb879705512e83721bb02e1085f66aa9971316709a502fa0babc2d07b6abd18",
    28312
+  ],
+  "public/js/viewpack.js": [
+   "364dd111e78a38cf290038e96805d522c3aa24dad7f0461ef733cf5a66f4121b",
+   8175
   ],
   "public/zz_test.html": [
    "5e0493da5a9decd104a5c2da928c75d55fa3523426b8edc37bbc462cdb141459",
@@ -2403,8 +2407,8 @@
    2422
   ],
   "tools/simtest.mjs": [
-   "6620fc1aaa4d124ecfc9c47f04da58242705712116294bdd80a5920ab4c0ab22",
-   182494
+   "d085f4e663113443b68503d7df715478cafe8461691b25608f6d82184122edc9",
+   182821
   ],
   "tools/trim-build.cjs": [
    "f14cc62bb2ab8633c47b31e660b4a38c3774977e6e95d099f8a71b9b6c4d288d",
