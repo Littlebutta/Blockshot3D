@@ -17,17 +17,15 @@ import { owView, owLootPick } from './openworld.js';
 import { coreRows } from './core.js';
 import { bItemRows, BRAWL } from './brawl.js';
 import { budgetRow } from './budget.js';
-import { tournRows, giftOffer, giftAccept, giftDecline } from './tourn.js';
+import { TOURN_FLOW, tournRows, giftOffer, giftAccept, giftDecline } from './tourn.js';
 import { ViewPacker } from './viewpack.js';
 
 // Co-op wave bots (raiders, Elites, wave turrets and drones; not anyone's commander units) wear raider markings.
 export const isRaider = (kind, transient, ownerId) => !!transient && !ownerId && ['wave', 'elite', 'turret', 'drone'].includes(kind);
 // v1.2.36: tournament events every joiner gets whichever arena they watch: the match's flow, picks and cards, the unit
 // roster, revives and respawns, chat-like ones (the rest, from sparks to card effects, only go to that arena's watchers)
-const TOURN_ALL = new Set(['round', 'roundEnd', 'tArena', 'tKO', 'tMove', 'tGo', 'over', 'extend', 'count', 'fight', 'overtime', 'suddenX',
-  'cards', 'cardsAll', 'picking', 'picked', 'pick', 'combo', 'comboAsk', 'comboChoice', 'breakAsk', 'breakChoice', 'units', 'split',
-  'gift', 'giftOffer', 'giftAccept', 'giftDecline', 'giftDone', 'giftFail', 'giftGone', 'giftNo', 'emote', 'bet', 'note', 'lossToken',
-  'respawn', 'revive', 'revived', 'reviving', 'reviveStart', 'rewind', 'modBroken', 'cloneInherit', 'setColor', 'setCos', 'setName', 'setTeam']);
+// (v1.2.37: the flow ones are tourn.js TOURN_FLOW; the rest here carry their arena, and screens mute them when it isn't theirs)
+const TOURN_ALL = new Set([...TOURN_FLOW, 'respawn', 'revive', 'revived', 'reviving', 'reviveStart', 'rewind', 'modBroken', 'cloneInherit']);
 export function viewOfPlayer(g, p) {
   return {
     id: p.id, name: p.name, color: p.color, team: p.team, pos: p.pos, vel: p.vel, aim: p.aim, aimPoint: p.aimPoint,
@@ -171,6 +169,16 @@ export class HostSim {
     if (gp && token) this.emit('departed', { token, rec: { cards: gp.cards.slice(), tally: { ...gp.tally }, rerollsLeft: gp.rerollsLeft, team: gp.team, oldKey: g.scoreKey(gp), score: g.scores[g.scoreKey(gp)] || 0 } });
     g.removePlayer(id);
   }
+  // v1.2.35: an event's tournament arena (null: every screen gets it). v1.2.36: every kind except the ones everyone needs
+  // (TOURN_ALL); deaths only in big lobbies, where the kill feed of 500 arenas is noise. v1.2.37: the sim tags each event
+  // with its arena (sim.js emit e.ar); the ids are the fallback for anything made outside it.
+  evArena = e => {
+    const g = this.g;
+    if ((e.t === 'death' && g.players.length <= 60) || TOURN_ALL.has(e.t)) return null;
+    if (e.ar != null) return e.ar;
+    const id = e.p ?? e.by ?? e.o ?? e.src ?? e.k, p = id != null ? g.player(id) : null;
+    return p && p.arena != null ? p.arena : null;
+  };
   // v1.2.35 (1000-player lobbies): what one screen needs in the tournament: the arena it shows (its own, or the one it
   // watches once out), plus that player. Null outside the tournament: everything, as before. Before the first arenas are
   // drawn (the opening card pick) a screen gets only its own player.
@@ -214,6 +222,8 @@ export class HostSim {
     const evs = g.takeEvents();
     if (this.host) this.outEvents.push(...evs);
     const sc = this.scopeFor(this.localId, this.watch), F = sc ? L => L.filter(x => g.seenIn(x, sc.a)) : L => L;
+    // v1.2.37 (Devin: other players' effects still showed): the host's own screen gets its arena's events only, like a joiner
+    const evsOwn = sc ? evs.filter(e => { const a = this.evArena(e); return a == null || a === sc.a; }) : evs;
     const view = {
       phase: g.phase, phaseT: g.phaseT, scores: sc && g.players.length > 60 ? g.scopedScores(sc.ps) : g.scores, round: g.round,
       waiting: g.phase === 'picking' ? g.players.filter(p => !p.picked).length : 0,
@@ -234,7 +244,7 @@ export class HostSim {
     const sent = this.host ? this.send(c, dt, ts, t0) : 0;
     if (this.packer) this.packer.pack(view);
     const tn = tournRows(g), tnOut = tn !== this.lastTn ? tn : undefined; this.lastTn = tn;   // (v1.2.35: the table only when it changed)
-    this.emit('frame', { view, evs, level, levelObj: level && this.inline ? g.level : null, tn: tnOut, brawlRows: g.isBrawl() ? g.brawlRows() : null, brawlT: g.isBrawl() ? Math.max(0, Math.ceil(BRAWL.suddenT - g.time)) : null, mirror: this.mirror(), sent });
+    this.emit('frame', { view, evs: evsOwn, level, levelObj: level && this.inline ? g.level : null, tn: tnOut, brawlRows: g.isBrawl() ? g.brawlRows() : null, brawlT: g.isBrawl() ? Math.max(0, Math.ceil(BRAWL.suddenT - g.time)) : null, mirror: this.mirror(), sent });
   }
   // snapshots for joiners: returns how many went out this frame (0 or 1)
   send(c, dt, ts, t0) {
@@ -267,10 +277,8 @@ export class HostSim {
     if (!G.size) G.set(0, mk(null));   // (nobody connected yet: still number the tick and keep its events)
     // v1.2.3: each player gets the changes since the newest snapshot THEY confirmed, sent unreliably (a lost one
     // is skipped, never resent), with any events they haven't confirmed riding along (netcodec.js AckEncoder)
-    // (v1.2.35: an event's arena by whoever it's about, so joiners only get their arena's effects; v1.2.36: every kind except
-    // the ones everyone needs (TOURN_ALL); deaths only in big lobbies, where the kill feed of 500 arenas is noise)
-    const big = g.players.length > 60, evA = g.tourn ? e => { if ((e.t === 'death' && !big) || TOURN_ALL.has(e.t)) return null; if (e.ar != null) return e.ar; const id = e.p ?? e.by ?? e.o ?? e.src ?? e.k, p = id != null ? g.player(id) : null; return p && p.arena != null ? p.arena : null; } : null;
-    const enc = this.enc ||= new AckEncoder(), q = enc.push(G, ev, evA);
+    // (v1.2.35: joiners only get their arena's events: evArena)
+    const enc = this.enc ||= new AckEncoder(), q = enc.push(G, ev, g.tourn ? this.evArena : null);
     this.acks ||= new Map();
     const same = new Map();   // v1.2.9: players who confirmed the same snapshot share one message (encodeFor), sent once to all of them
     for (const [id, rtt0] of peers) {

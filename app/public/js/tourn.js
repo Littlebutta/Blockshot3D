@@ -12,6 +12,12 @@ export const TOURN = {
 // v1.2.28: what the 'round' event carries for the matchup screen
 export const tournIntroInfo = g => tournOn(g) && g.tArenas ? { ti: TOURN.intro, tA: g.tArenas.map(A => A.ids) } : null;
 
+// v1.2.37: events about the match as a whole (its flow, picks and cards, the unit roster, chat-like ones): never tied to one
+// arena (sim.js emit leaves them untagged), every screen gets them and shows them in full
+export const TOURN_FLOW = new Set(['round', 'roundEnd', 'tArena', 'tKO', 'tMove', 'tGo', 'over', 'extend', 'count', 'fight', 'overtime', 'suddenX',
+  'cards', 'cardsAll', 'picking', 'picked', 'pick', 'combo', 'comboAsk', 'comboChoice', 'breakAsk', 'breakChoice', 'units', 'split',
+  'gift', 'giftOffer', 'giftAccept', 'giftDecline', 'giftDone', 'giftFail', 'giftGone', 'giftNo', 'emote', 'bet', 'note', 'lossToken',
+  'setColor', 'setCos', 'setName', 'setTeam', 'left']);
 export const tournOn = g => !!g && g.settings.mode === 'tourn';
 export const tournTeams = g => tournOn(g) && !!g.settings.tTeams;
 export const livesOf = g => Math.max(1, Math.min(99, Math.round(g.settings.tLives || TOURN.lives)));   // (v1.2.29: up to 99 after extensions)

@@ -2,7 +2,7 @@
 import { RULES, DEFAULT_STATS, DEFAULT_LOBBY_SETTINGS, sizeFor, speedFor, UNITS, bulletGravityFor, ROUND_MODS } from './config.js';
 import { applyCard, finishStats, weightedOffer, VARIANT_CHANCE, variantBase } from './cards.js';
 import { generateLevel, spawnPoints, clearSpawns, mulberry32, edgeDistance, boundaryPoint } from './levelgen.js';
-import { tournOn, tournStart, tournCheck, tournAfter, tournRows, tournSnap, tournIntroInfo, tournExtend, TOURN } from './tourn.js';
+import { TOURN_FLOW, tournOn, tournStart, tournCheck, tournAfter, tournRows, tournSnap, tournIntroInfo, tournExtend, TOURN } from './tourn.js';
 import { BUDGET, budgetTick, budgetAllow, budgetAdd, budgetRoom, budgetRow, budgetSummon } from './budget.js';
 import { prepareLevel, movePlayer, moveBody, accel, pointInSolid, rayExit, groundBelow, segBlocked, clampToArena, wallSegments, buildGrid, PA } from './physics.js';
 import { planWave, splitWave, unitSpec, spawnBoss, spawnAllyBoss, bossThink, portalThink, coopTick, bossDown, telegraphRows, shockRows, bossRow, gmBudget, coopDiff, UNIT_COSTS, UNIT_NAMES, isBossWave, addBlotch, CORE_TWISTS } from './coop.js';
@@ -245,14 +245,37 @@ export class Game {
   }
   maxHp(p) { return p.stats.health + (p.bonusHp || 0); }
   chest(p) { return p.pos.y + CHEST * p.size; }
-  player(id) { return this.players.find(p => p.id === id); }
+  // v1.2.37: by id through a map (a find over 6000 fighters, many times a step, added up). this.players only ever grows by
+  // push or is replaced by a new array, so the map is kept by the array and its length.
+  player(id) {
+    const L = this.players; let m = this._pm;
+    if (!m || this._pmL !== L) { m = this._pm = new Map(); this._pmL = L; this._pmN = 0; }
+    if (this._pmN !== L.length) { for (let i = this._pmN; i < L.length; i++) if (!m.has(L[i].id)) m.set(L[i].id, L[i]); this._pmN = L.length; }
+    return m.get(id);
+  }
   // v1.2.17: the view a player is using ('first' | 'shoulder' | 'third'), from their inputs; a turret or pet counts as its owner's
   viewOf(id) {
     let p = this.player(id); if (p && p.ownerId != null) p = this.player(p.ownerId) || p;
     const i = p && p.kind === 'hero' && !p.isBot && p.input;
     return i && i.fp ? (i.ots ? 'shoulder' : 'first') : 'third';
   }
-  emit(e) { this.events.push(e); }
+  // v1.2.37 (Devin: other arenas' effects still showed): in the tournament every event carries the arena it happened in
+  // (e.ar), from whatever the sim is working on when it's made (a fighter, a shot, a prop: PA.a, or evA for mines,
+  // fires, fields, blasts...), else from whoever it names. Screens and joiners then drop or mute other arenas' events by it.
+  emit(e) {
+    if (this.tourn && e.ar === undefined && !TOURN_FLOW.has(e.t)) { const a = PA.a ?? this.evA ?? this.evArenaOf(e); if (a != null) e.ar = a; }
+    this.events.push(e);
+  }
+  evArenaOf(e) {
+    for (const id of [e.p, e.o, e.by, e.src, e.s, e.k, e.from]) {
+      if (id == null) continue;
+      const p = this.player(id), o = p && (p.arena !== undefined ? p : p.ownerId ? this.player(p.ownerId) : null);
+      if (o && o.arena != null) return o.arena;
+    }
+    return null;
+  }
+  // the arena of x (a fighter, or a shot / mine / field / blast by its owner) while the sim works on it (emit)
+  arenaCtx(x) { if (!this.tourn || !x) return null; const o = x.arena !== undefined ? x : x.ownerRef || (x.owner && typeof x.owner === 'object' ? x.owner : null) || x.o; return o && o.arena != null ? o.arena : null; }
   takeEvents() { if (this.unitsEv) this.closeUnits(); const e = this.events; this.events = []; return e; }
   // v1.2.6: the unit roster ('units': the whole list of transient units) goes out at most once a step; a critter swarm sent
   // it for every shot and every death. The first change in a step puts the event in place (unitsChanged) and its list is
@@ -1627,6 +1650,7 @@ export class Game {
   }
   updateMines(dt) {
     for (const m of this.mines) {
+      this.evA = this.arenaCtx(m);   // (v1.2.37: its events carry its arena)
       m.armT -= dt; m.life -= dt;
       if (m.life <= 0) { m.dead = true; continue; }
       if (m.snare) { this.snareCheck(m); continue; }   // v1.2.15 Snare Plate
@@ -1640,6 +1664,7 @@ export class Game {
         }
       }
     }
+    this.evA = null;
     this.mines = this.mines.filter(m => !m.dead);
   }
   // ---- healing fields (Mending Field card)
@@ -1649,6 +1674,7 @@ export class Game {
   }
   updateFields(dt) {
     for (const f of this.fields) {
+      this.evA = this.arenaCtx(f);   // (v1.2.37: its events carry its arena)
       f.t -= dt;
       if (f.t > 0) continue;
       f.dead = true;
@@ -1658,6 +1684,7 @@ export class Game {
       }
       this.emit({ t: 'fieldPulse', x: f.x, y: f.y, z: f.z, r: f.r });
     }
+    this.evA = null;
     this.fields = this.fields.filter(f => !f.dead);
   }
 
@@ -1669,7 +1696,7 @@ export class Game {
     budgetTick(this, dt, performance.now() - t0);   // v1.2.25 entity / bullet budget (budget.js)
   }
   step0(dt) {
-    this.stepDt = dt; this.stepN++; this._ap = this._bp = null; this._maxSc = undefined;
+    this.stepDt = dt; this.stepN++; this._ap = this._bp = null; this._maxSc = undefined; this.evA = null;
     if (this.phase === 'countdown' && this.tourn && this.phaseT > (RULES.countdown || 3) + 0.2) {
       // v1.2.29 (Devin): the tournament matchup screen holds the world still (no health drain, burns, regen, timers)
       this.phaseT -= dt;
@@ -2266,6 +2293,7 @@ export class Game {
   inRitual(p, r) { return Math.hypot(p.pos.x - r.x, p.pos.z - r.z) < r.R + 0.1 && Math.abs(p.pos.y - r.y) < 1.2; }
   updateRituals(dt) {
     for (const r of this.rituals) {
+      this.evA = this.arenaCtx(r);   // (v1.2.37: its events carry its arena)
       const p = r.ownerRef, k = this.holdRateK(p), holding = p.alive && !p.reviving && p.fx.ritual === r && p.fx.hold;
       const C = r.holy ? GROVE : RITUAL, total = C.drawTime + 3 * C.levelTime;
       r.hold = holding;
@@ -2319,6 +2347,7 @@ export class Game {
         if (p.fx.ritual === r) { p.fx.ritual = null; if (r.deployed) p.blockCdT = p.stats.blockCooldown * RITUAL.cdMul; }
       }
     }
+    this.evA = null;
     this.rituals = this.rituals.filter(r => !r.dead);
   }
   // What each ritual level gives. Cursed Sacrifice: critter swarm, brute, meteor storm. Sacred Grove: holy shield, robe + cross, angel.
@@ -2410,6 +2439,7 @@ export class Game {
   updateRelics(dt) {
     if (!this.relics || !this.relics.length) return;
     for (const c of this.relics) {
+      this.evA = this.arenaCtx(c);   // (v1.2.37: its events carry its arena)
       c.t -= dt; c.fall = Math.max(0, c.fall - dt);
       const p = c.ownerRef;
       if (!p.alive || p.reviving) continue;
@@ -2417,6 +2447,7 @@ export class Game {
         p.hp = Math.min(this.maxHp(p), p.hp + GROVE.crossHeal * this.maxHp(p) * dt);
       }
     }
+    this.evA = null;
     this.relics = this.relics.filter(c => c.t > 0 && c.ownerRef.alive);
   }
   relicRows(sc = null) {
@@ -2949,6 +2980,7 @@ export class Game {
   }
   updateBooms(dt) {
     for (const b of this.booms) {
+      this.evA = this.arenaCtx(b);   // (v1.2.37: its events carry its arena)
       b.t -= dt;
       if (b.follow && b.follow.alive) b.pos = { x: b.follow.pos.x, y: this.chest(b.follow), z: b.follow.pos.z };
       if (b.t <= 0) {
@@ -2956,6 +2988,7 @@ export class Game {
         if (b.opts.meteor) { const M = RITUAL.meteors; this.firePatch(b.owner, b.pos.x, b.pos.y - 0.4, b.pos.z, M.fireR, M.fireDps, M.fireLife); }
       }
     }
+    this.evA = null;
     this.booms = this.booms.filter(b => !b.dead);
   }
   updateShields(dt) {
@@ -3261,6 +3294,7 @@ export class Game {
   updateClouds(dt) {
     if (!this.clouds || !this.clouds.length) return;
     for (const c of this.clouds) {
+      this.evA = this.arenaCtx(c);   // (v1.2.37: its events carry its arena)
       c.t -= dt;
       const nx = c.x + c.vx * dt, nz = c.z + c.vz * dt;
       if (!pointInSolid(this.solids, nx, c.y, nz, 0) && Math.abs(nx) < this.level.hx && Math.abs(nz) < this.level.hz) { c.x = nx; c.z = nz; } else { c.vx = 0; c.vz = 0; }
@@ -3274,6 +3308,7 @@ export class Game {
         q.fx.toxT = this.time + 0.4;
       }
     }
+    this.evA = null;
     this.clouds = this.clouds.filter(c => c.t > 0);
   }
   homingTarget(b, near) {
@@ -3531,6 +3566,7 @@ export class Game {
   updateFires(dt) {
     if (!this.fires.length) return;
     for (const f of this.fires) {
+      this.evA = this.arenaCtx(f);   // (v1.2.37: its events carry its arena)
       f.t -= dt;
       if ((f.checkT -= dt) > 0) continue;
       f.checkT = 0.1;
@@ -3542,6 +3578,7 @@ export class Game {
         }
       }
     }
+    this.evA = null;
     this.fires = this.fires.filter(f => f.t > 0);
   }
 
@@ -4178,6 +4215,7 @@ export class Game {
     if (!this.wells || !this.wells.length) return;
     const W = NEWC.well;
     for (const w of this.wells) {
+      this.evA = this.arenaCtx(w.o);   // (v1.2.37: its events carry its arena)
       w.t -= dt;
       for (const q of this.pool(w.o)) {
         if (!q.alive || q.reviving || q.heavy || q.flying || !this.isEnemy(w.o, q)) continue;
@@ -4188,6 +4226,7 @@ export class Game {
         q.fx.pullT = this.time + 0.15;
       }
     }
+    this.evA = null;
     this.wells = this.wells.filter(w => w.t > 0);
   }
   // Snapshot row for the new cards (0 when there's nothing to show): [flags, pressure stacks, rhythm progress 0-1 (-1 none),

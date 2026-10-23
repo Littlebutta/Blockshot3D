@@ -73,7 +73,8 @@ function show(id) {
 }
 let toastT = 0, bannerT = 0;
 // Text passes through the translator (i18n.js) and, with the AI slop filter on, gets "enhanced" (slop.js).
-function toast(text) { $('toast').textContent = slopify(t(text)); $('toast').classList.add('show'); toastT = 2.8; }
+let evMuted = false;   // v1.2.37: handling another tournament arena's event (handleEvent): no toasts, pauses or kill-cam marks from it
+function toast(text) { if (evMuted) return; $('toast').textContent = slopify(t(text)); $('toast').classList.add('show'); toastT = 2.8; }
 function banner(text, color, dur = 1.4) {
   const b = $('banner'); b.textContent = slopify(text); b.style.color = color || 'var(--fg)';
   b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); bannerT = dur;   // v1.2.0: restart the pop-in each time
@@ -142,7 +143,7 @@ function tickDeathLog(dt) {
 // Solo scales its own simulation (hit-stop on kills, slow motion on the round-winning kill); a host only does the
 // slow motion (peers see it through the snapshots); peers never change time.
 const TS = { stop: 0, slow: 0, dur: 1 };
-function hitStop(sec) { if (S && S.role === 'solo' && settings.feel !== false) TS.stop = Math.max(TS.stop, sec); }
+function hitStop(sec) { if (!evMuted && S && S.role === 'solo' && settings.feel !== false) TS.stop = Math.max(TS.stop, sec); }
 function slowMo(sec) { if (S && S.role !== 'peer' && settings.feel !== false) { TS.slow = TS.dur = sec; TS.stop = 0; } }
 function timeScale(dt) {
   if (!S || S.paused) return 1;
@@ -2656,14 +2657,16 @@ function squidTip(on) {
   el.classList.toggle('hidden', !on);
 }
 function flashWhite() { const h = $('hurt'); h.style.background = 'rgba(255,255,255,.35)'; h.style.opacity = 1; setTimeout(() => { h.style.opacity = 0; setTimeout(() => { h.style.background = ''; }, 200); }, 90); }
-// v1.2.26 tournament: effects from other arenas are not shown or heard (their text, like the kill feed, still is)
-const FX_FNS = ['burst', 'addShake', 'ring', 'line', 'holyBeam', 'punch', 'gunKick', 'deathPop', 'toxicCloud', 'slashFx', 'shotKick', 'shockArea', 'portal', 'poisonBlotch', 'napalmSplat', 'muzzleFlash', 'meteorWarn', 'lockFlash', 'healPulse', 'healField', 'cutFx', 'coreBlast', 'aoeFlash', 'angelAscend'];
+// v1.2.26 tournament: effects from other arenas are not shown or heard (the kill feed still lists them). v1.2.37: nor
+// toasted, and they no longer pause the game or move where the kill cam / round-end zoom looks; the host tags every event
+// with its arena (sim.js emit e.ar), so this no longer guesses from who it names
+const FX_FNS = ['burst', 'addShake', 'ring', 'line', 'holyBeam', 'punch', 'gunKick', 'deathPop', 'toxicCloud', 'slashFx', 'shotKick', 'shockArea', 'portal', 'poisonBlotch', 'napalmSplat', 'muzzleFlash', 'meteorWarn', 'lockFlash', 'healPulse', 'healField', 'cutFx', 'coreBlast', 'aoeFlash', 'angelAscend', 'reviveHold'];
 const noop = () => {};
 function handleEvent(e) {
-  if (S && S.tn && e.t !== 'tMove' && (e.x != null || e.p != null) && (e.ar != null ? e.ar !== viewArena() : !inMyArena(e.p ?? e.by ?? e.o ?? e.src ?? e.k))) {   // (v1.2.36 ar: a prop's arena)
-    const saved = FX_FNS.map(f => renderer[f]), sp = sound.play;
-    FX_FNS.forEach(f => { if (renderer[f]) renderer[f] = noop; }); sound.play = noop;
-    try { handleEvent0(e); } finally { FX_FNS.forEach((f, i) => { if (saved[i]) renderer[f] = saved[i]; }); sound.play = sp; }
+  if (S && S.tn && e.t !== 'tMove' && (e.ar != null ? e.ar !== viewArena() : (e.x != null || e.p != null) && !inMyArena(e.p ?? e.by ?? e.o ?? e.src ?? e.k))) {
+    const saved = FX_FNS.map(f => renderer[f]), sp = sound.play, ld = S.lastDeath, kd = KC.death;
+    FX_FNS.forEach(f => { if (renderer[f]) renderer[f] = noop; }); sound.play = noop; evMuted = true;
+    try { handleEvent0(e); } finally { FX_FNS.forEach((f, i) => { if (saved[i]) renderer[f] = saved[i]; }); sound.play = sp; evMuted = false; S.lastDeath = ld; KC.death = kd; }
     return;
   }
   handleEvent0(e);
