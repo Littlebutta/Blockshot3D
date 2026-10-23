@@ -16,6 +16,8 @@ import { arenaView, viewOfPlayer } from './hostsim.js';
 // shard events the match passes on as they are (the round's own flow comes from the match: count, fight, overtime...)
 const PASS = new Set(['tMove', 'split']);
 // events every screen gets whatever arena it shows (hostsim.js TOURN_ALL, less the flow)
+// v1.2.38: the most game time one shard frame may run (2 frames at 60 fps)
+const CATCH_UP = 1 / 30;
 const ALL = new Set(['respawn', 'revive', 'revived', 'reviving', 'reviveStart', 'rewind', 'modBroken', 'cloneInherit']);
 
 export class ShardSim {
@@ -163,9 +165,11 @@ export class ShardSet {
     for (const id of want.ids) { const s = this.of.get(id); if (s) { let o = bySlot.get(s); if (!o) bySlot.set(s, o = { sa: [], ids: [] }); o.ids.push(id); } }
     const vs = want.va != null ? pick(want.va) : null;
     for (const s of [...this.slots.filter(x => x.w), ...this.slots.filter(x => !x.w)]) {   // (threads first: they start while the ones here run)
-      // (a shard still busy with two frames gets this one's time with its next: it never falls further behind than that)
+      // (a shard still busy with two frames gets this one's time with its next. v1.2.38: at most CATCH_UP of it: a shard
+      // that can't keep up runs its arenas a bit slower but smoothly, instead of jumping ahead in big steps that make
+      // its next frame slower still)
       if (s.w && s.inFlight >= 2) { s.acc += c.dt; continue; }
-      const o = bySlot.get(s) || { sa: [], ids: [] }, dt = Math.min(0.3, c.dt + s.acc);
+      const o = bySlot.get(s) || { sa: [], ids: [] }, dt = Math.min(CATCH_UP, c.dt + s.acc);
       s.acc = 0; if (s.w) s.inFlight++;
       const inputs = s.inq; s.inq = [];
       this.post(s, { t: 'frame', tok: this.tok, dt, ts: c.ts, paused: c.paused, t0: c.t0, ph: c.ph, pt: c.pt, hostFps: c.hostFps, inputs, va: s === vs ? want.va : null, sa: o.sa, ids: o.ids, wa: want.wa });

@@ -38,10 +38,33 @@ export const PA = { a: null };
 const inArenaS = s => PA.a === null || s.arena === undefined || s.arena === null || s.arena === PA.a;
 // v1.2.35: in the tournament the deployed solids come split by arena (sim.js refreshSolids: S.extraBy, key -1 = every arena),
 // so a fighter only goes through its own arena's walls, not every arena's
-function pushExtra(S, out) {
+function pushExtra(S, out, x0, z0, x1, z1) {
   const by = S.extraBy;
   if (by && PA.a !== null) { const a = by.get(PA.a), c = by.get(-1); if (a) for (const s of a) out.push(s); if (c) for (const s of c) out.push(s); return; }
+  const X = S.exG;
+  if (X && x0 !== undefined) {   // (v1.2.38: lots of them: just the grid cells asked about, gridExtras)
+    const c = X.cell, st = ++X.stamp;
+    for (let i = Math.floor(x0 / c); i <= Math.floor(x1 / c); i++)
+      for (let j = Math.floor(z0 / c); j <= Math.floor(z1 / c); j++) {
+        const a = X.cells.get(i * 4096 + j); if (!a) continue;
+        for (const s of a) if (s._xst !== st) { s._xst = st; if (inArenaS(s)) out.push(s); }
+      }
+    return;
+  }
   for (const s of S.extra) if (inArenaS(s)) out.push(s);
+}
+// v1.2.38: the moving / deployed solids on a grid too, remade every step (sim.js step0), once there are lots of them: a
+// big lobby's walls or an Ice Sheets map's floes were all checked by every fighter's move, every bullet and every
+// sight line. Each goes in every cell it covers, plus a margin for moving a little before the next step.
+export function gridExtras(S) {
+  const E = S.extra;
+  if (!E || E.length < 48 || S.extraBy) { S.exG = null; return; }
+  const c = 4, m = 0.5, cells = new Map();
+  for (const s of E) {
+    for (let i = Math.floor((s.min.x - m) / c); i <= Math.floor((s.max.x + m) / c); i++)
+      for (let j = Math.floor((s.min.z - m) / c); j <= Math.floor((s.max.z + m) / c); j++) { const k = i * 4096 + j, l = cells.get(k); if (l) l.push(s); else cells.set(k, [s]); }
+  }
+  S.exG = { cell: c, cells, stamp: 0 };
 }
 // The solids that may touch the x/z rectangle (all of S when it has no grid).
 export function solidsNear(S, x0, z0, x1, z1) {
@@ -53,7 +76,7 @@ export function solidsNear(S, x0, z0, x1, z1) {
       const a = g.cells.get(i * 4096 + j); if (!a) continue;
       for (const s of a) if (s._st !== st) { s._st = st; out.push(s); }
     }
-  if (S.extra) pushExtra(S, out);
+  if (S.extra) pushExtra(S, out, x0, z0, x1, z1);
   return out;
 }
 // v1.2.25: the solids in the grid cells a straight x/z line passes through (cell walk), for long sight lines / shots
@@ -75,7 +98,7 @@ export function solidsAlong(S, ax, az, bx, bz) {
     if (tx < tz) { i += si; tx += tdx; } else { j += sj; tz += tdz; }
     if (tx > 1.0001 && tz > 1.0001 && (i !== i1 || j !== j1)) { const b = g.cells.get(i1 * 4096 + j1); if (b) for (const s of b) if (s._st !== st) { s._st = st; out.push(s); } break; }
   }
-  if (S.extra) pushExtra(S, out);
+  if (S.extra) pushExtra(S, out, Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz));
   return out;
 }
 // Ground height under (x,z): the open world's hills, 0 everywhere else.

@@ -7,6 +7,7 @@ import { sideBotSteer } from './side.js';
 
 const chestOf = q => ({ x: q.pos.x, y: q.pos.y + RULES.chest * (q.size || 1), z: q.pos.z });
 const G = RULES.gravity;
+const dodgeR = sp => 1.5 + sp * 0.09;   // (how far away a bullet can be and still count as incoming, below)
 
 // Lava / Ice Sheets: about to step off a platform into the liquid: jump instead, so the step becomes a hop to the next one.
 function lavaJumpAhead(p, inp) { if (p.onGround) inp.jumpAhead = true; }
@@ -25,7 +26,11 @@ function rectOf(n) {
 }
 // v1.2.6: returns the cached node list itself (moving nodes refreshed in place), not a copy per call; callers only read it
 export function navNodes(g) {
-  if (g._nav && g._nav.v === g.levelVersion && g._nav.level === g.level) { const N = g._nav.nodes; for (let i = 0; i < N.length; i++) rectOf(N[i]); return N; }
+  if (g._nav && g._nav.v === g.levelVersion && g._nav.level === g.level) {
+    // (v1.2.38: the moving ones, once a step: every bot's every call refreshed every node)
+    const C = g._nav; if (C.step !== g.stepN || C.time !== g.time) { C.step = g.stepN; C.time = g.time; C.nodes.t = (C.nodes.t | 0) + 1; for (const n of C.nodes.mov) rectOf(n); }
+    return C.nodes;
+  }
   const L = g.level, nodes = [];
   if (!L.lava) nodes.push({ floor: true, x0: -L.hx, x1: L.hx, z0: -L.hz, z1: L.hz, top: 0 });
   for (const b of L.boxes) if (!b.wall && b.w >= 0.9 && b.d >= 0.9) {
@@ -42,8 +47,15 @@ export function navNodes(g) {
   for (const o of g.dyn) if ((o.kind === 'piston' || o.kind === 'slide' || o.kind === 'float') && !o.arena) nodes.push({ obj: o, kind: o.kind, hMax: o.def && o.def.hMax });
   nodes.forEach((n, i) => { n.i = i; });
   nodes.moving = nodes.some(n => n.obj);
-  g._nav = { v: g.levelVersion, level: L, nodes };
+  nodes.mov = nodes.filter(n => n.obj);
+  g._nav = { v: g.levelVersion, level: L, nodes, step: g.stepN, time: g.time };
   for (const n of nodes) rectOf(n);
+  // v1.2.38: the fixed nodes on a 4 m grid (big lobbies' maps have hundreds; currentNode0)
+  if (nodes.length > 40) {
+    const cells = new Map();
+    for (const n of nodes) if (!n.obj && !n.floor) for (let i = Math.floor((n.x0 - 0.1) / 4); i <= Math.floor((n.x1 + 0.1) / 4); i++) for (let j = Math.floor((n.z0 - 0.1) / 4); j <= Math.floor((n.z1 + 0.1) / 4); j++) { const k = i * 4096 + j, l = cells.get(k); if (l) l.push(n); else cells.set(k, [n]); }
+    nodes.cells = cells;
+  }
   return nodes;
 }
 const rectGap = (a, b) => {
@@ -69,18 +81,20 @@ function canReach(a, b, jump, spd) {
 }
 export function currentNode(p, nodes) {
   const C = p._cn;   // v1.2.25: same spot, same answer (asked several times per bot per step, and for targets)
-  if (C && C.nodes === nodes && C.x === p.pos.x && C.y === p.pos.y && C.z === p.pos.z && C.g === p.onGround && !nodes.moving) return C.res;
+  if (C && C.nodes === nodes && C.x === p.pos.x && C.y === p.pos.y && C.z === p.pos.z && C.g === p.onGround && (!nodes.moving || C.t === nodes.t)) return C.res;
   const res = currentNode0(p, nodes);
-  p._cn = { nodes, x: p.pos.x, y: p.pos.y, z: p.pos.z, g: p.onGround, res };
+  p._cn = { nodes, x: p.pos.x, y: p.pos.y, z: p.pos.z, g: p.onGround, res, t: nodes.t };
   return res;
 }
 function currentNode0(p, nodes) {
   let best = null;
   if (p.onGround || p.flying === false) {
-    for (const n of nodes) {
+    const near = nodes.cells ? nodes.cells.get(Math.floor(p.pos.x / 4) * 4096 + Math.floor(p.pos.z / 4)) : null;
+    for (const n of nodes.cells ? nodes.mov : nodes) {
       if (n.floor) continue;
       if (inside(p.pos.x, p.pos.z, n, -0.05) && Math.abs(n.top - p.pos.y) < 0.3 && (!best || n.top > best.top)) best = n;
     }
+    if (near) for (const n of near) if (inside(p.pos.x, p.pos.z, n, -0.05) && Math.abs(n.top - p.pos.y) < 0.3 && (!best || n.top > best.top || (n.top === best.top && n.i < best.i))) best = n;
   }
   if (!best && p.pos.y < 0.3) best = nodes.find(n => n.floor) || null;
   return best;
@@ -117,10 +131,47 @@ function navLinks(nodes, jump, spd) {
   C.set(key, L);
   return L;
 }
+// v1.2.38: lots of moving nodes (a big Lava Lake is thousands of floating platforms): them on a grid, remade each step
+// (navNodes bumps nodes.t), so a search only tries the ones within a hop. Every node tried every one (seconds a search).
+function movGrid(nodes) {
+  if (!nodes.mov || nodes.mov.length < 40 || !nodes.cells) return null;
+  if (nodes.mg && nodes.t - nodes.mg.t >= 0 && nodes.t - nodes.mg.t < 30) return nodes.mg;   // (half a second: they drift slowly; hopCands allows for it)
+  const cells = new Map();
+  for (const n of nodes.mov) for (let i = Math.floor((n.x0 - 0.1) / 4); i <= Math.floor((n.x1 + 0.1) / 4); i++) for (let j = Math.floor((n.z0 - 0.1) / 4); j <= Math.floor((n.z1 + 0.1) / 4); j++) { const k = i * 4096 + j, l = cells.get(k); if (l) l.push(n); else cells.set(k, [n]); }
+  return (nodes.mg = { t: nodes.t, cells, floors: nodes.filter(n => n.floor), st: 0, hc: new Map() });
+}
+// the nodes a could hop to, in node order (as the full list would give them): its fixed links' fixed nodes, plus the
+// floors and the moving and fixed nodes within the furthest hop from its height
+function hopCands(a, nodes, links, MG, jump, spd) {
+  const hk = a.i * 1e6 + Math.round(jump * 10) * 1000 + Math.round(spd * 10), got = MG.hc.get(hk);
+  if (got) return got;   // (kept while the grid is: half a second)
+  const fa = (jump > 0 ? spd * (jump + Math.sqrt(jump * jump + 2 * G * (a.top + 0.5))) / G * 0.8 : 0.06) + 2;   // (+ drift)
+  const st = ++MG.st, out = [];
+  const take = n => { if (n._hs !== st) { n._hs = st; out.push(n); } };
+  for (const n of MG.floors) take(n);
+  const L = links[a.i];
+  if (L) { for (const n of L) if (!n.obj) take(n); }
+  else if (a.floor) { MG.hc.set(hk, nodes); return nodes; }
+  const i0 = Math.floor((a.x0 - fa) / 4), i1 = Math.floor((a.x1 + fa) / 4), j0 = Math.floor((a.z0 - fa) / 4), j1 = Math.floor((a.z1 + fa) / 4);
+  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+    const k = i * 4096 + j, m = MG.cells.get(k); if (m) for (const n of m) take(n);
+    if (!L) { const c = nodes.cells.get(k); if (c) for (const n of c) take(n); }
+  }
+  out.sort((x, y) => x.i - y.i);
+  MG.hc.set(hk, out);
+  return out;
+}
+// v1.2.38: on a big map (hundreds of nodes) only a few new searches a step: at the start of a 1000-bot Lava Lake every
+// bot searched at once (a second and a half's freeze). The rest wait for a later think.
+function bfsBudget(g, nodes) {
+  if (nodes.length < 200) return true;
+  if (g._bfsStep !== g.stepN) { g._bfsStep = g.stepN; g._bfsN = 0; }
+  return g._bfsN++ < Math.max(2, Math.round(24000 / nodes.length));
+}
 function navBFS(start, nodes, jump, spd) {
-  const par = new Map([[start, null]]), q = [start], links = navLinks(nodes, jump, spd);
+  const par = new Map([[start, null]]), q = [start], links = navLinks(nodes, jump, spd), MG = movGrid(nodes);
   for (let qi = 0; qi < q.length; qi++) {
-    const a = q[qi], list = links[a.i] || nodes;
+    const a = q[qi], list = MG ? hopCands(a, nodes, links, MG, jump, spd) : links[a.i] || nodes;
     for (const b of list) if (!par.has(b) && b !== a && ((!a.obj && !b.obj) || canReach(a, b, jump, spd))) { par.set(b, a); q.push(b); }
   }
   return par;
@@ -135,7 +186,10 @@ function planNav(g, p, A, t, D, force) {
   const NC = g._nav, key = cur.i * 1e6 + Math.round(jmp * 10) * 1000 + Math.round(spd * 10);
   if (!NC.bfs || NC.bfsT > g.time || g.time - NC.bfsT > 0.5) { NC.bfs = new Map(); NC.bfsT = g.time; }
   let par = NC.bfs.get(key);
-  if (!par) NC.bfs.set(key, par = navBFS(cur, nodes, jmp, spd));
+  if (!par) {
+    if (!bfsBudget(g, nodes)) return false;   // (v1.2.38: try again on a later think)
+    NC.bfs.set(key, par = navBFS(cur, nodes, jmp, spd));
+  }
   const hw = NAV_HEIGHT_W[p.difficulty] ?? 0.75, want = A.want || 9;
   const tc = t ? chestOf(t) : null;
   // v1.2.25: the cheap part of the score first; sight lines and crowding (which only add up to +3 / subtract) are only
@@ -157,15 +211,20 @@ function planNav(g, p, A, t, D, force) {
       const eye = { x: (n.x0 + n.x1) / 2, y: n.top + RULES.chest * (p.size || 1), z: (n.z0 + n.z1) / 2 };
       if (!segBlocked(g.level.solids, eye, tc)) sc += 3;
     }
-    for (const q of g.pool(p)) if (q !== p && q.alive && !q.flying && inside(q.pos.x, q.pos.z, n, -0.2) && Math.abs(q.pos.y - n.top) < 0.4) sc -= g.isEnemy(p, q) ? 1.5 : 2.5;
+    const qs = g.playersNear({ pos: { x: (n.x0 + n.x1) / 2, z: (n.z0 + n.z1) / 2 }, arena: p.arena }, Math.max(n.x1 - n.x0, n.z1 - n.z0) / 2 + 0.3);   // (v1.2.38: big lobbies)
+    for (const q of qs || g.pool(p)) if (q !== p && q.alive && !q.flying && inside(q.pos.x, q.pos.z, n, -0.2) && Math.abs(q.pos.y - n.top) < 0.4) sc -= g.isEnemy(p, q) ? 1.5 : 2.5;
     return sc;
   };
   const cands = [];
   let o = 0;
   for (const n of par.keys()) { o++; if (A.bad && A.bad.has(n) && A.bad.get(n) > g.time) continue; const b0 = base(n); if (b0 === -Infinity) continue; cands.push({ n, o, b0, ub: n.floor ? b0 : b0 + (tc ? 3 : 0) }); }
-  cands.sort((a, b) => b.ub - a.ub || a.o - b.o);
+  // (v1.2.38: best first by picking the top one each time instead of sorting them all: only a few are ever looked at,
+  // and a big lobby's map has hundreds of nodes. Same order as the sort: highest ub, then lowest o)
   let best = null, bs = -Infinity, bo = 0;
-  for (const c of cands) {
+  while (cands.length) {
+    let k = 0;
+    for (let i = 1; i < cands.length; i++) { const a = cands[i], b = cands[k]; if (a.ub > b.ub || (a.ub === b.ub && a.o < b.o)) k = i; }
+    const c = cands[k]; cands[k] = cands[cands.length - 1]; cands.pop();
     if (c.ub < bs) break;
     const sc = c.b0 + extra(c.n);
     if (sc > bs || (sc === bs && c.o < bo)) { bs = sc; best = c.n; bo = c.o; }
@@ -346,6 +405,46 @@ export function floorSteer(g, p, tx, tz) {
   return { x: wx / l, z: wz / l, steps: d[me] * N.cs };   // (steps: route length in meters, roughly)
 }
 
+// v1.2.38: the floating platforms / floes a bot can stand on: its own arena's copies plus the shared ones (sim.js
+// buildDynamics), grouped once per prop list. Every bot used to scan every arena's copies each think: a 1000-bot Ice
+// Sheets tournament spent about 150 ms a frame here.
+function floatsOf(g, p) {
+  let C = g._floats;
+  if (!C || C.dyn !== g.dyn || C.n !== g.dyn.length) {
+    C = g._floats = { dyn: g.dyn, n: g.dyn.length, all: [], shared: [], by: new Map(), got: new Map() };
+    for (const o of g.dyn) {
+      if (o.kind !== 'float' && o.kind !== 'slide') continue;
+      C.all.push(o);
+      if (o.arena === undefined) C.shared.push(o);
+      else { let L = C.by.get(o.arena); if (!L) C.by.set(o.arena, L = []); L.push(o); }
+    }
+  }
+  if (!C.by.size || p.arena === undefined) return C.all;
+  const k = p.arena ?? null; let L = C.got.get(k);
+  if (!L) C.got.set(k, L = [...(C.by.get(k) || []), ...C.shared]);
+  return L;
+}
+// v1.2.38: a float list (floatsOf) on 4 m grids, remade once a step (they drift): cells = every cell a platform covers
+// (standing on it), mid = the cell of its middle (the nearest one). Only for long lists.
+const NO_FLOATS = [], NO_PAR = new Map();
+function floatGrid(g, L) {
+  if (L.length < 40) return null;
+  if (L._gs === g.stepN && L._gt === g.time) return L._g;
+  const cells = new Map(), mid = new Map();
+  const add = (M, k, o) => { const l = M.get(k); if (l) l.push(o); else M.set(k, [o]); };
+  for (const o of L) {
+    add(mid, Math.floor(o.pos.x / 4) * 4096 + Math.floor(o.pos.z / 4), o);
+    for (let i = Math.floor((o.pos.x - o.w / 2) / 4); i <= Math.floor((o.pos.x + o.w / 2) / 4); i++)
+      for (let j = Math.floor((o.pos.z - o.d / 2) / 4); j <= Math.floor((o.pos.z + o.d / 2) / 4); j++) add(cells, i * 4096 + j, o);
+  }
+  L._gs = g.stepN; L._gt = g.time;
+  return (L._g = { cells, mid });
+}
+function gridAround(M, x, z, R) {
+  const out = [];
+  for (let i = Math.floor((x - R) / 4); i <= Math.floor((x + R) / 4); i++) for (let j = Math.floor((z - R) / 4); j <= Math.floor((z + R) / 4); j++) { const l = M.get(i * 4096 + j); if (l) for (const o of l) out.push(o); }
+  return out;
+}
 export function botThink(g, p, dt) {
   const D = DIFFICULTY[p.difficulty] || DIFFICULTY.normal;
   const A = p.ai, inp = p.input, S = g.level.solids;
@@ -357,12 +456,23 @@ export function botThink(g, p, dt) {
     A.retarget = 0.6;
     let best = null, bd = Infinity;
     const far = g.ow ? g.ow.sight || 34 : Infinity;   // open world: bots only notice what's near them
-    for (const q of g.pool(p)) {   // (v1.2.35: the tournament: only their own arena)
+    // (v1.2.38: big lobbies look near first: whoever is found within 14 m beats anyone further out, so the whole list is
+    // only scanned when nobody is that close)
+    const nearL = g.playersNear(p, 14);
+    for (const q of nearL || g.pool(p)) {   // (v1.2.35: the tournament: only their own arena)
       if (!q.alive) continue;
       let d = Math.hypot(q.pos.x - from.x, q.pos.z - from.z);
       // v1.2.6: no closer than the best so far: it can't win even in plain sight, so skip isEnemy and the line-of-sight test
       if (d >= bd || !g.isEnemy(p, q) || (q.ow && q.ow.st === 'bus')) continue;
       if (d > far * (q.crouch && g.ow ? g.ow.crouchK || 1 : 1)) continue;   // open world: crouching heroes are harder to spot
+      if (segBlocked(S, from, chestOf(q))) d += 12;
+      if (d < bd) { bd = d; best = q; }
+    }
+    if (nearL && bd > 14) for (const q of g.pool(p)) {   // (the same, everyone: same rules as above)
+      if (!q.alive) continue;
+      let d = Math.hypot(q.pos.x - from.x, q.pos.z - from.z);
+      if (d >= bd || !g.isEnemy(p, q) || (q.ow && q.ow.st === 'bus')) continue;
+      if (d > far * (q.crouch && g.ow ? g.ow.crouchK || 1 : 1)) continue;
       if (segBlocked(S, from, chestOf(q))) d += 12;
       if (d < bd) { bd = d; best = q; }
     }
@@ -419,7 +529,7 @@ export function botThink(g, p, dt) {
       A.replan = (A.replan || 0) - dt;
       if (mine && theirs && mine !== theirs && (!A.path || A.goal !== theirs) && A.replan <= 0) {
         A.replan = 0.5;
-        const par = navBFS(mine, nodes, Math.floor(p.stats.jump * 4) / 4, Math.floor(p.stats.moveSpeed * 2) / 2);
+        const par = bfsBudget(g, nodes) ? navBFS(mine, nodes, Math.floor(p.stats.jump * 4) / 4, Math.floor(p.stats.moveSpeed * 2) / 2) : NO_PAR;
         if (par.has(theirs)) { A.path = pathTo(par, theirs); A.pi = 1; A.goal = theirs; A.navAge = 0; }
       }
       if (mine === theirs) A.path = null;
@@ -483,7 +593,7 @@ export function botThink(g, p, dt) {
   const stationary = p.stats.moveSpeed <= 0.01;
   // keep away from walls and teammates
   { const e = edgePush(g.level, p.pos.x, p.pos.z, 2.8); mx += e.x * 1.2; mz += e.z * 1.2; }   // rectangles and polygon arenas
-  for (const q of g.pool(p)) {
+  for (const q of g.playersNear(p, 2.5) || g.pool(p)) {
     if (q === p || !q.alive || g.isEnemy(p, q)) continue;
     const ox = p.pos.x - q.pos.x, oz = p.pos.z - q.pos.z, od = Math.hypot(ox, oz);
     if (od < 2.5 && od > 0.01) { mx += ox / od * 0.8; mz += oz / od * 0.8; }
@@ -519,11 +629,13 @@ export function botThink(g, p, dt) {
     }
   }
   else if (lava || (g.level.lava && p.pos.y < 0.6 && !p.flying)) {
-    const floats = g.dyn.filter(o => o.kind === 'float' || o.kind === 'slide');
-    const onPlat = (x, z) => floats.some(o => Math.abs(x - o.pos.x) < o.w / 2 - 0.3 && Math.abs(z - o.pos.z) < o.d / 2 - 0.3);
+    const floats = floatsOf(g, p), FG = floatGrid(g, floats);
+    const onPlat = (x, z) => (FG ? FG.cells.get(Math.floor(x / 4) * 4096 + Math.floor(z / 4)) || NO_FLOATS : floats).some(o => Math.abs(x - o.pos.x) < o.w / 2 - 0.3 && Math.abs(z - o.pos.z) < o.d / 2 - 0.3);
     if (p.pos.y < 0.6) {
       let best = null, bd = Infinity;
-      for (const o of floats) { const d = Math.hypot(o.pos.x - p.pos.x, o.pos.z - p.pos.z); if (d < bd) { bd = d; best = o; } }
+      // (v1.2.38: lots of them: the ones whose middle is within 8 m first, everyone only if none is)
+      for (const o of FG ? gridAround(FG.mid, p.pos.x, p.pos.z, 8) : floats) { const d = Math.hypot(o.pos.x - p.pos.x, o.pos.z - p.pos.z); if (d < bd) { bd = d; best = o; } }
+      if (FG && bd > 8) for (const o of floats) { const d = Math.hypot(o.pos.x - p.pos.x, o.pos.z - p.pos.z); if (d < bd) { bd = d; best = o; } }
       if (best) { mx = best.pos.x - p.pos.x; mz = best.pos.z - p.pos.z; lavaJump = true; }
     } else if (p.onGround) {
       const ml = Math.hypot(mx, mz) || 1, nx = p.pos.x + mx / ml * 0.9, nz = p.pos.z + mz / ml * 0.9;
@@ -616,7 +728,7 @@ export function botThink(g, p, dt) {
     if (want && Math.random() < dt * 2.5) inp.blockSeq = (inp.blockSeq | 0) + 1;
   }
   if (p.blockCdT <= 0) {
-    for (const b of g.bulletPool(p)) {
+    for (const b of g.bulletsNear(p, dodgeR) || g.bulletPool(p)) {   // (v1.2.38: big lobbies: just the bullets close enough to matter)
       if (b.aiSeen[p.id] || (b.owner === p.id && !b.bounced)) continue;
       if (!g.canHurt(b.ownerRef, p)) continue;
       const rx = from.x - b.pos.x, ry = from.y - b.pos.y, rz = from.z - b.pos.z, d = Math.hypot(rx, ry, rz);
