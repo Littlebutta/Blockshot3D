@@ -9,6 +9,7 @@ export const PATCHES = [
     Changed: [
       'Big free-for-all and team games run much faster: bots, bullets, shields, walls and floating platforms only check what\'s near them instead of the whole map. 1000 bots: about 214 ms of game work a frame down to about 15; Lava Lake and Ice Sheets from seconds a frame to about 30 ms.',
       'Bots on big maps spread their route planning out over a few frames instead of all planning at once when the round starts.',
+      'Big free-for-all and team games (48+ bots) now use your other CPU cores too: the bots do their thinking (targets, sight lines, routes, dodging) on extra threads while the match runs on its own. F2 shows the bot brain threads. Bots charging Hair, Pentagram, Grove or Space King, Pillar and katana bots still think on the match\'s thread.',
     ],
   } },
   { v: '1.2.37', date: 'Oct 23', notes: {

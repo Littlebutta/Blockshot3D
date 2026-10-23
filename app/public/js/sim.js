@@ -436,6 +436,7 @@ export class Game {
     p.cards = p.cards.filter((id, i) => { const c = this.cardById.get(id); return !c || !((c.weaponMod && i !== w) || (c.shieldMod && i !== sm)); });
   }
   recompute(p) {
+    p._rv = (p._rv | 0) + 1;   // (v1.2.38: the build changed: brain threads get a fresh copy, brain.js)
     this.oneModEach(p);
     const s = { ...DEFAULT_STATS };
     p.mod = null; p.smod = null;
@@ -1853,6 +1854,7 @@ export class Game {
       else if (p.kind === 'angel') { this.angelThink(p, dt); continue; }
       else if (p.kind === 'decoy') { /* v1.2.15 Afterimage: stands still where you blocked */ }
       else if (p.kind === 'mount') { this.mountThink(p, dt); if (!p.alive) continue; }
+      else if (p._brain) { /* v1.2.38: a brain thread thinks for this bot (brain.js); its buttons were pressed before the step */ }
       else if (p.isBot || p.commanded) {
         // v1.2.35: past 200 fighters each bot thinks every other step (past 500, every third), taking turns, with that much
         // more time: its last buttons stay held in between. Bot thinking was the biggest part of a 1000-player step.

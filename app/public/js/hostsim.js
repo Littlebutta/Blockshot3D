@@ -20,6 +20,7 @@ import { budgetRow } from './budget.js';
 import { TOURN_FLOW, tournRows, giftOffer, giftAccept, giftDecline } from './tourn.js';
 import { ViewPacker } from './viewpack.js';
 import { ShardSet } from './shard.js';
+import { BrainSet, brainy, brainMode, BRAIN_MIN } from './brain.js';
 
 // Co-op wave bots (raiders, Elites, wave turrets and drones; not anyone's commander units) wear raider markings.
 export const isRaider = (kind, transient, ownerId) => !!transient && !ownerId && ['wave', 'elite', 'turret', 'drone'].includes(kind);
@@ -119,6 +120,11 @@ export class HostSim {
       const sr = g.startRound.bind(g);
       g.startRound = () => { sr(); this.roundStarted(); };
       g.shardWait = () => !!(this.shards && this.shards.tok && !this.finalsDone);
+    }
+    // v1.2.38: in the other modes the spare threads think for the bots (brain.js), once there are enough of them
+    if (!g.tourn && o.shards >= 1) {
+      this.brainN = Math.min(6, Math.max(1, o.shards - 1)); this.cards = o.cards;   // (one fewer than the spare threads: the page draws on one)
+      this.brainMk = typeof Worker !== 'undefined' && !this.inline ? () => new Worker(new URL('./brainworker.js', import.meta.url), { type: 'module' }) : null;
     }
     this.practice = o.settings.mode === 'practice' ? o.practiceCards || null : null;
     if (this.practice) g.practiceSetCards(this.localId, this.practice);
@@ -244,9 +250,11 @@ export class HostSim {
     if (sh) shEv = this.shardIn(sh);   // (v1.2.37: what the arena shards sent back since the last frame)
     if (this.shardPending && (g.phase === 'countdown' || g.phase === 'play')) { this.shardOut(); sh = this.shards; }
     const ph0 = g.phase, pt0 = g.phaseT;
+    const br = this.brainN ? this.brainsIn() : null;   // (v1.2.38: the bots' buttons from the brain threads)
     let w = t0 - dt * 1000;   // (v1.2.9: the wall-clock time each step covers, for joiners' held-back inputs: queueInput)
     if (!paused) for (let rem = dt * ts; rem > 1e-4;) { const st = Math.min(rem, 0.035); if (this.acks) releaseInputs(g, this.acks, w + st / ts * 500); w += st / ts * 1000; g.step(st); rem -= st; }
     else if (this.acks) releaseInputs(g, this.acks, t0);
+    if (br && br.active) br.frame(g, paused ? 0 : dt * ts);   // (they think while this answers the page)
     if (sh) {
       if (g.phase === 'roundEnd' && !this.finalsAsked) { this.finalsAsked = true; this.finalsDone = false; sh.askFinals(); }
       if (g.phase !== 'countdown' && g.phase !== 'play' && g.phase !== 'roundEnd') { sh.end(); g.sharded = false; sh = null; }   // (picks or the end: no arenas running)
@@ -276,10 +284,28 @@ export class HostSim {
     const sent = this.host ? this.send(c, dt, ts, t0) : 0;
     if (this.packer) this.packer.pack(view);
     const tn = tournRows(g), tnOut = tn !== this.lastTn ? tn : undefined; this.lastTn = tn;   // (v1.2.35: the table only when it changed)
+    const brains = br && br.active ? { n: br.size, t: br.threads, ms: br.stat.ms.map(x => Math.round((x || 0) * 10) / 10), b: br.stat.n.slice() } : null;   // (v1.2.38)
     const shards = sh ? { n: sh.size, t: sh.threads, ms: sh.stat.ms.map(x => Math.round((x || 0) * 10) / 10), p: sh.stat.n.slice(), behind: Math.max(0, Math.round((g.time - Math.min(...sh.stat.tm.map(x => x ?? g.time))) * 100) / 100) } : null;   // (behind: s of game time the slowest shard trails the match's clock)
-    this.emit('frame', { view, evs: evsOwn, level, levelObj: level && this.inline ? g.level : null, tn: tnOut, brawlRows: g.isBrawl() ? g.brawlRows() : null, brawlT: g.isBrawl() ? Math.max(0, Math.ceil(BRAWL.suddenT - g.time)) : null, mirror: this.mirror(), sent, shards });
+    this.emit('frame', { view, evs: evsOwn, level, levelObj: level && this.inline ? g.level : null, tn: tnOut, brawlRows: g.isBrawl() ? g.brawlRows() : null, brawlT: g.isBrawl() ? Math.max(0, Math.ceil(BRAWL.suddenT - g.time)) : null, mirror: this.mirror(), sent, shards, brains });
   }
 
+  // ---------------------------------------------------------------- v1.2.38 bot brains (brain.js)
+  // Whether this frame's bots think on the brain threads: a mode without the things the brains' copy of the world leaves
+  // out, while the match runs, with enough bots for it. Presses the buttons that came back and marks who they're for.
+  brainsIn() {
+    const g = this.g, run = g.phase === 'countdown' || g.phase === 'play' || g.phase === 'roundEnd';
+    let n = 0;
+    if (run && brainMode(g)) for (const p of g.players) if (p.alive && brainy(p)) n++;
+    const want = n >= BRAIN_MIN;
+    let br = this.brains;
+    if (!want) { if (br) br.stop(g); return br; }
+    if (!br) br = this.brains = new BrainSet(this.brainN, g.settings, this.cards, this.brainMk);
+    if (!br.slots.length) return br;   // (every thread was lost)
+    if (!br.active) br.start(g);
+    br.take(g);
+    for (const p of g.players) p._brain = brainy(p);
+    return br;
+  }
   // ---------------------------------------------------------------- v1.2.37 arena shards (shard.js)
   // A tournament round with more than 60 fighters runs its arenas in shards when there are threads for them
   roundStarted() {
