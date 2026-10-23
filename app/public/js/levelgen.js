@@ -100,7 +100,7 @@ function genBoxes(rng, hx, hz, rectsOut, inside = null, areaFrac = 1, asym = fal
       break;
     }
   }
-  if (rectsOut) rectsOut.push(...rects);
+  if (rectsOut) for (const r of rects) rectsOut.push(r);   // (v1.2.38: a loop: spreading a huge lobby's list overflowed the stack)
   return out;
 }
 
@@ -442,7 +442,7 @@ export function generateLevel(nPlayers, source, seed, themeSet, spawnCount = nPl
     const inside = (r, m) => [[r[0], r[2]], [r[1], r[2]], [r[0], r[3]], [r[1], r[3]], [(r[0] + r[1]) / 2, (r[2] + r[3]) / 2]].every(([x, z]) => A.inside(x, z, m));
     boxes = genBoxes(rng, hx, hz, rects, inside, 0.5, false);
     toMeters(boxes);
-    boxes.push(...A.boxes);
+    for (const b of A.boxes) boxes.push(b);
     for (const b of A.boxes) rects.push([b.x - b.w / 2, b.x + b.w / 2, b.z - b.d / 2, b.z + b.d / 2]);
     dynamic = placeDynamics(rng, hx, hz, rects, { inside }).filter(o => A.inside(o.x, o.z, 1));
     shapedInside = A.inside;

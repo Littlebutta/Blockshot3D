@@ -2282,5 +2282,63 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
   check('shards: the joiner\'s snapshot has its arena\'s fighters', last && last.pl && last.pl.some(x => x[0] === 'p1'), last && last.pl && last.pl.length);
   check('shards: unit ids stay unique across shards', unitIds && new Set(unitIds).size === unitIds.length, unitIds && unitIds.length);
 }
+{ // v1.2.38 (Devin: big matches still stuttered, other modes too): big lobbies look things up on grids instead of scanning
+  // everything. The grids must find everything the full scans did (they may give more)
+  const { solidsNear } = await J('physics.js');
+  const g = new Game({ roster: roster(300), settings: { mode: 'ffa', pickTime: 1 }, cards });
+  g.start(); for (let i = 0; i < 60 * 6; i++) g.step(1 / 60);
+  let missP = 0, missB = 0, nB = 0;
+  g._pg = g._bg = null;   // (the grids are made at a step's first look: shots fired later in it join the next step's)
+  for (const p of g.players.filter(q => q.alive).slice(0, 80)) {
+    const near = new Set(g.playersNear(p, 6) || []);
+    for (const q of g.players) if (q.alive && Math.hypot(q.pos.x - p.pos.x, q.pos.z - p.pos.z) < 6 && !near.has(q)) missP++;
+    const nb = g.bulletsNear(p, 5); if (nb) { nB++; const S = new Set(nb); for (const b of g.bullets) if (b.alive && Math.hypot(b.pos.x - p.pos.x, b.pos.z - p.pos.z) < 5 && !S.has(b)) missB++; }
+  }
+  check('1.2.38: the player grid finds everyone a full scan does', g.playersNear(g.players[0], 6) && missP === 0, missP);
+  check('1.2.38: the bullet grid finds every bullet a full scan does', missB === 0, [missB, nB, g.bullets.length]);
+  // the moving / deployed solids' grid (Ice Sheets floes, walls): a box query gets every one that overlaps it
+  const PH = await J('physics.js'), S = [];
+  S.grid = PH.buildGrid([], 4); S.extra = Array.from({ length: 300 }, () => { const x = Math.random() * 80 - 40, z = Math.random() * 60 - 30, w = 0.5 + Math.random() * 6, d = 0.5 + Math.random() * 6; return { min: { x, y: 0, z }, max: { x: x + w, y: 1, z: z + d } }; });
+  PH.gridExtras(S); let missS = 0, asked = 0;
+  for (let k = 0; k < 400; k++) {
+    const x = Math.random() * 90 - 45, z = Math.random() * 70 - 35, r = 0.2 + Math.random() * 4; asked++;
+    const got = new Set(solidsNear(S, x - r, z - r, x + r, z + r));
+    for (const b of S.extra) if (b.max.x > x - r && b.min.x < x + r && b.max.z > z - r && b.min.z < z + r && !got.has(b)) missS++;
+  }
+  check('1.2.38: the moving-solids grid finds every one a full scan does', S.exG && missS === 0, [missS, asked]);
+}
+{ // v1.2.38: a big tournament's map is made for one arena, not the whole lobby (a 2000-bot Lava Lake made 2000 floating
+  // platforms for each of 1000 arenas), and a prop lookup only gives a fighter its own arena's copies
+  const g = new Game({ roster: roster(400), settings: { mode: 'tourn', pickTime: 1 }, cards });
+  let worst = 0;
+  for (let k = 0; k < 6; k++) { g.startRound(); worst = Math.max(worst, g.dyn.length / Math.max(1, g.tArenas.length)); }
+  check('1.2.38: tournament maps have an arena\'s worth of props per arena', worst < 60, worst.toFixed(1));
+  const p = g.players[5], mine = g.dynOf(p);
+  check('1.2.38: a fighter\'s prop list is its own arena\'s copies plus the shared ones', mine.every(o => g.dynIn(o, p)) && mine.length === g.dyn.filter(o => g.dynIn(o, p)).length, [mine.length, g.dyn.length]);
+}
+{ // v1.2.38 (Devin: use the other cores in every mode): in a big free-for-all the bots think on brain threads (brain.js),
+  // here run on this thread. They still move, shoot and kill; the host's own hero and Hair / katana bots think here
+  const { HostSim } = await J('hostsim.js');
+  const r = roster(80).map((x, i) => ({ ...x, isBot: i > 0 }));
+  let deaths = 0, brains = null, frames = 0;
+  const hs = new HostSim({ roster: r, settings: { pickTime: 1, mode: 'ffa', startPick: false }, cards, localId: 'p0', host: true, inline: true, shards: 3 }, (k, v) => {
+    if (k === 'ui' && v.k === 'offer') hs.cmd({ t: 'pick', from: 'p0', card: v.offer[0] });
+    if (k === 'frame') { frames++; if (v.brains) brains = v.brains; for (const e of v.evs) if (e.t === 'death') deaths++; }
+  });
+  hs.start(); const g = hs.g;
+  const kat = cards.find(c => c.weaponMod === 'katana'), b5 = g.player('p5');
+  if (kat) { b5.cards.push(kat.id); g.recompute(b5); }
+  const x0 = new Map(g.players.map(p => [p.id, { ...p.pos }]));
+  let t = 1000;
+  for (let i = 0; i < 60 * 20; i++) { t += 1000 / 60; hs.cmd({ t: 'local', i: { mx: 0, mz: 0 } }); hs.cmd({ t: 'frame', dt: 1 / 60, ts: 1, paused: false, t0: t, hostFps: 60, peers: [], pz: [] }); if (g.phase !== 'play' && g.phase !== 'countdown') break; }
+  const moved = g.players.filter(p => p.isBot && p.kind === 'hero' && x0.has(p.id) && Math.hypot(p.pos.x - x0.get(p.id).x, p.pos.z - x0.get(p.id).z) > 2).length;
+  check('1.2.38: big free-for-all bots think on the brain threads', brains && brains.n === 2 && brains.b.reduce((a, b) => a + b, 0) > 40, JSON.stringify(brains));
+  check('1.2.38: brain-thread bots move and fight (kills happen)', moved > 40 && deaths > 10, [moved, deaths]);
+  check('1.2.38: the host and katana bots are not brain bots', !g.player('p0')._brain && (!kat || !b5._brain), [g.player('p0')._brain, b5._brain]);
+  // a small lobby: everyone thinks on the match's thread
+  const hs2 = new HostSim({ roster: roster(10).map((x, i) => ({ ...x, isBot: i > 0 })), settings: { pickTime: 1, mode: 'ffa', startPick: false }, cards, localId: 'p0', host: true, inline: true, shards: 3 }, () => {});
+  hs2.start(); t = 1000; for (let i = 0; i < 300; i++) { t += 1000 / 60; hs2.cmd({ t: 'frame', dt: 1 / 60, ts: 1, paused: false, t0: t, hostFps: 60, peers: [], pz: [] }); }
+  check('1.2.38: small lobbies keep the bots\' thinking on the match\'s thread', !hs2.g.players.some(p => p._brain) && !(hs2.brains && hs2.brains.active));
+}
 console.log(`baseline: ${passes} passed, ${fails} failed, ${(Date.now() - t0) / 1000}s`);
 if (fails) process.exitCode = 1;

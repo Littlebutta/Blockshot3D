@@ -28,8 +28,11 @@ export class Net {
         if (sim) {
           const u = !!m.msg && (!!m.msg._u || UNREL.has(m.msg.k));   // what Steam sends unreliably can be lost, not held back (v1.2.6: inputs, AMON fields, anything sent toPeerU / toHostU)
           const at = netSimDelay(sim, this.rel || 0, u); if (at < 0) return;
-          if (!u) this.rel = at;
-          setTimeout(() => this.fire(m), at - performance.now());
+          if (u) { setTimeout(() => this.fire(m), at - performance.now()); return; }
+          // (v1.2.38: the held-back ones go out in order from one queue: separate timers could swap two sent within a
+          // millisecond of each other, so a joiner's 'setCos' beat its 'hello' and it got kicked as an old version)
+          this.rel = at; (this.rq ||= []).push([at, m]);
+          if (!this.rqT) { const pump = () => { this.rqT = 0; const t = performance.now(); while (this.rq.length && this.rq[0][0] <= t + 0.5) this.fire(this.rq.shift()[1]); if (this.rq.length) this.rqT = setTimeout(pump, this.rq[0][0] - t); }; this.rqT = setTimeout(pump, at - performance.now()); }
         }
         else this.fire(m);
       };

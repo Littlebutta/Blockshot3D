@@ -4,7 +4,7 @@ import { applyCard, finishStats, weightedOffer, VARIANT_CHANCE, variantBase } fr
 import { generateLevel, spawnPoints, clearSpawns, mulberry32, edgeDistance, boundaryPoint } from './levelgen.js';
 import { TOURN_FLOW, tournOn, tournStart, tournCheck, tournAfter, tournRows, tournSnap, tournIntroInfo, tournExtend, TOURN } from './tourn.js';
 import { BUDGET, budgetTick, budgetAllow, budgetAdd, budgetRoom, budgetRow, budgetSummon } from './budget.js';
-import { prepareLevel, movePlayer, moveBody, accel, pointInSolid, rayExit, groundBelow, segBlocked, clampToArena, wallSegments, buildGrid, PA } from './physics.js';
+import { prepareLevel, movePlayer, moveBody, accel, pointInSolid, rayExit, groundBelow, segBlocked, clampToArena, wallSegments, buildGrid, gridExtras, PA } from './physics.js';
 import { planWave, splitWave, unitSpec, spawnBoss, spawnAllyBoss, bossThink, portalThink, coopTick, bossDown, telegraphRows, shockRows, bossRow, gmBudget, coopDiff, UNIT_COSTS, UNIT_NAMES, isBossWave, addBlotch, CORE_TWISTS } from './coop.js';
 import { botThink } from './ai.js';
 import { generateOpenWorld, owStart, owTick, owAir, owView, owBotThink, owRoundEnd, owDrive, owCarHit, OW } from './openworld.js';
@@ -166,7 +166,24 @@ export const NEWC = {
 const WAVE_COLORS = ['#ff5f5f', '#ff7f50', '#e04a6a', '#ff9a6b'];
 
 const NO_ONE = Object.freeze([]);
+// v1.2.38: a 4 m grid of things by where they stand (Game.playersNear / bulletsNear / shield lookup); tournament arenas
+// overlap in space, so each gets its own layer
+const GRID_MIN = 48, GC = 4;
+const gridKey = (x, z, a) => Math.floor(x / GC) * 4096 + Math.floor(z / GC) + (a !== undefined ? ((a ?? -1) + 2) * 16777216 : 0);
+const gridAdd = (G, k, o) => { const l = G.get(k); if (l) l.push(o); else G.set(k, [o]); };
+function gridGet(G, x, z, R, a) {
+  const out = [], off = a !== undefined ? ((a ?? -1) + 2) * 16777216 : 0;
+  const i0 = Math.floor((x - R) / GC), i1 = Math.floor((x + R) / GC), j0 = Math.floor((z - R) / GC), j1 = Math.floor((z + R) / GC);
+  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const l = G.get(i * 4096 + j + off); if (l) for (const o of l) out.push(o); }
+  return out;
+}
 const byArena = L => { const m = new Map(); for (const q of L) { const a = q.arena ?? null; let l = m.get(a); if (!l) m.set(a, l = []); l.push(q); } return m; };
+
+// v1.2.38: how many spawns a tournament map is made for: one arena's worth (at least 8, so small tournaments keep their
+// shaped maps). It was everyone in the lobby: a 6000-bot Lava Lake made thousands of floating platforms for every arena
+// (millions in all), so the match took seconds to start and could run out of memory.
+const NO_RIDERS = [];
+const tournSpawnCount = (tArenas, n) => Math.max(Math.max(...tArenas.map(A => A.length)), Math.min(n, 8));
 
 export class Game {
   constructor({ roster, settings, cards, onOffer, onCombo, onBreak }) {
@@ -358,6 +375,25 @@ export class Game {
     if (!m) { m = this._bp = new Map(); for (const b of this.bullets) { const a = b.ownerRef ? b.ownerRef.arena ?? null : null; let l = m.get(a); if (!l) m.set(a, l = []); l.push(b); } }
     return m.get(x.arena ?? null) || NO_ONE;
   }
+  // v1.2.38: big lobbies: the living fighters (and the bullets) on a grid, made once per step for the bots. A bot looked
+  // through everyone (and every bullet) several times a think: a 1000-bot free-for-all spent most of its step there.
+  // Both give candidates near x (same arena) within about R, or null when the plain list is small enough to just scan.
+  playersNear(x, R) {
+    if (this.players.length < GRID_MIN) return null;
+    let G = this._pg;
+    if (!G) { G = this._pg = new Map(); for (const q of this.players) if (q.alive) gridAdd(G, gridKey(q.pos.x, q.pos.z, this.tourn ? q.arena ?? null : undefined), q); }
+    return gridGet(G, x.pos.x, x.pos.z, R, this.tourn ? x.arena ?? null : undefined);
+  }
+  bulletsNear(x, R) {
+    if (this.bullets.length < GRID_MIN) return null;
+    let G = this._bg;
+    if (!G) {
+      G = this._bg = new Map(); let ms = 0;
+      for (const b of this.bullets) { if (!b.alive) continue; gridAdd(G, gridKey(b.pos.x, b.pos.z, this.tourn ? (b.ownerRef ? b.ownerRef.arena ?? null : null) : undefined), b); const v = b.vel.x * b.vel.x + b.vel.y * b.vel.y + b.vel.z * b.vel.z; if (v > ms) ms = v; }
+      G.maxSp = Math.sqrt(ms);
+    }
+    return gridGet(G, x.pos.x, x.pos.z, typeof R === 'function' ? R(G.maxSp) : R, this.tourn ? x.arena ?? null : undefined);
+  }
   // v1.2.13 (Devin): SCP also covers your own shots after someone blocked them back at you (bullets, bees, their blasts, fire, clouds).
   ownShot(x, q) { return !!(x && x.cown && x.cown === q.id && q.stats.noSelfDamage > 0); }
   creditOf(p) { return p && p.ownerId ? this.player(p.ownerId) : p; }
@@ -400,6 +436,7 @@ export class Game {
     p.cards = p.cards.filter((id, i) => { const c = this.cardById.get(id); return !c || !((c.weaponMod && i !== w) || (c.shieldMod && i !== sm)); });
   }
   recompute(p) {
+    p._rv = (p._rv | 0) + 1;   // (v1.2.38: the build changed: brain threads get a fresh copy, brain.js)
     this.oneModEach(p);
     const s = { ...DEFAULT_STATS };
     p.mod = null; p.smod = null;
@@ -598,7 +635,7 @@ export class Game {
     const open = this.isOpen(), side = this.isSide();
     SIDE_ON = side; BRAWL_ON = this.isBrawl();
     if (this.settings.core && this.coreSeed == null) this.coreSeed = seed;   // v28 Core Defense: one map for the whole match (made for wave 1)
-    const level = open ? generateOpenWorld(seed, this.settings) : this.settings.core ? generateCoreLevel(this.coreSeed, this.settings.themes) : BRAWL_ON ? generateBrawlLevel(heroes.length, seed, this.settings.themes, !!this.settings.brawlFlat) : side ? generateSideLevel(heroes.length + Math.ceil(totalUnits / 3), this.settings.mapSource, seed, this.settings.themes, { spread: this.settings.mode === 'tdm' || this.isWaves() }) : generateLevel(tArenas ? Math.max(...tArenas.map(A => A.length)) : heroes.length + Math.ceil(totalUnits / 2), this.settings.mapSource, seed, this.settings.themes, heroes.length + waveCount, { noLava: this.isWaves(), liquids: { lava: this.settings.mapLava !== false, ice: this.settings.mapIce !== false } });
+    const level = open ? generateOpenWorld(seed, this.settings) : this.settings.core ? generateCoreLevel(this.coreSeed, this.settings.themes) : BRAWL_ON ? generateBrawlLevel(heroes.length, seed, this.settings.themes, !!this.settings.brawlFlat) : side ? generateSideLevel(heroes.length + Math.ceil(totalUnits / 3), this.settings.mapSource, seed, this.settings.themes, { spread: this.settings.mode === 'tdm' || this.isWaves() }) : generateLevel(tArenas ? Math.max(...tArenas.map(A => A.length)) : heroes.length + Math.ceil(totalUnits / 2), this.settings.mapSource, seed, this.settings.themes, tArenas ? tournSpawnCount(tArenas, heroes.length) : heroes.length + waveCount, { noLava: this.isWaves(), liquids: { lava: this.settings.mapLava !== false, ice: this.settings.mapIce !== false } });
     level.rmod = this.rmod;
     if (this.rmod && ROUND_MODS[this.rmod].grav) level.gravK = (level.gravK || 1) * ROUND_MODS[this.rmod].grav;
     const sizes = groups.map(g => g.length);
@@ -966,6 +1003,19 @@ export class Game {
   // tournament arena (the damage still runs out)
   dotSrc(src, p) { return this.tourn && src && src.arena !== undefined && p.arena !== undefined && (src.arena ?? null) !== (p.arena ?? null) && !src.ownerId ? null : src; }
   // v1.2.36: whether prop o is in the arena of x (a fighter or unit; anything else: everywhere)
+  // v1.2.38: the props in x's arena (its copies and the shared ones), grouped once per prop list: a blast or a swing
+  // checked every arena's copies (tens of thousands in a big tournament)
+  dynOf(x) {
+    let C = this._dynBy;
+    if (!C || C.dyn !== this.dyn || C.n !== this.dyn.length) {
+      C = this._dynBy = { dyn: this.dyn, n: this.dyn.length, by: new Map(), shared: [], got: new Map() };
+      for (const o of this.dyn) { if (o.arena === undefined) C.shared.push(o); else { let L = C.by.get(o.arena); if (!L) C.by.set(o.arena, L = []); L.push(o); } }
+    }
+    if (!C.by.size || !x || x.arena === undefined) return this.dyn;
+    const k = x.arena ?? null; let L = C.got.get(k);
+    if (!L) C.got.set(k, L = [...(C.by.get(k) || []), ...C.shared]);
+    return L;
+  }
   dynIn(o, x) { return o.arena === undefined || !x || x.arena === undefined || (x.arena ?? null) === o.arena; }
   updateSolid(o) {
     const s = o.solid;
@@ -1071,6 +1121,7 @@ export class Game {
     if (this._wallSrc !== this.level.solids) { this._wallSrc = this.level.solids; this.wallSolids = this.level.solids.filter(s => s.wall); }   // v1.2.6: once per level, not every tick
     if (this.tourn) for (const b of B) for (const q of b.solids) q.arena = b.ownerRef ? b.ownerRef.arena ?? null : null;   // (tournament: walls only stand in their builder's arena)
     if (this.tourn && !this.level.grid) { this.level.grid = buildGrid(L.solids, 4); L.solids.grid = this.level.grid; L.solids.extra = []; }   // (the arena filter works on the grid's extras)
+    else if (!this.level.grid && !this.level.side && this.solids.length >= 48) { this.level.grid = buildGrid(L.solids, 4); L.solids.grid = this.level.grid; L.solids.extra = []; }   // (v1.2.38: few boxes but lots of props or walls: the grid too, so physics.js gridExtras can sort the rest)
     if (this.level.grid && this.level.grid.n !== L.solids.length) { this.level.grid = buildGrid(L.solids, this.level.open ? 8 : 4); L.solids.grid = this.level.grid; L.solids.extra = []; }   // (tests push boxes in)
     if (this.level.grid) {   // static boxes through the grid, the rest always checked
       this.solids.grid = this.level.grid; this.solids.hAt = this.level.hAt;
@@ -1585,7 +1636,7 @@ export class Game {
       const k = (10 + (s.blockPush || 0) * 0.6) * (1 - 0.5 * Math.min(1, d / R)) / q.size;
       q.vel.x += dir.x * k; q.vel.z += dir.z * k; q.vel.y += 6 / q.size;
     }
-    for (const o of this.dyn) {
+    for (const o of this.dynOf(p)) {
       if (!this.dynIn(o, p)) continue;
       const dx = o.pos.x - p.pos.x, dz = o.pos.z - p.pos.z, d = Math.hypot(dx, dz);
       if (d < R + 1) this.impulse(o, { x: dx / (d || 1) * 6, y: 4, z: dz / (d || 1) * 6 });
@@ -1709,7 +1760,7 @@ export class Game {
     budgetTick(this, dt, performance.now() - t0);   // v1.2.25 entity / bullet budget (budget.js)
   }
   step0(dt) {
-    this.stepDt = dt; this.stepN++; this._ap = this._bp = null; this._maxSc = undefined; this.evA = null;
+    this.stepDt = dt; this.stepN++; this._ap = this._bp = this._pg = this._bg = null; this._maxSc = undefined; this.evA = null;
     if (this.phase === 'countdown' && this.tourn && this.phaseT > (RULES.countdown || 3) + 0.2) {
       // v1.2.29 (Devin): the tournament matchup screen holds the world still (no health drain, burns, regen, timers)
       this.phaseT -= dt;
@@ -1725,7 +1776,7 @@ export class Game {
       if (this.phaseT <= 0 && !this.fightSent) { this.fightSent = true; this.lastCount = null; this.emit({ t: 'fight' }); }
       if (this.phaseT <= 0) { this.phase = 'play'; this.fightAt = this.time; }
       if (this.sharded) return;   // v1.2.37: the arenas run in shards (shard.js); this match keeps the clock and the round's flow
-      this.updateDynamics(dt); this.refreshSolids();
+      this.updateDynamics(dt); this.refreshSolids(); gridExtras(this.solids);
       if (this.ow) owTick(this, dt);
       if (this.settings.core) coreTick(this, dt);   // build phase: drops keep falling, you can carry and place
       if (this.settings.core && this.phaseT > 3.2) {   // v28: once every player is ready (Enter; again to unready) the wave comes early
@@ -1738,7 +1789,7 @@ export class Game {
     } else if (this.phase === 'play' || this.phase === 'roundEnd') {
       this.time += dt;
       if (!this.sharded) {   // (v1.2.37: see above)
-        this.updateDynamics(dt); this.refreshSolids();
+        this.updateDynamics(dt); this.refreshSolids(); gridExtras(this.solids);
         this.updatePlayers(dt, true);
         this.updateBullets(dt);
         this.updateMines(dt); this.updateFires(dt); this.updateClouds(dt); this.updateFields(dt); this.updateBooms(dt); this.updateShields(dt); this.updatePillars(dt);
@@ -1803,6 +1854,7 @@ export class Game {
       else if (p.kind === 'angel') { this.angelThink(p, dt); continue; }
       else if (p.kind === 'decoy') { /* v1.2.15 Afterimage: stands still where you blocked */ }
       else if (p.kind === 'mount') { this.mountThink(p, dt); if (!p.alive) continue; }
+      else if (p._brain) { /* v1.2.38: a brain thread thinks for this bot (brain.js); its buttons were pressed before the step */ }
       else if (p.isBot || p.commanded) {
         // v1.2.35: past 200 fighters each bot thinks every other step (past 500, every third), taking turns, with that much
         // more time: its last buttons stay held in between. Bot thinking was the biggest part of a 1000-player step.
@@ -2213,7 +2265,7 @@ export class Game {
       if (s.explosive > 0) this.explode(to, dmg, p, { knock: s.knockback, rmul: 0.8, noSelf: true, extra: Math.max(0, Math.round(s.explosive) - 1) });
     }
     // crates and barrels get knocked about
-    for (const o of this.dyn) {
+    for (const o of this.dynOf(p)) {
       if ((!o.pushable && o.kind !== 'crate' && o.kind !== 'barrel') || !this.dynIn(o, p)) continue;
       const dx = o.pos.x - p.pos.x, dz = o.pos.z - p.pos.z, d = Math.hypot(dx, dz);
       if (d < reach + Math.max(o.w, o.d) / 2 && (dx * a.x + dz * a.z) / (d || 1) > Math.cos(arc)) this.impulse(o, { x: dx / (d || 1) * dmg * 0.06, y: 0.6, z: dz / (d || 1) * dmg * 0.06 });
@@ -2488,7 +2540,9 @@ export class Game {
   // Ice Sheets floes. Small floes slowly sink under anyone standing on them (and bob back up once empty);
   // medium floes tip toward whoever stands near an edge, sliding them off; big floes stay steady.
   floeRules(o, dt) {
-    const riders = this.players.filter(p => p.alive && p.ground === o), kind = o.def.floe;
+    // (v1.2.38: who stands on what, once a step: every floe used to look through every player, all arenas' worth)
+    if (this._ridN !== this.stepN) { this._ridN = this.stepN; const R = this._rid = new Map(); for (const p of this.players) if (p.alive && p.ground) { const L = R.get(p.ground); if (L) L.push(p); else R.set(p.ground, [p]); } }
+    const riders = this._rid.get(o) || NO_RIDERS, kind = o.def.floe;
     if (kind === 'small') {
       o.sink = Math.max(0, Math.min(0.75, (o.sink || 0) + (riders.length ? 0.22 : -0.35) * dt));
       o.base.y = o.def.y0 - o.sink;
@@ -2987,7 +3041,7 @@ export class Game {
       const k = (3 + R + (opts.knock || 0) * dmg * 0.06) / q.size;
       q.vel.x += dir.x * k; q.vel.z += dir.z * k; q.vel.y += 3;
     }
-    for (const o of this.dyn) {
+    for (const o of this.dynOf(owner)) {
       if (!this.dynIn(o, owner)) continue;
       const c = { x: o.pos.x - pos.x, y: o.pos.y + o.h / 2 - pos.y, z: o.pos.z - pos.z }, d = len(c);
       if (d < R + Math.max(o.w, o.d) / 2) {
@@ -3125,7 +3179,8 @@ export class Game {
 
   // Shields (bubbles and deployed walls) get first say on every bullet, even drilling ones.
   shieldCheck(b, prev) {
-    for (const q of this.listFor(this._shQ, b)) {   // (v1.2.25: updateBullets lists who has a shield up once per step)
+    const SG = this._shG;
+    for (const q of SG ? SG.get(gridKey(b.pos.x, b.pos.z, this.tourn ? (b.ownerRef ? b.ownerRef.arena ?? null : null) : undefined)) || NO_ONE : this.listFor(this._shQ, b)) {   // (v1.2.25: updateBullets lists who has a shield up once per step)
       if (!q.alive || q.reviving || q.id === b.owner) continue;
       const R = 1.05 * q.stats.blockSize * q.size, c = { x: q.pos.x, y: q.pos.y + 0.8 * q.size, z: q.pos.z };
       const off = { x: b.pos.x - c.x, y: b.pos.y - c.y, z: b.pos.z - c.z }, d = len(off);
@@ -3364,6 +3419,18 @@ export class Game {
     // v1.2.25: per-step lookups so a bullet only tests the players near it (big lobbies have hundreds of bullets)
     this._shQ = this.players.filter(q => q.alive && !q.reviving && this.shielded(q));
     this._riotQ = this.players.filter(q => q.mod === 'shield');
+    // v1.2.38: lots of shields up (a big free-for-all): each on the grid cells its bubble reaches, so a bullet only tests
+    // the ones around it instead of all of them
+    this._shG = null;
+    if (this._shQ.length >= GRID_MIN) {
+      let br = 0; for (const b of this.bullets) if (b.r > br) br = b.r;
+      const G = this._shG = new Map();
+      for (const q of this._shQ) {
+        const R = 1.05 * q.stats.blockSize * q.size + br + 0.5, a = this.tourn ? q.arena ?? null : undefined;
+        const i0 = Math.floor((q.pos.x - R) / GC), i1 = Math.floor((q.pos.x + R) / GC), j0 = Math.floor((q.pos.z - R) / GC), j1 = Math.floor((q.pos.z + R) / GC), off = gridKey(0, 0, a);
+        for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) gridAdd(G, i * 4096 + j + off, q);
+      }
+    }
     if (this.tourn) { this._shQ = byArena(this._shQ); this._riotQ = byArena(this._riotQ); }   // (v1.2.35: per arena, Map arena -> list)
     const PG = new Map(), PGC = 4, hasBags = this.barricades.length > 0;
     let pgR = 0;
@@ -4370,7 +4437,7 @@ export class Game {
     this.nextUnit = B.unitBase; this.nextId = B.idBase; this.crowdN = B.crowdN;
     SIDE_ON = false; BRAWL_ON = false;
     this.players = B.heroes.map(h => Object.assign(this.makePlayer({ ...h, kind: 'hero' }), h));
-    this._ap = this._bp = null;
+    this._ap = this._bp = this._pg = this._bg = null;
     this.scores = {}; for (const p of this.players) this.scores[this.scoreKey(p)] = 0;
     this.tArenas = []; for (const [a, ids] of B.arenas) this.tArenas[a] = { ids, done: false, winner: null };
     this.tSpots = B.tSpots; this.tQuietT = null;
