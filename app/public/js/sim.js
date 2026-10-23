@@ -36,6 +36,18 @@ function turnToward(v, d, maxAng) {
   const t = Math.min(1, maxAng / ang), a = Math.sin((1 - t) * ang) / s, b = Math.sin(t * ang) / s;
   return { x: v.x * a + d.x * b, y: v.y * a + d.y * b, z: v.z * a + d.z * b };
 }
+// v1.2.37 (exportHero): what a fighter's round start makes anew, or points at things in this Game
+const HERO_LOCAL = new Set(['ai', 'fx', 'ground', 'ownerRef', 'offer', 'lootQ', 'encoreQ', 'veh', 'ow', 'carry', 'giftIn']);
+const NOPE = Symbol('nope');
+function plainCopy(v, d) {
+  if (v === null || typeof v !== 'object') return typeof v === 'function' || typeof v === 'symbol' ? NOPE : v;
+  if (d > 5) return NOPE;
+  if (Array.isArray(v)) { const o = []; for (const x of v) { const c = plainCopy(x, d + 1); o.push(c === NOPE ? null : c); } return o; }
+  const pr = Object.getPrototypeOf(v); if (pr !== Object.prototype && pr !== null) return NOPE;
+  if ('pos' in v && 'id' in v) return NOPE;   // (another fighter, a shot, a prop: never carried over)
+  const o = {}; for (const k in v) { const c = plainCopy(v[k], d + 1); if (c !== NOPE) o[k] = c; }
+  return o;
+}
 const emptyInput = () => ({ mx: 0, mz: 0, jump: false, shoot: false, blockSeq: 0, reloadSeq: 0, aim: null, aimPoint: null });
 // Riot Shield weapon mod: the shield's shape (matches the model in art.js), hits before it breaks, recharge times,
 // and wave charging (one extra bullet every `step` seconds held, up to `maxExtra`).
@@ -944,7 +956,8 @@ export class Game {
       const out = [];
       for (const o of this.dyn) {
         if (!o.pushable && o.kind !== 'float') { out.push(o); continue; }
-        for (let a = 0; a < this.tArenas.length; a++) { const c = a ? mk(o.def) : o; c.arena = a; c.solid.arena = a; out.push(c); }
+        let first = true;   // (v1.2.37: an arena shard has only some of the arenas: shard.js)
+        this.tArenas.forEach((A, a) => { const c = first ? o : mk(o.def); first = false; c.arena = a; c.solid.arena = a; out.push(c); });
       }
       this.dyn = out;
     }
@@ -1700,6 +1713,7 @@ export class Game {
     if (this.phase === 'countdown' && this.tourn && this.phaseT > (RULES.countdown || 3) + 0.2) {
       // v1.2.29 (Devin): the tournament matchup screen holds the world still (no health drain, burns, regen, timers)
       this.phaseT -= dt;
+      if (this.shard) return;   // (v1.2.37: an arena shard follows the host's clock: shard.js)
       const humans = this.heroes().filter(p => p.connected && !p.isBot && !p.tko);
       if (humans.length && humans.every(p => p.input.ready === this.round)) { this.phaseT = 3.2; this.emit({ t: 'tGo' }); }
       return;
@@ -1710,6 +1724,7 @@ export class Game {
       if (c !== this.lastCount && c > 0) { this.lastCount = c; this.emit({ t: 'count', n: c }); }
       if (this.phaseT <= 0 && !this.fightSent) { this.fightSent = true; this.lastCount = null; this.emit({ t: 'fight' }); }
       if (this.phaseT <= 0) { this.phase = 'play'; this.fightAt = this.time; }
+      if (this.sharded) return;   // v1.2.37: the arenas run in shards (shard.js); this match keeps the clock and the round's flow
       this.updateDynamics(dt); this.refreshSolids();
       if (this.ow) owTick(this, dt);
       if (this.settings.core) coreTick(this, dt);   // build phase: drops keep falling, you can carry and place
@@ -1722,28 +1737,30 @@ export class Game {
       this.updatePlayers(dt, false);
     } else if (this.phase === 'play' || this.phase === 'roundEnd') {
       this.time += dt;
-      this.updateDynamics(dt); this.refreshSolids();
-      this.updatePlayers(dt, true);
-      this.updateBullets(dt);
-      this.updateMines(dt); this.updateFires(dt); this.updateClouds(dt); this.updateFields(dt); this.updateBooms(dt); this.updateShields(dt); this.updatePillars(dt);
-      this.updateRituals(dt); this.updateRelics(dt); this.updateWells(dt);
-      this.updateHazard(dt); this.updateTraps();
-      if (this.isWaves() || this.telegraphs.length || this.shockwaves.length) coopTick(this, dt);   // Space King's ally boss casts in any mode
-      if (this.settings.core) coreTick(this, dt);
-      if (this.ow) owTick(this, dt);
-      if (SIDE_ON) for (const p of this.players) { p.pos.z = 0; p.vel.z = 0; }   // 2D side view: nothing leaves the play plane
-      this.pruneUnits();
+      if (!this.sharded) {   // (v1.2.37: see above)
+        this.updateDynamics(dt); this.refreshSolids();
+        this.updatePlayers(dt, true);
+        this.updateBullets(dt);
+        this.updateMines(dt); this.updateFires(dt); this.updateClouds(dt); this.updateFields(dt); this.updateBooms(dt); this.updateShields(dt); this.updatePillars(dt);
+        this.updateRituals(dt); this.updateRelics(dt); this.updateWells(dt);
+        this.updateHazard(dt); this.updateTraps();
+        if (this.isWaves() || this.telegraphs.length || this.shockwaves.length) coopTick(this, dt);   // Space King's ally boss casts in any mode
+        if (this.settings.core) coreTick(this, dt);
+        if (this.ow) owTick(this, dt);
+        if (SIDE_ON) for (const p of this.players) { p.pos.z = 0; p.vel.z = 0; }   // 2D side view: nothing leaves the play plane
+        this.pruneUnits();
+      }
       // Overtime: if a round drags past 100 s, everyone slowly loses health so it can't stall forever.
       if (this.isPractice()) this.practiceTick(dt);
       else if (BRAWL_ON) brawlTick(this, dt);   // brawl: damage %, respawns and its own sudden death
       else if (this.phase === 'play' && !this.ow && !this.settings.core && this.time > (this.isWaves() ? 150 : 100) && !(this.boss && this.boss.alive)) {   // never during the boss fight
         if (!this.overtime) { this.overtime = true; this.overtimeAt = this.time; this.emit({ t: 'overtime' }); }
         this.suddenMul();
-        for (const p of this.players) if (p.alive && !p.reviving && p.kind !== 'hazardTurret') { p.hp -= 4 * dt; if (p.hp <= 0) { p.hp = 0.01; this.hurt(p, 1, null, null); } }
+        if (!this.sharded) for (const p of this.players) if (p.alive && !p.reviving && p.kind !== 'hazardTurret') { p.hp -= 4 * dt; if (p.hp <= 0) { p.hp = 0.01; this.hurt(p, 1, null, null); } }
       }
       if (this.isPractice()) { /* the practice range never ends a round */ }
       else if (this.phase === 'play') this.checkRoundEnd();
-      else { this.phaseT -= dt; if (this.phaseT <= 0) this.afterRound(); }
+      else { this.phaseT -= dt; if (this.phaseT <= 0 && !this.shard && !(this.sharded && this.shardWait && this.shardWait())) this.afterRound(); }   // (v1.2.37: a shard never ends the round; the host's match waits for the shards' last word on it)
     } else if (this.phase === 'picking') {
       // Every picker has their own timer (late joiners catching up get 50% longer, Speed mode resets it per pick).
       let longest = 0;
@@ -1772,7 +1789,7 @@ export class Game {
     this.players = this.players.filter(p => !(p.ephemeral && !p.alive));
   }
   updatePlayers(dt, canAct) {
-    const crowd = this.players.length > 500 ? 3 : this.players.length > 200 ? 2 : 1;
+    const n = this.crowdN || this.players.length, crowd = n > 500 ? 3 : n > 200 ? 2 : 1;   // (v1.2.37: an arena shard counts the whole match: crowdN)
     for (const p of this.players) {
       if (!p.alive) continue;
       if (this.tourn) PA.a = p.arena ?? null;   // (v1.2.26: only your own arena's walls)
@@ -2946,7 +2963,10 @@ export class Game {
     }
     this.emit({ t: 'split', x: t.pos.x, y: t.pos.y + 0.5, z: t.pos.z, units: this.unitList() });
   }
-  unitList() { return this.players.filter(p => p.transient).map(u => ({ id: u.id, name: u.name, color: u.color, team: u.team, kind: u.kind, ownerId: u.ownerId, cosmetics: u.cosmetics, ...(u.am ? { am: u.am } : {}) })); }
+  unitList() {
+    if (this.sharded && this.shardUnits) { const o = []; for (const l of this.shardUnits.values()) for (const u of l) o.push(u); return o; }   // (v1.2.37: the shards' units)
+    return this.players.filter(p => p.transient).map(u => ({ id: u.id, name: u.name, color: u.color, team: u.team, kind: u.kind, ownerId: u.ownerId, cosmetics: u.cosmetics, ...(u.am ? { am: u.am } : {}) }));
+  }
 
   // Explosion size comes from damage. extra = additional explosions, one second apart.
   explode(pos, dmg, owner, opts = {}) {
@@ -4259,26 +4279,28 @@ export class Game {
   healPing(q, before) { if (q.hp - before >= 0.5) q.healN = ((q.healN || 0) + 1) & 255; }
   // v1.2.35 sc (scope): { ps: the players to send, a: the arena } for one tournament arena (hostsim.js scopeFor): only its
   // fighters, shots, walls, shields and mines go (a 1000-player tournament sent everyone's to everyone, 500 KB a time)
-  snapshot(sc = null) {
-    const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100, r3 = v => Math.round(v * 1000) / 1000;
-    const h = this.hazard, F = sc ? L => L.filter(x => this.seenIn(x, sc.a)) : L => L;
+  snapshot(sc = null, part = null) {   // (v1.2.37 part: the arena's rows from the shard running it)
+    const r2 = v => Math.round(v * 100) / 100;
+    const h = this.hazard;
     return {
-      ph: this.phase, pt: fin(this.phaseT) ? r2(this.phaseT) : -1, rd: this.round, sc: sc && this.players.length > 60 ? this.scopedScores(sc.ps) : this.scores, bud: budgetRow(this), tn: tournSnap(this)[0], tq: tournSnap(this)[1],
+      ph: this.phase, pt: fin(this.phaseT) ? r2(this.phaseT) : -1, rd: this.round, sc: sc && this.players.length > 60 ? this.scopedScores(sc.ps) : this.scores, tn: tournSnap(this)[0], tq: tournSnap(this)[1],
       pw: this.phase === 'picking' ? this.players.filter(p => !p.picked).length : 0,
-      pl: (sc ? sc.ps : this.players).filter(p => p.connected).map(p => [
-        p.id, r2(p.pos.x), r2(p.pos.y), r2(p.pos.z), r2(p.aim.x), r2(p.aim.y), r2(p.aim.z),   // (v1.0.1: aim to 2 places, less traffic)
-        Math.ceil(p.hp), Math.round(this.maxHp(p)), p.alive && !p.reviving ? 1 : 0, this.shielded(p) ? 1 : 0,
-        p.ammo, Math.round(p.stats.ammo), p.reloadT > 0 ? r2(p.reloadT / p.stats.reloadTime) : 0,
-        p.blockCdT > 0 ? r2(p.blockCdT / p.stats.blockCooldown) : 0, p.flashT > 0 ? 1 : 0,
-        r1(p.vel.x), r1(p.vel.y), r1(p.vel.z), p.stats.skyfall > 0 ? 1 : 0, r2(p.stats.blockSize),
-        p.mod || 0, p.fx.charging ? p.fx.chargeShots : 0, p.mod === 'shield' && (p.fx.shieldBrokenT || 0) > this.time ? 1 : 0,
-        (this.burning(p) ? 1 : 0) | (p.fx.poisonS || (p.fx.toxT || 0) > this.time ? 2 : 0) | ((p.fx.chillT || 0) > this.time ? 4 : 0) | ((p.fx.hexT || 0) > this.time ? 8 : 0) | ((p.fx.wetT || 0) > this.time ? 16 : 0) | ((p.fx.sqOnT || 0) > this.time ? 32 : 0),
-        r2(p.size),
-        (p.stats.blockShock > 0 ? 1 : 0) | (p.stats.blockLeech > 0 ? 2 : 0) | (p.stats.blockDeploy > 0 ? 4 : 0),
-        r2(p.stats.bulletSpeed), r2(this.bulletGrav(p)), this.playerFlags(p), r2(this.riotFrac(p)), r2(this.pillarFrac(p)),
-        p.healN || 0, p.mod === 'critter' ? this.critterCount(p) : -1, r2(this.slowFieldRadius(p.stats.slowField || 0)),
-        this.extRow(p),
-      ]),
+      lz: h && h.type === 'laser' ? [r2(h.pos), h.state === 'warn' ? 1 : h.state === 'on' ? 2 : 0] : null,
+      tg: this.telegraphs.length ? telegraphRows(this) : null, sw: this.shockwaves.length ? shockRows(this) : null, bo: bossRow(this),
+      ow: this.ow ? this.owSnap() : null,
+      co: this.settings.core ? coreRows(this) : null,
+      bw: BRAWL_ON ? this.brawlRows() : null, bi: BRAWL_ON ? bItemRows(this) : null, bwt: BRAWL_ON ? Math.max(0, Math.ceil(BRAWL.suddenT - this.time)) : null,
+      ...(part || this.snapshotArena(sc)),
+    };
+  }
+  // v1.2.37: the part of a snapshot that is one tournament arena's (sc: { ps, a }) or, with no sc, everything's; an arena shard
+  // (shard.js) makes this part for the arenas it runs and the host's match adds the rest
+  snapshotArena(sc = null) {
+    const r2 = v => Math.round(v * 100) / 100, r3 = v => Math.round(v * 1000) / 1000;
+    const F = sc ? L => L.filter(x => this.seenIn(x, sc.a)) : L => L;
+    return {
+      bud: budgetRow(this),
+      pl: (sc ? sc.ps : this.players).filter(p => p.connected).map(p => this.snapRow(p)),
       bfx: F(this.bullets).filter(b => b.fx).map(b => b.latch ? [b.id, b.fx, b.latch.q.id, 1] : b.swarm === 'bee' && b.swTgt ? [b.id, b.fx, b.swTgt.id] : [b.id, b.fx]),   // v1.2.20: [2] who a bee is after (it turns red for them)
       bu: F(this.bullets).map(b => [b.id, r2(b.pos.x), r2(b.pos.y), r2(b.pos.z), b.hold ? 0 : r2(b.vel.x * (b.slowK ?? 1)), b.hold ? 0 : r2(b.vel.y * (b.slowK ?? 1)), b.hold ? 0 : r2(b.vel.z * (b.slowK ?? 1)),
         r3(b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r), b.owner, b.ring ? r2(b.ring) : 0, b.cown && b.cown !== b.owner ? b.cown : 0,
@@ -4288,14 +4310,27 @@ export class Game {
       sh: F(this.shields).map(s => [s.id, r2(s.x), r2(s.y0), r2(s.z), r2(s.w), r2(s.h), r2(s.d), s.owner, (s.shock ? 1 : 0) | (s.leech ? 2 : 0) | (s.box ? 4 : 0), s.box ? r2(Math.max(0, s.hp) / s.maxHp) : 1, r2(s.ang || 0)]),
       mn: F(this.mines).map(m => m.snare ? [m.id, r2(m.x), r2(m.y), r2(m.z), m.owner, m.armT <= 0 ? 1 : 0, 1, 1] : [m.id, r2(m.x), r2(m.y), r2(m.z), m.owner, m.armT <= 0 ? 1 : 0, r2(m.sz || 1)]),   // (v1.2.15: [7] 1 = Snare Plate)
       tp: this.level.traps ? Math.round(this.time * 100) / 100 : null,   // v1.2.15 trap clock (traps.js)
-      lz: h && h.type === 'laser' ? [r2(h.pos), h.state === 'warn' ? 1 : h.state === 'on' ? 2 : 0] : null,
-      tg: this.telegraphs.length ? telegraphRows(this) : null, sw: this.shockwaves.length ? shockRows(this) : null, bo: bossRow(this),
       rt: this.rituals.length ? this.ritualRows(sc) : null, rl: this.relics.length ? this.relicRows(sc) : null,
-      ow: this.ow ? this.owSnap() : null,
-      co: this.settings.core ? coreRows(this) : null,
       mv: this.predRows(sc && sc.ps),
-      bw: BRAWL_ON ? this.brawlRows() : null, bi: BRAWL_ON ? bItemRows(this) : null, bwt: BRAWL_ON ? Math.max(0, Math.ceil(BRAWL.suddenT - this.time)) : null,
     };
+  }
+  // one fighter's snapshot row
+  snapRow(p) {
+    const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;
+    return [
+      p.id, r2(p.pos.x), r2(p.pos.y), r2(p.pos.z), r2(p.aim.x), r2(p.aim.y), r2(p.aim.z),   // (v1.0.1: aim to 2 places, less traffic)
+      Math.ceil(p.hp), Math.round(this.maxHp(p)), p.alive && !p.reviving ? 1 : 0, this.shielded(p) ? 1 : 0,
+      p.ammo, Math.round(p.stats.ammo), p.reloadT > 0 ? r2(p.reloadT / p.stats.reloadTime) : 0,
+      p.blockCdT > 0 ? r2(p.blockCdT / p.stats.blockCooldown) : 0, p.flashT > 0 ? 1 : 0,
+      r1(p.vel.x), r1(p.vel.y), r1(p.vel.z), p.stats.skyfall > 0 ? 1 : 0, r2(p.stats.blockSize),
+      p.mod || 0, p.fx.charging ? p.fx.chargeShots : 0, p.mod === 'shield' && (p.fx.shieldBrokenT || 0) > this.time ? 1 : 0,
+      (this.burning(p) ? 1 : 0) | (p.fx.poisonS || (p.fx.toxT || 0) > this.time ? 2 : 0) | ((p.fx.chillT || 0) > this.time ? 4 : 0) | ((p.fx.hexT || 0) > this.time ? 8 : 0) | ((p.fx.wetT || 0) > this.time ? 16 : 0) | ((p.fx.sqOnT || 0) > this.time ? 32 : 0),
+      r2(p.size),
+      (p.stats.blockShock > 0 ? 1 : 0) | (p.stats.blockLeech > 0 ? 2 : 0) | (p.stats.blockDeploy > 0 ? 4 : 0),
+      r2(p.stats.bulletSpeed), r2(this.bulletGrav(p)), this.playerFlags(p), r2(this.riotFrac(p)), r2(this.pillarFrac(p)),
+      p.healN || 0, p.mod === 'critter' ? this.critterCount(p) : -1, r2(this.slowFieldRadius(p.stats.slowField || 0)),
+      this.extRow(p),
+    ];
   }
   // Open world rows; the taken-loot list rides along once a second (and right after something is picked up).
   owSnap() {
@@ -4316,5 +4351,41 @@ export class Game {
   levelForNet() {
     const { seed, name, hx, hz, theme, boxes, dynamic, lava, ice, hazard, poly, shape, open, zones, pads, loot, side, brawl, gravK, rmod, traps } = this.level;
     return { seed, name, hx, hz, theme, boxes, dynamic, lava, ice, hazard, poly, shape, open, zones, pads, loot, side, brawl, gravK, rmod, traps };   // (v1.2.15: gravK too, so joiners predict 2D and Low Gravity jumps)
+  }
+
+  // ---------------------------------------------------------------- v1.2.37 arena shards (shard.js)
+  // In a big tournament the host's match hands its arenas to shards: Games on other CPU threads that each run some of the
+  // arenas for the round (an arena never touches another, so they run side by side). The host's match (this.sharded) keeps
+  // the clock, the round's flow, picks, lives and the table; a shard (this.shard) runs fights and reports back.
+  // A fighter as plain data for a shard: everything but per-step caches (_...) and what a round start makes anew
+  exportHero(p) {
+    const o = {};
+    for (const k in p) if (k[0] !== '_' && !HERO_LOCAL.has(k)) { const v = plainCopy(p[k], 0); if (v !== NOPE) o[k] = v; }
+    return o;
+  }
+  // a shard's round: these heroes in these arenas (B from shard.js ShardSet.startRound)
+  shardRound(B) {
+    this.shard = true; this.round = B.round; this.rmod = B.rmod; this.levelVersion++; this.time = B.time || 0;
+    this.overtime = false; this.odx = 0; this.fightAt = null; this.lastDmgT = null; this.lastKill = null;
+    this.nextUnit = B.unitBase; this.nextId = B.idBase; this.crowdN = B.crowdN;
+    SIDE_ON = false; BRAWL_ON = false;
+    this.players = B.heroes.map(h => Object.assign(this.makePlayer({ ...h, kind: 'hero' }), h));
+    this._ap = this._bp = null;
+    this.scores = {}; for (const p of this.players) this.scores[this.scoreKey(p)] = 0;
+    this.tArenas = []; for (const [a, ids] of B.arenas) this.tArenas[a] = { ids, done: false, winner: null };
+    this.tSpots = B.tSpots; this.tQuietT = null;
+    this.events = []; this.bullets = []; this.barricades = []; this.shields = []; this.mines = []; this.fields = []; this.booms = []; this.fires = []; this.clouds = []; this.rituals = []; this.relics = []; this.wells = [];
+    this.telegraphs = []; this.shockwaves = []; this.boss = null; this.gm = null; this.blotches = []; this.hazard = null; this.core = null; this.ow = null; this.bItems = [];
+    this.level = prepareLevel(B.level); this.buildDynamics(); this.flyHeight = B.fly;
+    this.phase = B.phase; this.phaseT = B.phaseT; this.fightSent = B.phase !== 'countdown'; this.lastCount = null; this.roundWinner = null;
+    for (const p of this.players) { p.input = { ...emptyInput(), ...p.input }; this.resetPlayer(p, p.spawn); }
+    for (const h of this.players) {   // (their summons, as startRound)
+      const s = h.stats;
+      for (let k = 0; k < Math.round(s.summonTwin); k++) this.spawnUnit('twin', h, this.nearSpot(h, k + 1));
+      for (let k = 0; k < Math.round(s.summonTurret); k++) this.spawnUnit('turret', h, this.nearSpot(h, k + 3));
+      for (let k = 0; k < Math.round(s.summonDrone); k++) this.spawnUnit('drone', h, this.nearSpot(h, k + 5));
+    }
+    this.refreshSolids();
+    this.unitsChanged();
   }
 }

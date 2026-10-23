@@ -20,7 +20,7 @@ export class SimLink {
         this.w = new Worker(new URL('./simworker.js', import.meta.url), { type: 'module' });
         this.w.onmessage = e => this.onMsg(e.data);
         this.w.onerror = e => { e.preventDefault && e.preventDefault(); this.lost((e && e.message) || 'the game thread stopped'); };
-        this.w.postMessage({ t: 'init', opts });
+        this.w.postMessage({ t: 'init', opts: { ...opts, shards: threads - 1 } });   // (v1.2.37: a big tournament's arenas use the other threads: shard.js)
         this.threaded = true;
         return;
       } catch { this.w = null; }

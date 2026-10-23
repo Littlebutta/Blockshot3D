@@ -19,6 +19,7 @@ import { bItemRows, BRAWL } from './brawl.js';
 import { budgetRow } from './budget.js';
 import { TOURN_FLOW, tournRows, giftOffer, giftAccept, giftDecline } from './tourn.js';
 import { ViewPacker } from './viewpack.js';
+import { ShardSet } from './shard.js';
 
 // Co-op wave bots (raiders, Elites, wave turrets and drones; not anyone's commander units) wear raider markings.
 export const isRaider = (kind, transient, ownerId) => !!transient && !ownerId && ['wave', 'elite', 'turret', 'drone'].includes(kind);
@@ -58,14 +59,32 @@ export function ncFields(x) {
     press: press || 0, rhy: rhy ?? -1, gam: gam ?? -1, shell: shell || 0, ascTier: (asc || 0) & 3, ascRounds: (asc || 0) >> 2, purge: purge || 0 };
 }
 
+// The host's view of one tournament arena (sc: { ps, a }), or with no sc of everything: the part an arena shard makes
+// (shard.js) for the arena the host's screen shows
+export function arenaView(g, sc) {
+  const F = sc ? L => L.filter(x => g.seenIn(x, sc.a)) : L => L;
+  return {
+    players: (sc ? sc.ps : g.players).filter(p => p.connected).map(p => viewOfPlayer(g, p)),
+    bullets: F(g.bullets).map(b => ({ id: b.id, pos: b.pos, vel: b.vel, ring: b.ring || 0, r: b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r, color: b.color, fx: b.fx, tgt: b.swarm === 'bee' && b.swTgt ? b.swTgt.id : 0, o: b.owner })),
+    dynamics: (sc ? g.dyn.filter(o => o.arena === undefined || o.arena === sc.a) : g.dyn).map(o => ({ id: o.id, x: o.pos.x, y: o.pos.y, z: o.pos.z, h: o.h, tip: o.tipped || 0, tx: o.tx || 0, tz: o.tz || 0 })),
+    shields: F(g.shields).map(sh => ({ id: sh.id, x: sh.x, y0: sh.y0, z: sh.z, w: sh.w, h: sh.h, d: sh.d, ang: sh.ang || 0, shock: !!sh.shock, leech: !!sh.leech, box: !!sh.box, hp: sh.box ? Math.max(0, sh.hp) / sh.maxHp : 1, color: (g.player(sh.owner) || {}).color || '#ffffff', o: sh.owner })),
+    mines: F(g.mines).map(m => ({ id: m.id, x: m.x, y: m.y, z: m.z, armed: m.armT <= 0, sz: m.sz || 1, snare: !!m.snare, color: (g.player(m.owner) || {}).color || '#ffffff', o: m.owner })),   // (the page hides enemies' Snare Plates: main.js friendOf)
+    barricades: F(g.barricades).map(b => ({ id: b.id, kind: b.kind, x: b.x, y0: b.y0, z: b.z, len: b.len, h: b.h, th: b.th, ang: b.ang, hp: Math.max(0, b.hp) / b.maxHp, color: b.ownerRef.color, o: b.owner })),
+    trapT: g.level && g.level.traps ? g.time : null,
+    rituals: g.rituals.length ? g.ritualRows(sc) : null, relics: g.relics.length ? g.relicRows(sc) : null,
+    bud: budgetRow(g),
+  };
+}
+const NO_ARENA = { players: [], bullets: [], dynamics: [], shields: [], mines: [], barricades: [], trapT: null, rituals: null, relics: null, bud: null };
+
 // v1.2.9: joiners' inputs are used for as long as they were held, not from whenever each one happened to arrive. With uneven
 // delivery (jitter) the host used to apply one input 40 ms and the next 0 ms, so its idea of where you were drifted from your
 // own prediction and your view was pulled around at every snapshot (it was smooth once you died). Each input carries its
 // send time; the host holds each input until send time + a hold-back covering 97% of the recent (2 s) arrival - send spread
 // (at most 40 ms over the smallest), then applies it at that point inside the frame's steps (frame, releaseInputs).
 // (All times here are the page's clock: the page passes them in, a worker's own clock starts elsewhere.)
-function queueInput(g, a, from, i, now) {
-  if (!(i.t > 0)) { g.setInput(from, i); return; }
+function queueInput(g, a, from, i, now, fwd) {   // (v1.2.37 fwd(release, id, input): the same input to an arena shard)
+  if (!(i.t > 0)) { g.setInput(from, i); if (fwd) fwd(0, from, i); return; }
   const o = now - i.t, dl = a.dl ||= []; dl.push(o); if (dl.length > 120) dl.shift();
   // v1.2.9: the hold-back (a.hold) moves only when the wanted one is well off (6 ms): every change moves where an input lands
   // on the host's step grid and so how long it seems to be held, which came back to the joiner as a correction
@@ -78,6 +97,7 @@ function queueInput(g, a, from, i, now) {
   // same release time would through releaseInputs (which rounds to the nearest step), so its length on the host was off by a step
   if (i.q < (a.appQ || 0)) return;
   let k = Q.length; while (k > 0 && Q[k - 1][2].q > i.q) k--; Q.splice(k, 0, [r, from, i]);
+  if (fwd) fwd(r, from, i);
 }
 function releaseInputs(g, acks, w) {
   for (const a of acks.values()) { const Q = a.inq; while (Q && Q.length && Q[0][0] <= w) { const [, f, x] = Q.shift(); g.setInput(f, x); if (x.q > (a.appQ || 0)) a.appQ = x.q; } }
@@ -92,6 +112,14 @@ export class HostSim {
     this.watch = undefined; this.peerWatch = new Map(); this.lastTn = undefined;   // (v1.2.35: the tournament arena each screen shows)
     this.packer = this.inline ? null : new ViewPacker();   // (v1.2.31: on its own thread, the view crosses packed: viewpack.js)
     const g = this.g = new Game({ roster: o.roster, settings: o.settings, cards: o.cards, onOffer: p => this.onOffer(p), onCombo: (p, C) => this.toPlayer(p, { k: 'comboAsk', combo: C.id }), onBreak: (p, opts) => this.toPlayer(p, { k: 'breakAsk', opts }) });
+    // v1.2.37: a big tournament's arenas run on every CPU core (shard.js): o.shards = how many (1 or none: all here)
+    if (g.tourn && o.shards > 1) {
+      const mk = typeof Worker !== 'undefined' && !this.inline ? () => new Worker(new URL('./shardworker.js', import.meta.url), { type: 'module' }) : null;
+      this.shardN = o.shards; this.shardMk = mk; this.cards = o.cards;
+      const sr = g.startRound.bind(g);
+      g.startRound = () => { sr(); this.roundStarted(); };
+      g.shardWait = () => !!(this.shards && this.shards.tok && !this.finalsDone);
+    }
     this.practice = o.settings.mode === 'practice' ? o.practiceCards || null : null;
     if (this.practice) g.practiceSetCards(this.localId, this.practice);
   }
@@ -110,7 +138,7 @@ export class HostSim {
   cmd(c) {
     const g = this.g;
     switch (c.t) {
-      case 'local': g.setInput(this.localId, c.i); break;
+      case 'local': g.setInput(this.localId, c.i); if (this.shards) this.shards.input(this.localId, 0, c.i); break;
       case 'input': this.input(c.from, c.i, c.now); break;
       case 'frame': this.frame(c); break;
       case 'pick': g.pick(c.from, c.card); break;
@@ -123,10 +151,10 @@ export class HostSim {
       case 'loot': if (g.ow) owLootPick(g, c.from, c.card); break;
       case 'ev': this.outEvents.push(c.e); break;   // (emotes, bets: made on the page, sent to joiners with the next snapshot)
       case 'join': this.join(c); break;
-      case 'leave': this.leave(c.id, c.token); break;
+      case 'leave': this.leave(c.id, c.token); if (this.shards) this.shards.cmd(c.id, { t: 'leave', id: c.id }); break;
       case 'practice': this.practice = c.list.slice(); g.practiceSetCards(this.localId, c.list); break;
       case 'resetDmg': { const p = g.player(this.localId); if (p) p.tally.damage = 0; break; }
-      case 'setting': g.settings[c.k] = c.v; break;
+      case 'setting': g.settings[c.k] = c.v; if (this.shards) this.shards.cmd(null, { t: 'setting', k: c.k, v: c.v }); break;
       case 'extend': g.extend(c.n); break;
       case 'retry': g.retryRound(); break;
       case 'netRows': this.nsRows = c.ns; this.hf = c.hf; break;
@@ -144,7 +172,8 @@ export class HostSim {
     if (a && aq && this.enc && pe.get(from) === this.enc.e && aq > a.q && aq <= this.enc.n) a.q = aq;
     const ak = Array.isArray(i.a) && i.a.length > 2 ? i.a[2] : i.ak;   // v1.2.12: the newest event batch it applied in order (netcodec.js encodeFor ek)
     if (a && ak > (a.k || 0) && this.enc && pe.get(from) === this.enc.e && ak <= this.enc.n) a.k = ak;
-    if (a) queueInput(g, a, from, i, now); else g.setInput(from, i);
+    const sh = this.shards && this.shards.tok ? this.shards : null, fwd = sh ? (r, id, x) => sh.input(id, r, x) : null;
+    if (a) queueInput(g, a, from, i, now, fwd); else { g.setInput(from, i); if (fwd) fwd(0, from, i); }
   }
   // Someone joins a match in progress (main.js lateJoin did the lobby side and sent them 'start'): the level, everyone's
   // cards, then the roster entry; their seat (or their old one back, with their build when they're returning)
@@ -211,40 +240,121 @@ export class HostSim {
   frame(c) {
     const g = this.g, { dt, ts, paused, t0 } = c;
     g.hostFps = c.hostFps;   // (v1.2.25 shot budget)
+    let sh = this.shards && this.shards.tok ? this.shards : null, shEv = null;
+    if (sh) shEv = this.shardIn(sh);   // (v1.2.37: what the arena shards sent back since the last frame)
+    if (this.shardPending && (g.phase === 'countdown' || g.phase === 'play')) { this.shardOut(); sh = this.shards; }
+    const ph0 = g.phase, pt0 = g.phaseT;
     let w = t0 - dt * 1000;   // (v1.2.9: the wall-clock time each step covers, for joiners' held-back inputs: queueInput)
     if (!paused) for (let rem = dt * ts; rem > 1e-4;) { const st = Math.min(rem, 0.035); if (this.acks) releaseInputs(g, this.acks, w + st / ts * 500); w += st / ts * 1000; g.step(st); rem -= st; }
     else if (this.acks) releaseInputs(g, this.acks, t0);
+    if (sh) {
+      if (g.phase === 'roundEnd' && !this.finalsAsked) { this.finalsAsked = true; this.finalsDone = false; sh.askFinals(); }
+      if (g.phase !== 'countdown' && g.phase !== 'play' && g.phase !== 'roundEnd') { sh.end(); g.sharded = false; sh = null; }   // (picks or the end: no arenas running)
+      else sh.frame({ dt, ts, paused, t0, ph: ph0, pt: pt0, hostFps: c.hostFps }, this.shardWant(c.peers || []));   // (they work while this answers the page)
+    }
     let level = null;
     if (g.levelVersion !== this.levelVersion) {
       this.levelVersion = g.levelVersion; level = g.levelForNet();
       if (this.host) this.emit('net', { t: 'toAll', msg: { k: 'level', level } });
     }
     const evs = g.takeEvents();
+    if (shEv) for (const e of shEv) evs.push(e);
     if (this.host) this.outEvents.push(...evs);
-    const sc = this.scopeFor(this.localId, this.watch), F = sc ? L => L.filter(x => g.seenIn(x, sc.a)) : L => L;
+    const sc = this.scopeFor(this.localId, this.watch);
     // v1.2.37 (Devin: other players' effects still showed): the host's own screen gets its arena's events only, like a joiner
     const evsOwn = sc ? evs.filter(e => { const a = this.evArena(e); return a == null || a === sc.a; }) : evs;
     const view = {
       phase: g.phase, phaseT: g.phaseT, scores: sc && g.players.length > 60 ? g.scopedScores(sc.ps) : g.scores, round: g.round,
       waiting: g.phase === 'picking' ? g.players.filter(p => !p.picked).length : 0,
-      players: (sc ? sc.ps : g.players).filter(p => p.connected).map(p => viewOfPlayer(g, p)),
-      bullets: F(g.bullets).map(b => ({ id: b.id, pos: b.pos, vel: b.vel, ring: b.ring || 0, r: b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r, color: b.color, fx: b.fx, tgt: b.swarm === 'bee' && b.swTgt ? b.swTgt.id : 0, o: b.owner })),
-      dynamics: (sc ? g.dyn.filter(o => o.arena === undefined || o.arena === sc.a) : g.dyn).map(o => ({ id: o.id, x: o.pos.x, y: o.pos.y, z: o.pos.z, h: o.h, tip: o.tipped || 0, tx: o.tx || 0, tz: o.tz || 0 })),
-      shields: F(g.shields).map(sh => ({ id: sh.id, x: sh.x, y0: sh.y0, z: sh.z, w: sh.w, h: sh.h, d: sh.d, ang: sh.ang || 0, shock: !!sh.shock, leech: !!sh.leech, box: !!sh.box, hp: sh.box ? Math.max(0, sh.hp) / sh.maxHp : 1, color: (g.player(sh.owner) || {}).color || '#ffffff', o: sh.owner })),
-      mines: F(g.mines).map(m => ({ id: m.id, x: m.x, y: m.y, z: m.z, armed: m.armT <= 0, sz: m.sz || 1, snare: !!m.snare, color: (g.player(m.owner) || {}).color || '#ffffff', o: m.owner })),   // (the page hides enemies' Snare Plates: main.js friendOf)
-      trapT: g.level && g.level.traps ? g.time : null,
+      ...(sh ? this.shardView(sc) : arenaView(g, sc)),
       laser: g.hazard && g.hazard.type === 'laser' ? [g.hazard.pos, g.hazard.state === 'warn' ? 1 : g.hazard.state === 'on' ? 2 : 0] : null,
       telegraphs: g.telegraphs.length ? telegraphRows(g) : null, shocks: g.shockwaves.length ? shockRows(g) : null, boss: bossRow(g), final: g.isFinalRound(),
-      rituals: g.rituals.length ? g.ritualRows(sc) : null, relics: g.relics.length ? g.relicRows(sc) : null,
       ow: g.ow ? { ...owView(g), taken: g.ow.taken } : null,
-      barricades: F(g.barricades).map(b => ({ id: b.id, kind: b.kind, x: b.x, y0: b.y0, z: b.z, len: b.len, h: b.h, th: b.th, ang: b.ang, hp: Math.max(0, b.hp) / b.maxHp, color: b.ownerRef.color, o: b.owner })),
       core: g.settings.core ? coreRows(g) : null,
-      bitems: g.isBrawl() ? bItemRows(g) : null, bud: budgetRow(g),
+      bitems: g.isBrawl() ? bItemRows(g) : null,
     };
     const sent = this.host ? this.send(c, dt, ts, t0) : 0;
     if (this.packer) this.packer.pack(view);
     const tn = tournRows(g), tnOut = tn !== this.lastTn ? tn : undefined; this.lastTn = tn;   // (v1.2.35: the table only when it changed)
-    this.emit('frame', { view, evs: evsOwn, level, levelObj: level && this.inline ? g.level : null, tn: tnOut, brawlRows: g.isBrawl() ? g.brawlRows() : null, brawlT: g.isBrawl() ? Math.max(0, Math.ceil(BRAWL.suddenT - g.time)) : null, mirror: this.mirror(), sent });
+    const shards = sh ? { n: sh.size, t: sh.threads, ms: sh.stat.ms.map(x => Math.round((x || 0) * 10) / 10), p: sh.stat.n.slice() } : null;
+    this.emit('frame', { view, evs: evsOwn, level, levelObj: level && this.inline ? g.level : null, tn: tnOut, brawlRows: g.isBrawl() ? g.brawlRows() : null, brawlT: g.isBrawl() ? Math.max(0, Math.ceil(BRAWL.suddenT - g.time)) : null, mirror: this.mirror(), sent, shards });
+  }
+
+  // ---------------------------------------------------------------- v1.2.37 arena shards (shard.js)
+  // A tournament round with more than 60 fighters runs its arenas in shards when there are threads for them
+  roundStarted() {
+    const g = this.g, n = g.heroes().filter(p => p.connected && !p.tko).length;
+    if (n > 60 && g.tArenas && g.tArenas.length > 1) {
+      if (!this.shards) this.shards = new ShardSet(this.shardN, g.settings, this.cards, this.shardMk);
+      g.sharded = true; this.shardPending = true; this.finalsAsked = false; this.finalsDone = false;
+    } else { g.sharded = false; this.shardPending = false; if (this.shards) this.shards.end(); }
+  }
+  // hand the arenas out (once the round's cards are in: the first round's pick comes after its start)
+  shardOut() {
+    const g = this.g; this.shardPending = false;
+    g.unitsRemoved(); g.players = g.players.filter(p => !p.transient); g._ap = null;   // (the shards make the round's summons)
+    g.shardUnits = this.shards.units;
+    this.shards.startRound(g);
+    g.unitsChanged();
+  }
+  // the shards' results: finished arenas, heroes moved to help an ally, unit lists, end-of-round tallies; returns their events
+  shardIn(sh) {
+    const g = this.g, { ev, done, unitsChanged, finals } = sh.take(), out = [];
+    for (const [a, w] of done) {
+      const A = g.tArenas && g.tArenas[a]; if (!A || A.done) continue;
+      A.done = true; A.winner = w;
+      if (w != null && w in g.scores) g.scores[w]++;
+      g.emit({ t: 'tArena', a, w, left: g.tArenas.filter(x => !x.done).length });
+    }
+    for (const e of ev) {
+      if (e.t === 'tMove') { const p = g.player(e.p); if (p) { p.arena = e.a; g._ap = null; } }
+      else if (e.t === 'split') e.units = g.unitList();
+      out.push(e);
+    }
+    if (unitsChanged) g.unitsChanged();
+    if (finals && !this.finalsDone && sh.finalsIn) {
+      for (const L of finals.values()) for (const [id, tally, alive, hp, pos, vel, arena] of L) {
+        const p = g.player(id); if (!p) continue;
+        p.tally = tally; p.alive = alive; p.hp = hp; p.pos = pos; p.vel = vel; p.arena = arena;
+      }
+      this.finalsDone = true; g._ap = null;
+    }
+    if (this.finalsAsked && !this.finalsDone && sh.finalsIn) this.finalsDone = true;   // (a shard that never answered: carry on)
+    return out;
+  }
+  // which rows the shards should send: the arena on the host's screen, the ones joiners watch, and fighters watching
+  // from another arena (each screen's own player rides along: scopeFor)
+  shardWant(peers) {
+    const g = this.g, sh = this.shards, sa = new Set(), ids = new Set(), wa = new Set();
+    const hs = this.scopeFor(this.localId, this.watch), va = hs && hs.a >= 0 ? hs.a : null;
+    if (va != null) wa.add(va);
+    const rideAlong = (id, sc) => { const p = g.player(id); if (p && sc && p.arena !== sc.a && sh.of.has(id)) ids.add(id); };
+    rideAlong(this.localId, hs);
+    for (const [id] of peers) {
+      const sc = this.scopeFor(id, this.peerWatch.get(id));
+      if (sc && sc.a >= 0) { sa.add(sc.a); wa.add(sc.a); }
+      rideAlong(id, sc);
+    }
+    return { va, sa: [...sa], ids: [...ids], wa: [...wa] };
+  }
+  // the host's view of its arena from the shard running it (a frame old), with its own player when it watches another
+  shardView(sc) {
+    const g = this.g, sh = this.shards;
+    if (!sc || sc.a < 0) return arenaView(g, sc);
+    const r = sh.rows.get(sc.a), part = r && r.v ? { ...r.v } : { ...NO_ARENA }, me = g.player(this.localId);
+    if (me && me.connected && me.arena !== sc.a) { const x = sh.idRows.get(me.id); part.players = [...part.players, x ? x.v : viewOfPlayer(g, me)]; }
+    return part;
+  }
+  // a joiner's snapshot of its arena, the same way
+  shardSnap(sc, id) {
+    const g = this.g, sh = this.shards;
+    if (!sc || sc.a < 0) return null;
+    const r = sh.rows.get(sc.a), part = r && r.s ? { ...r.s } : g.snapshotArena({ ps: [], a: sc.a }), me = g.player(id);
+    if (me && me.connected && me.arena !== sc.a) {
+      const x = sh.idRows.get(id);
+      part.pl = [...part.pl, x ? x.s : g.snapRow(me)]; part.mv = [...(part.mv || []), ...(x ? x.mv : g.predRows([me]))];
+    }
+    return part;
   }
   // snapshots for joiners: returns how many went out this frame (0 or 1)
   send(c, dt, ts, t0) {
@@ -259,8 +369,8 @@ export class HostSim {
     this.snapN++;
     if (!(c.peers && c.peers.length) && g.tourn) return 1;   // (v1.2.35: nobody to send a 1000-player tournament to: don't build it)
     const ns = this.nsRows && this.snapN % 30 === 0;
-    const mk = sc => {
-      const s = g.snapshot(sc);
+    const mk = (sc, id) => {
+      const s = g.snapshot(sc, this.shards && this.shards.tok ? this.shardSnap(sc, id) : null);   // (v1.2.37: an arena in a shard: its rows)
       if (hz !== 30) s.hz = hz;
       s.pz = c.pz || [];
       s.tm = Math.round(t0);   // v1.2.6: when this state was taken (host clock), so joiners place things by it, not by arrival
@@ -272,7 +382,7 @@ export class HostSim {
     const peers = c.peers || [], gkOf = new Map(), gaOf = new Map(), G = new Map();
     for (const [id] of peers) {
       const sc = this.scopeFor(id, this.peerWatch.get(id)), gk = sc ? sc.k : 0;
-      gkOf.set(id, gk); gaOf.set(id, sc ? sc.a : null); if (!G.has(gk)) G.set(gk, mk(sc));
+      gkOf.set(id, gk); gaOf.set(id, sc ? sc.a : null); if (!G.has(gk)) G.set(gk, mk(sc, id));
     }
     if (!G.size) G.set(0, mk(null));   // (nobody connected yet: still number the tick and keep its events)
     // v1.2.3: each player gets the changes since the newest snapshot THEY confirmed, sent unreliably (a lost one
