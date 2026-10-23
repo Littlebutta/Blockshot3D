@@ -1,6 +1,16 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.38', date: 'Oct 23', notes: {
+    Fixed: [
+      'Big tournaments: the start of the match no longer stutters. Lava Lake and Ice Sheets built a floating platform for every player in the lobby inside every arena (millions of them with thousands of bots), which took seconds and could run out of memory. Each arena now gets its own arena\'s worth.',
+      'Big tournaments: an arena thread that falls behind now slows down smoothly for a moment instead of jumping ahead in bursts.',
+    ],
+    Changed: [
+      'Big free-for-all and team games run much faster: bots, bullets, shields, walls and floating platforms only check what\'s near them instead of the whole map. 1000 bots: about 214 ms of game work a frame down to about 15; Lava Lake and Ice Sheets from seconds a frame to about 30 ms.',
+      'Bots on big maps spread their route planning out over a few frames instead of all planning at once when the round starts.',
+    ],
+  } },
   { v: '1.2.37', date: 'Oct 23', notes: {
     Changed: [
       'Big tournaments now use all your CPU cores (Devin: 6000 bots). The arenas are shared out between several game threads, sized to your PC, so the game logic no longer has to run every arena on one core. 6000 bots went from about 0.15x speed (moving in little jumps) to full speed on a 4-core test machine. It kicks in for tournaments over 60 players; Settings > Graphics > CPU threads still controls it (1 = old way).',
