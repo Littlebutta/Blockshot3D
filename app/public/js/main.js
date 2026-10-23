@@ -1915,6 +1915,7 @@ function onSimUi(m) {
 }
 function simFrame(f) {
   if (f.level) { S.levelVersion = (S.levelVersion || 0) + 1; renderer.setLevel(f.levelObj || prepareLevel(f.level)); }
+  S.shardStat = f.shards || null;   // v1.2.37: the tournament's arena threads (F2 window)
   if (f.sent) { NR.send.tick(); const tn = performance.now(); if (HM.sendAt) HM.send.add(tn - HM.sendAt, null, tn); HM.sendAt = tn; }
   for (const e of f.evs) { handleEvent(e); if (!S || !S.game) return; }
   const v = f.view;
@@ -2331,6 +2332,7 @@ function netDetails(nameOf) {
     L.push(`This PC: <b class="${cls(me, 30, 50)}">${me} FPS</b>${c ? ` · your movement corrected by ${Math.round(c.avg * 100)} cm on average (max ${Math.round(c.max * 100)})` : ''}`);
   } else L.push(`This PC (host): <b class="${cls(me, 25, 45)}">${me} FPS</b> · sim ${Math.round(NR.sim.hz())}/s · sends <b class="${cls(NR.send.hz(), 20, 27)}">${Math.round(NR.send.hz())}</b> updates/s to each player`);
   if (S.role !== 'peer' && S.game && S.game.stat) L.push(S.game.threaded ? `Game thread: <b class="good">on</b> (${coreCount()} CPU threads on this PC) · the match comes back ${Math.round(S.game.stat.waitMs)} ms after it's sent (about ${Math.max(1, Math.round((S.game.stat.late || 0) + 0.5))} frame)` : `Game thread: off (one thread: Settings > CPU threads${coreCount() < 2 ? ', this PC has 1' : ''})`);   // v1.2.30
+  if (S.role !== 'peer' && S.shardStat) { const X = S.shardStat; L.push(`Arena threads: <b class="good">${X.n}</b> (${X.t} of their own, one on the game thread) · fighters each: ${X.p.join(' / ')} · ms a frame: ${X.ms.join(' / ')} · slowest ${X.behind} s behind`); }   // v1.2.37 (shard.js)
   {   // v1.2.9: hitch readout: tells a slow PC (this one or the host) from a late network
     const hc = (v, warn, bad) => v >= bad ? 'bad' : v >= warn ? 'ok' : 'good', f = HM.frame.get(), m = HM.msg.get(), ms = v => `<b class="${hc(v, 25, 50)}">${Math.round(v)} ms</b>`;
     const parts = [];

@@ -105,7 +105,7 @@ export class ShardSet {
       if (i > 0 && makeWorker) {
         try { s.w = makeWorker(); s.w.onmessage = e => this.onOut(s, e.data); s.w.onerror = e => { if (e && e.preventDefault) e.preventDefault(); this.lost(s, (e && e.message) || 'shard stopped'); }; } catch { s.w = null; }
       }
-      if (!s.w) { s.local = new ShardSim(); s.weight = i === 0 && n > 1 ? +(globalThis.SHARD_W0 ?? 0.35) : 1; }   // (the match's own one gets a smaller share: its thread also builds the views and snapshots, and the page waits on those)
+      if (!s.w) { s.local = new ShardSim(); s.weight = i === 0 && n > 1 ? +(globalThis.SHARD_W0 ?? (n > 4 ? 0.2 : 0.35)) : 1; }   // (the match's own one gets a smaller share: its thread also builds the views and snapshots, and the page waits on those)
       this.slots.push(s);
       this.post(s, { t: 'init', settings, cards, idx: i });
     }

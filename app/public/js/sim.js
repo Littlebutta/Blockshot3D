@@ -4379,7 +4379,7 @@ export class Game {
     this.level = prepareLevel(B.level); this.buildDynamics(); this.flyHeight = B.fly;
     this.phase = B.phase; this.phaseT = B.phaseT; this.fightSent = B.phase !== 'countdown'; this.lastCount = null; this.roundWinner = null;
     for (const p of this.players) { p.input = { ...emptyInput(), ...p.input }; this.resetPlayer(p, p.spawn); }
-    for (const h of this.players) {   // (their summons, as startRound)
+    for (const h of this.players.slice()) {   // (their summons, as startRound; not the summons' own: they copy their owner's stats)
       const s = h.stats;
       for (let k = 0; k < Math.round(s.summonTwin); k++) this.spawnUnit('twin', h, this.nearSpot(h, k + 1));
       for (let k = 0; k < Math.round(s.summonTurret); k++) this.spawnUnit('turret', h, this.nearSpot(h, k + 3));

@@ -276,7 +276,7 @@ export class HostSim {
     const sent = this.host ? this.send(c, dt, ts, t0) : 0;
     if (this.packer) this.packer.pack(view);
     const tn = tournRows(g), tnOut = tn !== this.lastTn ? tn : undefined; this.lastTn = tn;   // (v1.2.35: the table only when it changed)
-    const shards = sh ? { n: sh.size, t: sh.threads, ms: sh.stat.ms.map(x => Math.round((x || 0) * 10) / 10), p: sh.stat.n.slice() } : null;
+    const shards = sh ? { n: sh.size, t: sh.threads, ms: sh.stat.ms.map(x => Math.round((x || 0) * 10) / 10), p: sh.stat.n.slice(), behind: Math.max(0, Math.round((g.time - Math.min(...sh.stat.tm.map(x => x ?? g.time))) * 100) / 100) } : null;   // (behind: s of game time the slowest shard trails the match's clock)
     this.emit('frame', { view, evs: evsOwn, level, levelObj: level && this.inline ? g.level : null, tn: tnOut, brawlRows: g.isBrawl() ? g.brawlRows() : null, brawlT: g.isBrawl() ? Math.max(0, Math.ceil(BRAWL.suddenT - g.time)) : null, mirror: this.mirror(), sent, shards });
   }
 
