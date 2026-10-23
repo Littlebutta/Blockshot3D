@@ -2211,5 +2211,30 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
   const m2 = enc.encodeFor(d2.ack()[1], 1, d2.ack()[2], 2, 2), o2 = d2.decode(JSON.parse(JSON.stringify(m2)));
   check('1000p: switching arena sends a keyframe of the lists, events carry on', o1 && o2 && m2.kf === 1 && o2.pl.length === 1 && o2.pl[0][0] === 'b' && o2.ev.some(e => e.p === 'b') && !o2.ev.some(e => e.p === 'a'), JSON.stringify(m2).slice(0, 160));
 }
+{ // v1.2.36 (Devin): tournament arenas each have their own crates and barrels, and screens only get their own arena's
+  const g = new Game({ roster: roster(6), settings: { mode: 'tourn', startPick: false }, cards }); g.start(); g.phase = 'play';
+  let cx = 0.5, cz = 0.5;   // (an open stretch of floor: nothing within 4 m along x, 1.5 m across)
+  find: for (let z = -g.level.hz + 3; z < g.level.hz - 3; z += 1) for (let x = -g.level.hx + 3; x < g.level.hx - 8; x += 1)
+    if (g.level.solids.every(s => s.max.y <= 0.01 || s.max.x < x - 2 || s.min.x > x + 6 || s.max.z < z - 1.5 || s.min.z > z + 1.5)) { cx = x; cz = z; break find; }
+  g.level.dynamic.push({ id: 9999, kind: 'crate', x: cx, y0: 0, z: cz, w: 1, d: 1, h: 1 }); g.buildDynamics(); g.refreshSolids();
+  const cs = g.dyn.filter(o => o.id === 9999);
+  check('tournament: one crate per arena, same id', cs.length === g.tArenas.length && new Set(cs.map(o => o.arena)).size === cs.length, cs.length);
+  for (const p of g.players) { p.pos = { x: 20, y: 0, z: 20 }; }   // (everyone away from it)
+  for (let i = 0; i < 30; i++) g.updateDynamics(1 / 60);   // (let them settle; just the props: a round ending would rebuild them)
+  const [a, b] = cs, bx = b.pos.x;
+  g.impulse(a, { x: 40, y: 0, z: 0 });
+  for (let i = 0; i < 30; i++) g.updateDynamics(1 / 60);
+  check('tournament: shoving one arena\'s crate leaves the others where they were', a.pos.x > cx + 0.5 && Math.abs(b.pos.x - bx) < 1e-6, [a.pos.x, b.pos.x]);
+  for (let i = 0; i < 90; i++) g.updateDynamics(1 / 60);
+  check('tournament: a resting arena crate sleeps', a.sleep === true && b.sleep === true);
+  const p1 = g.player('p1'), snap = g.snapshot({ ps: g.pool(p1), a: p1.arena });
+  check('tournament: a screen gets its own arena\'s crate only', snap.ob.filter(r => r[0] === 9999).length === 1);
+  g.level.dynamic.push({ id: 9998, kind: 'float', x: 6.5, y0: -0.4, z: 6.5, w: 2, d: 2, h: 0.7, mass: 30 }); g.buildDynamics(); g.refreshSolids();
+  const fs = g.dyn.filter(o => o.id === 9998);
+  for (let i = 0; i < 400; i++) g.updateDynamics(1 / 60);   // (settle: copies at rest go to sleep)
+  const rider = g.players.find(p => p.arena === fs[0].arena), fy = fs[1].pos.y;
+  for (let i = 0; i < 60; i++) { rider.alive = true; rider.ground = fs[0]; g.updateDynamics(1 / 60); }   // (just the props: a round ending would rebuild them)
+  check('tournament: floats are per arena, a rider sinks only their arena\'s copy', fs.length === g.tArenas.length && fs[0].pos.y < fy - 0.01 && Math.abs(fs[1].pos.y - fy) < 1e-6 && fs[1].sleep, [fs.length, fs[0].pos.y, fs[1].pos.y, fy]);
+}
 console.log(`baseline: ${passes} passed, ${fails} failed, ${(Date.now() - t0) / 1000}s`);
 if (fails) process.exitCode = 1;

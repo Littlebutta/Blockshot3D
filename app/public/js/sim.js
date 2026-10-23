@@ -903,7 +903,7 @@ export class Game {
 
   // ------------------------------------------------------------ world objects
   buildDynamics() {
-    this.dyn = (this.level.dynamic || []).map(d => {
+    const mk = d => {
       const o = { id: d.id, kind: d.kind, w: d.w, d: d.d, h: d.h, def: d, mass: d.mass || 5,
         base: { x: d.x, y: d.y0, z: d.z }, pos: { x: d.x, y: d.y0, z: d.z }, vel: { x: 0, y: 0, z: 0 }, dx: 0, dy: 0, dz: 0 };
       o.pushable = d.kind === 'crate' || d.kind === 'barrel';
@@ -912,8 +912,25 @@ export class Game {
       o.solid = { min: {}, max: {}, obj: o, oneWay: !!d.oneWay };
       this.updateSolid(o);
       return o;
-    });
+    };
+    this.dyn = (this.level.dynamic || []).map(mk);
+    // v1.2.36 (Devin): in the tournament every arena gets its own crates, barrels and floating platforms (same ids: each screen shows its own
+    // arena's copy). They were shared, so another arena's fight shoved yours around. Props moved on a timer (lifts, sliders,
+    // crushers) stay shared: they move the same everywhere.
+    if (this.tourn && this.tArenas && this.tArenas.length) {
+      const out = [];
+      for (const o of this.dyn) {
+        if (!o.pushable && o.kind !== 'float') { out.push(o); continue; }
+        for (let a = 0; a < this.tArenas.length; a++) { const c = a ? mk(o.def) : o; c.arena = a; c.solid.arena = a; out.push(c); }
+      }
+      this.dyn = out;
+    }
   }
+  // v1.2.36: who gets the credit for a burn / poison tick: nobody once the one who put it on has gone to help in another
+  // tournament arena (the damage still runs out)
+  dotSrc(src, p) { return this.tourn && src && src.arena !== undefined && p.arena !== undefined && (src.arena ?? null) !== (p.arena ?? null) && !src.ownerId ? null : src; }
+  // v1.2.36: whether prop o is in the arena of x (a fighter or unit; anything else: everywhere)
+  dynIn(o, x) { return o.arena === undefined || !x || x.arena === undefined || (x.arena ?? null) === o.arena; }
   updateSolid(o) {
     const s = o.solid;
     s.min.x = o.pos.x - o.w / 2; s.max.x = o.pos.x + o.w / 2;
@@ -927,6 +944,8 @@ export class Game {
   }
   updateDynamics(dt) {
     const t = this.time;
+    const RD = new Map();   // (v1.2.36: riders per float, counted once instead of a players pass per float)
+    for (const p of this.players) if (p.alive && p.ground) RD.set(p.ground, (RD.get(p.ground) || 0) + 1);
     for (const o of this.dyn) {
       const px = o.pos.x, py = o.pos.y, pz = o.pos.z, top0 = o.pos.y + o.h;
       if (o.kind === 'slide') {
@@ -945,6 +964,8 @@ export class Game {
         swingStep(o, dt);
       } else if ((o.kind === 'crate' || o.kind === 'barrel') && o.gone) {
         continue;   // fell off the map: stays gone (parked far below) instead of dropping in again and again
+      } else if ((o.kind === 'crate' || o.kind === 'barrel') && o.sleep && !o.vel.x && !o.vel.y && !o.vel.z) {
+        continue;   // v1.2.36: a tournament arena's copy resting on the floor sleeps until something moves it (500 arenas' worth)
       } else if (o.kind === 'crate' || o.kind === 'barrel') {
         // 2D: a moving platform coming down onto a prop (or sweeping through it) shoves it out sideways; otherwise the
         // collision pushes it up through the platform and it pops on top of it, over and over.
@@ -956,14 +977,23 @@ export class Game {
           const sx = Math.sign(o.pos.x - m.pos.x) || 1;
           o.pos.x += sx * (ox + 0.02); o.vel.x = sx * Math.max(Math.abs(o.vel.x), 1);
         }
+        if (o.arena !== undefined) PA.a = o.arena;   // (v1.2.36: only its own arena's walls and props)
         moveBody(o, dt, this.solids, this.level);   // (v1.2.6: moveBody skips the prop's own solid and noPlayer ones itself)
+        PA.a = null;
+        if (o.arena !== undefined) {
+          const gy = this.level.hAt ? this.level.hAt(o.pos.x, o.pos.z) : 0;
+          o.sleep = o.grounded && o.pos.y <= gy + 1e-6 && Math.abs(o.vel.x) < 0.02 && Math.abs(o.vel.z) < 0.02 && !o.tipped;
+          if (o.sleep) { o.vel.x = o.vel.y = o.vel.z = 0; }
+        }
         if (this.level.side && (o.pos.y < SIDE.bottom - 8 || Math.abs(o.pos.x) > this.level.hx + 1)) { o.gone = true; o.pos = { x: o.base.x, y: -80, z: 0 }; o.vel = { x: 0, y: 0, z: 0 }; continue; }   // v26: off the map = despawned
         const SP = this.level.side && this.level.side.pads;
         if (SP && o.vel.y <= 0.01) for (const [a, b, y] of SP) if (o.pos.x > a - 0.3 && o.pos.x < b + 0.3 && Math.abs(o.pos.y - y) < 0.12) {   // crates bounce on pads like players
           o.vel.y = SIDE.pad * 0.8 * Math.sqrt(this.level.gravK || 1); o.pos.y += 0.05; break;
         }
+      } else if (o.kind === 'float' && o.sleep && !RD.get(o) && !o.vel.x && !o.vel.y && !o.vel.z) {
+        continue;   // v1.2.36: a tournament arena's copy at rest with nobody on it sleeps
       } else if (o.kind === 'float') {
-        const riders = this.players.filter(p => p.alive && p.ground === o).length;
+        const riders = RD.get(o) || 0;
         for (const ax of ['x', 'y', 'z']) {
           const off = o.pos[ax] - o.base[ax];
           o.vel[ax] += (-6 * off - 2.6 * o.vel[ax]) * dt;
@@ -974,6 +1004,10 @@ export class Game {
           o.pos[ax] += o.vel[ax] * dt;
           const off = o.pos[ax] - o.base[ax];
           if (Math.abs(off) > 3) { o.pos[ax] = o.base[ax] + Math.sign(off) * 3; o.vel[ax] *= -0.2; }
+        }
+        if (o.arena !== undefined && !riders && !(o.sink > 0) && Math.abs(o.tx || 0) < 1e-3 && Math.abs(o.tz || 0) < 1e-3
+          && ['x', 'y', 'z'].every(ax => Math.abs(o.pos[ax] - o.base[ax]) < 2e-3 && Math.abs(o.vel[ax]) < 2e-3)) {
+          o.sleep = true; o.pos = { ...o.base }; o.vel = { x: 0, y: 0, z: 0 };
         }
       }
       o.dx = o.pos.x - px; o.dz = o.pos.z - pz; o.dy = (o.pos.y + o.h) - top0;
@@ -1516,6 +1550,7 @@ export class Game {
       q.vel.x += dir.x * k; q.vel.z += dir.z * k; q.vel.y += 6 / q.size;
     }
     for (const o of this.dyn) {
+      if (!this.dynIn(o, p)) continue;
       const dx = o.pos.x - p.pos.x, dz = o.pos.z - p.pos.z, d = Math.hypot(dx, dz);
       if (d < R + 1) this.impulse(o, { x: dx / (d || 1) * 6, y: 4, z: dz / (d || 1) * 6 });
     }
@@ -1939,7 +1974,7 @@ export class Game {
   updateStatus(p, dt) {
     const f = p.fx;
     if (f.burns && f.burns.length) {
-      for (const b of f.burns) { if (b.t <= 0) continue; const step = Math.min(dt, b.t); b.t -= dt; this.dmgTag = 'fire'; this.hurt(p, b.dps * step, b.src, null, true); if (!p.alive) return; }
+      for (const b of f.burns) { if (b.t <= 0) continue; const step = Math.min(dt, b.t); b.t -= dt; this.dmgTag = 'fire'; this.hurt(p, b.dps * step, this.dotSrc(b.src, p), null, true); if (!p.alive) return; }
       f.burns = f.burns.filter(b => b.t > 0);
     }
     const P = f.poisonS;
@@ -1948,7 +1983,7 @@ export class Game {
       const step = Math.min(dt, Math.max(0, P.left));
       P.t += step; P.left -= dt;
       const rate = Math.min(this.maxHp(p), POISON.hpCap) * POISON.share / POISON.dur * (0.4 + 0.24 * Math.min(P.t, POISON.rampCap)) * (1 + POISON.perLevel * Math.max(0, P.lvl - 1)) * (p.kind === 'boss' || p.heavy ? POISON.boss : 1);
-      if (step > 0) { this.dmgTag = 'poison'; this.hurt(p, rate * step, P.src, null, true); }
+      if (step > 0) { this.dmgTag = 'poison'; this.hurt(p, rate * step, this.dotSrc(P.src, p), null, true); }
       if (!p.alive) return;
       if (P.left <= 0) f.poisonS = null;
     }
@@ -2135,7 +2170,7 @@ export class Game {
     }
     // crates and barrels get knocked about
     for (const o of this.dyn) {
-      if (!o.pushable && o.kind !== 'crate' && o.kind !== 'barrel') continue;
+      if ((!o.pushable && o.kind !== 'crate' && o.kind !== 'barrel') || !this.dynIn(o, p)) continue;
       const dx = o.pos.x - p.pos.x, dz = o.pos.z - p.pos.z, d = Math.hypot(dx, dz);
       if (d < reach + Math.max(o.w, o.d) / 2 && (dx * a.x + dz * a.z) / (d || 1) > Math.cos(arc)) this.impulse(o, { x: dx / (d || 1) * dmg * 0.06, y: 0.6, z: dz / (d || 1) * dmg * 0.06 });
     }
@@ -2384,15 +2419,15 @@ export class Game {
     }
     this.relics = this.relics.filter(c => c.t > 0 && c.ownerRef.alive);
   }
-  relicRows() {
+  relicRows(sc = null) {
     const r2 = v => Math.round(v * 100) / 100;
-    return (this.relics || []).map(c => [c.id, c.owner, r2(c.x), r2(c.y), r2(c.z), r2(c.fall), r2(c.t)]);
+    return (sc ? (this.relics || []).filter(c => this.seenIn(c, sc.a)) : this.relics || []).map(c => [c.id, c.owner, r2(c.x), r2(c.y), r2(c.z), r2(c.fall), r2(c.t)]);
   }
   // Network rows: [id, owner, x, y, z, radius, draw 0-1, deployed, level, progress to next level, open portal 0-1,
   //   charging now, holy (Sacred Grove), owner x, chest y, z]
-  ritualRows() {
+  ritualRows(sc = null) {   // (v1.2.36 sc: one tournament arena's: hostsim.js scopeFor)
     const r2 = v => Math.round(v * 100) / 100;
-    return this.rituals.map(r => {
+    return (sc ? this.rituals.filter(r => this.seenIn(r, sc.a)) : this.rituals).map(r => {
       const q = r.portals[r.portals.length - 1];
       const o = r.ownerRef;
       return [r.id, r.owner, r2(r.x), r2(r.y), r2(r.z), r2(r.R), r2(r.draw), r.deployed ? 1 : 0, r.level, r2(r.prog), q ? r2(Math.min(1, q.t / 0.4)) : 0,
@@ -2902,6 +2937,7 @@ export class Game {
       q.vel.x += dir.x * k; q.vel.z += dir.z * k; q.vel.y += 3;
     }
     for (const o of this.dyn) {
+      if (!this.dynIn(o, owner)) continue;
       const c = { x: o.pos.x - pos.x, y: o.pos.y + o.h / 2 - pos.y, z: o.pos.z - pos.z }, d = len(c);
       if (d < R + Math.max(o.w, o.d) / 2) {
         const dir = norm(c), J = dmg * 0.08 * (1 - d / (R + 2)) + 2;
@@ -3521,7 +3557,7 @@ export class Game {
     if (Math.abs(dx) >= Math.abs(dz)) { o.tipped = dx > 0 ? 1 : 2; const old = o.w; o.w = o.h; o.h = old; o.pos.x += Math.sign(dx) * (o.w - old) / 2; }
     else { o.tipped = dz > 0 ? 3 : 4; const old = o.d; o.d = o.h; o.h = old; o.pos.z += Math.sign(dz) * (o.d - old) / 2; }
     this.updateSolid(o);
-    this.emit({ t: 'tip', x: o.pos.x, y: o.pos.y + 0.3, z: o.pos.z });
+    this.emit({ t: 'tip', x: o.pos.x, y: o.pos.y + 0.3, z: o.pos.z, ...(o.arena !== undefined ? { ar: o.arena } : null) });
   }
 
   checkRoundEnd() {
@@ -4209,13 +4245,13 @@ export class Game {
         r3(b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r), b.owner, b.ring ? r2(b.ring) : 0, b.cown && b.cown !== b.owner ? b.cown : 0,
         b.hold ? 0 : r2((b.grav ?? RULES.bulletGravity) * (b.slowK ?? 1) ** 2)]),   // v1.2.9: [11] its gravity, so joiners' decoders predict the drop (netcodec.js GRAV)
       bc: F(this.barricades).map(b => [b.id, r2(b.x), r2(b.y0), r2(b.z), r2(b.len), r2(b.h), r2(b.th), r2(Math.max(0, b.hp) / b.maxHp), b.owner, r3(b.ang), b.kind === 'concrete' ? 1 : b.kind === 'pillar' ? 2 : b.kind === 'block' ? 3 : b.kind === 'cube' ? 4 : b.kind === 'plank' ? 5 : b.kind === 'slab' ? 6 : b.kind === 'steel' ? 7 : b.kind === 'spikes' ? 8 : 0]),
-      ob: this.dyn.map(o => [o.id, r2(o.pos.x), r2(o.pos.y), r2(o.pos.z), r2(o.h), o.tipped || 0, r2(o.tx || 0), r2(o.tz || 0)]),
+      ob: (sc ? this.dyn.filter(o => o.arena === undefined || o.arena === sc.a) : this.dyn).map(o => [o.id, r2(o.pos.x), r2(o.pos.y), r2(o.pos.z), r2(o.h), o.tipped || 0, r2(o.tx || 0), r2(o.tz || 0)]),
       sh: F(this.shields).map(s => [s.id, r2(s.x), r2(s.y0), r2(s.z), r2(s.w), r2(s.h), r2(s.d), s.owner, (s.shock ? 1 : 0) | (s.leech ? 2 : 0) | (s.box ? 4 : 0), s.box ? r2(Math.max(0, s.hp) / s.maxHp) : 1, r2(s.ang || 0)]),
       mn: F(this.mines).map(m => m.snare ? [m.id, r2(m.x), r2(m.y), r2(m.z), m.owner, m.armT <= 0 ? 1 : 0, 1, 1] : [m.id, r2(m.x), r2(m.y), r2(m.z), m.owner, m.armT <= 0 ? 1 : 0, r2(m.sz || 1)]),   // (v1.2.15: [7] 1 = Snare Plate)
       tp: this.level.traps ? Math.round(this.time * 100) / 100 : null,   // v1.2.15 trap clock (traps.js)
       lz: h && h.type === 'laser' ? [r2(h.pos), h.state === 'warn' ? 1 : h.state === 'on' ? 2 : 0] : null,
       tg: this.telegraphs.length ? telegraphRows(this) : null, sw: this.shockwaves.length ? shockRows(this) : null, bo: bossRow(this),
-      rt: this.rituals.length ? this.ritualRows() : null, rl: this.relics.length ? this.relicRows() : null,
+      rt: this.rituals.length ? this.ritualRows(sc) : null, rl: this.relics.length ? this.relicRows(sc) : null,
       ow: this.ow ? this.owSnap() : null,
       co: this.settings.core ? coreRows(this) : null,
       mv: this.predRows(sc && sc.ps),

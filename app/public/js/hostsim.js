@@ -22,6 +22,12 @@ import { ViewPacker } from './viewpack.js';
 
 // Co-op wave bots (raiders, Elites, wave turrets and drones; not anyone's commander units) wear raider markings.
 export const isRaider = (kind, transient, ownerId) => !!transient && !ownerId && ['wave', 'elite', 'turret', 'drone'].includes(kind);
+// v1.2.36: tournament events every joiner gets whichever arena they watch: the match's flow, picks and cards, the unit
+// roster, revives and respawns, chat-like ones (the rest, from sparks to card effects, only go to that arena's watchers)
+const TOURN_ALL = new Set(['round', 'roundEnd', 'tArena', 'tKO', 'tMove', 'tGo', 'over', 'extend', 'count', 'fight', 'overtime', 'suddenX',
+  'cards', 'cardsAll', 'picking', 'picked', 'pick', 'combo', 'comboAsk', 'comboChoice', 'breakAsk', 'breakChoice', 'units', 'split',
+  'gift', 'giftOffer', 'giftAccept', 'giftDecline', 'giftDone', 'giftFail', 'giftGone', 'giftNo', 'emote', 'bet', 'note', 'lossToken',
+  'respawn', 'revive', 'revived', 'reviving', 'reviveStart', 'rewind', 'modBroken', 'cloneInherit', 'setColor', 'setCos', 'setName', 'setTeam']);
 export function viewOfPlayer(g, p) {
   return {
     id: p.id, name: p.name, color: p.color, team: p.team, pos: p.pos, vel: p.vel, aim: p.aim, aimPoint: p.aimPoint,
@@ -213,13 +219,13 @@ export class HostSim {
       waiting: g.phase === 'picking' ? g.players.filter(p => !p.picked).length : 0,
       players: (sc ? sc.ps : g.players).filter(p => p.connected).map(p => viewOfPlayer(g, p)),
       bullets: F(g.bullets).map(b => ({ id: b.id, pos: b.pos, vel: b.vel, ring: b.ring || 0, r: b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r, color: b.color, fx: b.fx, tgt: b.swarm === 'bee' && b.swTgt ? b.swTgt.id : 0, o: b.owner })),
-      dynamics: g.dyn.map(o => ({ id: o.id, x: o.pos.x, y: o.pos.y, z: o.pos.z, h: o.h, tip: o.tipped || 0, tx: o.tx || 0, tz: o.tz || 0 })),
+      dynamics: (sc ? g.dyn.filter(o => o.arena === undefined || o.arena === sc.a) : g.dyn).map(o => ({ id: o.id, x: o.pos.x, y: o.pos.y, z: o.pos.z, h: o.h, tip: o.tipped || 0, tx: o.tx || 0, tz: o.tz || 0 })),
       shields: F(g.shields).map(sh => ({ id: sh.id, x: sh.x, y0: sh.y0, z: sh.z, w: sh.w, h: sh.h, d: sh.d, ang: sh.ang || 0, shock: !!sh.shock, leech: !!sh.leech, box: !!sh.box, hp: sh.box ? Math.max(0, sh.hp) / sh.maxHp : 1, color: (g.player(sh.owner) || {}).color || '#ffffff', o: sh.owner })),
       mines: F(g.mines).map(m => ({ id: m.id, x: m.x, y: m.y, z: m.z, armed: m.armT <= 0, sz: m.sz || 1, snare: !!m.snare, color: (g.player(m.owner) || {}).color || '#ffffff', o: m.owner })),   // (the page hides enemies' Snare Plates: main.js friendOf)
       trapT: g.level && g.level.traps ? g.time : null,
       laser: g.hazard && g.hazard.type === 'laser' ? [g.hazard.pos, g.hazard.state === 'warn' ? 1 : g.hazard.state === 'on' ? 2 : 0] : null,
       telegraphs: g.telegraphs.length ? telegraphRows(g) : null, shocks: g.shockwaves.length ? shockRows(g) : null, boss: bossRow(g), final: g.isFinalRound(),
-      rituals: g.rituals.length ? g.ritualRows() : null, relics: g.relics.length ? g.relicRows() : null,
+      rituals: g.rituals.length ? g.ritualRows(sc) : null, relics: g.relics.length ? g.relicRows(sc) : null,
       ow: g.ow ? { ...owView(g), taken: g.ow.taken } : null,
       barricades: F(g.barricades).map(b => ({ id: b.id, kind: b.kind, x: b.x, y0: b.y0, z: b.z, len: b.len, h: b.h, th: b.th, ang: b.ang, hp: Math.max(0, b.hp) / b.maxHp, color: b.ownerRef.color, o: b.owner })),
       core: g.settings.core ? coreRows(g) : null,
@@ -261,8 +267,9 @@ export class HostSim {
     if (!G.size) G.set(0, mk(null));   // (nobody connected yet: still number the tick and keep its events)
     // v1.2.3: each player gets the changes since the newest snapshot THEY confirmed, sent unreliably (a lost one
     // is skipped, never resent), with any events they haven't confirmed riding along (netcodec.js AckEncoder)
-    // (v1.2.35: an event's arena by whoever it's about; deaths only in big lobbies, where the kill feed of 500 arenas is noise)
-    const big = g.players.length > 60, evA = g.tourn ? e => { if (e.t === 'death' && !big) return null; const id = e.p ?? e.by ?? e.o ?? e.src ?? e.k, p = id != null ? g.player(id) : null; return p && p.arena != null ? p.arena : null; } : null;
+    // (v1.2.35: an event's arena by whoever it's about, so joiners only get their arena's effects; v1.2.36: every kind except
+    // the ones everyone needs (TOURN_ALL); deaths only in big lobbies, where the kill feed of 500 arenas is noise)
+    const big = g.players.length > 60, evA = g.tourn ? e => { if ((e.t === 'death' && !big) || TOURN_ALL.has(e.t)) return null; if (e.ar != null) return e.ar; const id = e.p ?? e.by ?? e.o ?? e.src ?? e.k, p = id != null ? g.player(id) : null; return p && p.arena != null ? p.arena : null; } : null;
     const enc = this.enc ||= new AckEncoder(), q = enc.push(G, ev, evA);
     this.acks ||= new Map();
     const same = new Map();   // v1.2.9: players who confirmed the same snapshot share one message (encodeFor), sent once to all of them

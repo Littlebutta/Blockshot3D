@@ -1,6 +1,13 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.36', date: 'Oct 23', notes: {
+    Fixed: [
+      'Tournament: every arena now has its own crates, barrels and floating platforms. They were shared by all arenas, so a fight in another arena shoved, sank or knocked over the ones in yours. Copies nobody is touching sleep, so hundreds of arenas\' worth costs almost nothing.',
+      'Tournament: Sacred Grove circles, crosses, relics and effects (blasts, sparks, sounds) from other arenas no longer show up in yours, and your friends\' screens are no longer sent them.',
+      'Tournament: a burn or poison put on by someone who has since moved to another arena no longer gives them the kill.',
+    ],
+  } },
   { v: '1.2.35', date: 'Oct 22', notes: {
     Changed: [
       'Huge lobbies (Devin: 1000 players): the tournament now treats every arena as its own little match. Fighters, bots, shots, walls, shields and blasts only look at their own arena instead of all 1000 players: a 1000-bot tournament went from about 250 ms of game work a frame to about 15.',

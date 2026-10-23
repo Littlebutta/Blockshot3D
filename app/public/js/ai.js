@@ -38,7 +38,8 @@ export function navNodes(g) {
     }
     if (n.spots.length) nodes.push(n);
   }
-  for (const o of g.dyn) if (o.kind === 'piston' || o.kind === 'slide' || o.kind === 'float') nodes.push({ obj: o, kind: o.kind, hMax: o.def && o.def.hMax });
+  // (v1.2.36: tournament arenas each have a copy of every float, all in the same spot: the first one stands for them all)
+  for (const o of g.dyn) if ((o.kind === 'piston' || o.kind === 'slide' || o.kind === 'float') && !o.arena) nodes.push({ obj: o, kind: o.kind, hMax: o.def && o.def.hMax });
   nodes.forEach((n, i) => { n.i = i; });
   nodes.moving = nodes.some(n => n.obj);
   g._nav = { v: g.levelVersion, level: L, nodes };

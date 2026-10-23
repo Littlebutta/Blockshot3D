@@ -2660,7 +2660,7 @@ function flashWhite() { const h = $('hurt'); h.style.background = 'rgba(255,255,
 const FX_FNS = ['burst', 'addShake', 'ring', 'line', 'holyBeam', 'punch', 'gunKick', 'deathPop', 'toxicCloud', 'slashFx', 'shotKick', 'shockArea', 'portal', 'poisonBlotch', 'napalmSplat', 'muzzleFlash', 'meteorWarn', 'lockFlash', 'healPulse', 'healField', 'cutFx', 'coreBlast', 'aoeFlash', 'angelAscend'];
 const noop = () => {};
 function handleEvent(e) {
-  if (S && S.tn && e.t !== 'tMove' && (e.x != null || e.p != null) && !inMyArena(e.p ?? e.by ?? e.o ?? e.src ?? e.k)) {
+  if (S && S.tn && e.t !== 'tMove' && (e.x != null || e.p != null) && (e.ar != null ? e.ar !== viewArena() : !inMyArena(e.p ?? e.by ?? e.o ?? e.src ?? e.k))) {   // (v1.2.36 ar: a prop's arena)
     const saved = FX_FNS.map(f => renderer[f]), sp = sound.play;
     FX_FNS.forEach(f => { if (renderer[f]) renderer[f] = noop; }); sound.play = noop;
     try { handleEvent0(e); } finally { FX_FNS.forEach((f, i) => { if (saved[i]) renderer[f] = saved[i]; }); sound.play = sp; }

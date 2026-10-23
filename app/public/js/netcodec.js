@@ -115,8 +115,7 @@ const EV_KEEP = 150;           // event batches kept for players who fall behind
 // after that a copy would come 100+ ms late anyway. Hits, deaths and everything else are resent until confirmed.
 const FX = new Set(['shoot', 'impact', 'bounce', 'jump', 'reload', 'block', 'blockOn', 'splash', 'lava', 'drain', 'leech', 'zap', 'push', 'tip', 'drill', 'pad', 'beam', 'chain', 'cut', 'mine', 'unitGone', 'ritualHum', 'kingHum', 'edgeBounce']);
 const FX_TTL = 3;
-const EVA = new WeakMap();   // v1.2.35: sound / particle event (or hit) -> its tournament arena (AckEncoder push evArena)
-const LOCAL = new Set([...FX, 'hit', 'boom', 'skyLock', 'toxic', 'nc', 'death']);   // (hits, blasts, card effects: sparks, sounds, your own hit marker; deaths: the kill feed, big lobbies only: hostsim.js)
+const EVA = new WeakMap();   // v1.2.35: event -> its tournament arena (AckEncoder push evArena; hostsim.js decides which ones have one)
 // v1.2.6: the wire copy of an event: top-level fractions to 2 places (1 cm), about half the bytes (the host's own
 // handleEvent already ran on the originals; nested arrays / objects such as unit lists are left alone)
 const r2 = v => typeof v === 'number' && !Number.isInteger(v) ? Math.round(v * 100) / 100 : v;
@@ -175,8 +174,8 @@ export class AckEncoder {
   // v1.2.35: or several, one per group of players who see different things (a Map key -> snapshot: the tournament sends
   // each player only the arena they're in or watching). They share the tick number and the events; a player whose
   // group isn't in the snapshot they confirmed (they moved arena) simply gets a keyframe of the lists.
-  // v1.2.35 evArena(e): the tournament arena an event happened in (null: everywhere); a group with an arena (encodeFor ga)
-  // then gets only its own arena's sound / particle events and hits (a 1000-player tournament made about 90 kB of them a second).
+  // v1.2.35 evArena(e): the tournament arena an event belongs to (null: everyone gets it); a group with an arena (encodeFor ga)
+  // then gets only its own arena's (effects, hits, sounds: hostsim.js send) (a 1000-player tournament made about 90 kB of them a second).
   push(s, ev, evArena = null) {
     const q = ++this.n, G = s instanceof Map ? s : new Map([[0, s]]), groups = new Map();
     for (const [gk, s] of G) {
@@ -190,7 +189,7 @@ export class AckEncoder {
     this.hist.delete(q - HIST);
     if (ev && ev.length) {
       const all = ev.map(netEvent);
-      if (evArena) for (let i = 0; i < ev.length; i++) if (LOCAL.has(ev[i].t)) { const a = evArena(ev[i]); if (a != null) EVA.set(all[i], a); }
+      if (evArena) for (let i = 0; i < ev.length; i++) { const a = evArena(ev[i]); if (a != null) EVA.set(all[i], a); }
       const keep = all.filter(e => !FX.has(e.t)), K = keep.length === all.length ? all : keep;
       // v1.2.6: a 'units' event is the whole unit roster (the peer rebuilds its list from it), so a resend only needs the
       // newest one: nu is the batch without its 'units' events, sent instead once a newer batch carries one ('split' only
