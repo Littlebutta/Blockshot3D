@@ -1,6 +1,17 @@
 // v1.2.16: what changed in each update, for the title screen's Patch list (newest first). Add the new version at the top
 // with every release; the window shows the first few as tabs and always opens on the newest.
 export const PATCHES = [
+  { v: '1.2.37', date: 'Oct 23', notes: {
+    Changed: [
+      'Big tournaments now use all your CPU cores (Devin: 6000 bots). The arenas are shared out between several game threads, sized to your PC, so the game logic no longer has to run every arena on one core. 6000 bots went from about 0.15x speed (moving in little jumps) to full speed on a 4-core test machine. It kicks in for tournaments over 60 players; Settings > Graphics > CPU threads still controls it (1 = old way).',
+      'The game looks players up much faster in huge lobbies: one thread\'s work for 6000 bots dropped by about a fifth.',
+      'F2 shows how many arena threads are running, how many fighters each has and whether any is falling behind.',
+    ],
+    Fixed: [
+      'Tournament: effects from other arenas no longer show on your screen: hits, deaths and sparks from summons and turrets, chain and field pulses, ricochets, and revive and respawn effects. Every effect is now tagged with its arena.',
+      'Tournament: a death in another arena no longer causes a hit-stop freeze, a toast, or moves your kill cam.',
+    ],
+  } },
   { v: '1.2.36', date: 'Oct 23', notes: {
     Fixed: [
       'Tournament: every arena now has its own crates, barrels and floating platforms. They were shared by all arenas, so a fight in another arena shoved, sank or knocked over the ones in yours. Copies nobody is touching sleep, so hundreds of arenas\' worth costs almost nothing.',

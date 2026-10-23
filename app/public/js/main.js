@@ -73,7 +73,8 @@ function show(id) {
 }
 let toastT = 0, bannerT = 0;
 // Text passes through the translator (i18n.js) and, with the AI slop filter on, gets "enhanced" (slop.js).
-function toast(text) { $('toast').textContent = slopify(t(text)); $('toast').classList.add('show'); toastT = 2.8; }
+let evMuted = false;   // v1.2.37: handling another tournament arena's event (handleEvent): no toasts, pauses or kill-cam marks from it
+function toast(text) { if (evMuted) return; $('toast').textContent = slopify(t(text)); $('toast').classList.add('show'); toastT = 2.8; }
 function banner(text, color, dur = 1.4) {
   const b = $('banner'); b.textContent = slopify(text); b.style.color = color || 'var(--fg)';
   b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); bannerT = dur;   // v1.2.0: restart the pop-in each time
@@ -142,7 +143,7 @@ function tickDeathLog(dt) {
 // Solo scales its own simulation (hit-stop on kills, slow motion on the round-winning kill); a host only does the
 // slow motion (peers see it through the snapshots); peers never change time.
 const TS = { stop: 0, slow: 0, dur: 1 };
-function hitStop(sec) { if (S && S.role === 'solo' && settings.feel !== false) TS.stop = Math.max(TS.stop, sec); }
+function hitStop(sec) { if (!evMuted && S && S.role === 'solo' && settings.feel !== false) TS.stop = Math.max(TS.stop, sec); }
 function slowMo(sec) { if (S && S.role !== 'peer' && settings.feel !== false) { TS.slow = TS.dur = sec; TS.stop = 0; } }
 function timeScale(dt) {
   if (!S || S.paused) return 1;
@@ -1914,6 +1915,7 @@ function onSimUi(m) {
 }
 function simFrame(f) {
   if (f.level) { S.levelVersion = (S.levelVersion || 0) + 1; renderer.setLevel(f.levelObj || prepareLevel(f.level)); }
+  S.shardStat = f.shards || null;   // v1.2.37: the tournament's arena threads (F2 window)
   if (f.sent) { NR.send.tick(); const tn = performance.now(); if (HM.sendAt) HM.send.add(tn - HM.sendAt, null, tn); HM.sendAt = tn; }
   for (const e of f.evs) { handleEvent(e); if (!S || !S.game) return; }
   const v = f.view;
@@ -2330,6 +2332,7 @@ function netDetails(nameOf) {
     L.push(`This PC: <b class="${cls(me, 30, 50)}">${me} FPS</b>${c ? ` · your movement corrected by ${Math.round(c.avg * 100)} cm on average (max ${Math.round(c.max * 100)})` : ''}`);
   } else L.push(`This PC (host): <b class="${cls(me, 25, 45)}">${me} FPS</b> · sim ${Math.round(NR.sim.hz())}/s · sends <b class="${cls(NR.send.hz(), 20, 27)}">${Math.round(NR.send.hz())}</b> updates/s to each player`);
   if (S.role !== 'peer' && S.game && S.game.stat) L.push(S.game.threaded ? `Game thread: <b class="good">on</b> (${coreCount()} CPU threads on this PC) · the match comes back ${Math.round(S.game.stat.waitMs)} ms after it's sent (about ${Math.max(1, Math.round((S.game.stat.late || 0) + 0.5))} frame)` : `Game thread: off (one thread: Settings > CPU threads${coreCount() < 2 ? ', this PC has 1' : ''})`);   // v1.2.30
+  if (S.role !== 'peer' && S.shardStat) { const X = S.shardStat; L.push(`Arena threads: <b class="good">${X.n}</b> (${X.t} of their own, one on the game thread) · fighters each: ${X.p.join(' / ')} · ms a frame: ${X.ms.join(' / ')} · slowest ${X.behind} s behind`); }   // v1.2.37 (shard.js)
   {   // v1.2.9: hitch readout: tells a slow PC (this one or the host) from a late network
     const hc = (v, warn, bad) => v >= bad ? 'bad' : v >= warn ? 'ok' : 'good', f = HM.frame.get(), m = HM.msg.get(), ms = v => `<b class="${hc(v, 25, 50)}">${Math.round(v)} ms</b>`;
     const parts = [];
@@ -2656,14 +2659,16 @@ function squidTip(on) {
   el.classList.toggle('hidden', !on);
 }
 function flashWhite() { const h = $('hurt'); h.style.background = 'rgba(255,255,255,.35)'; h.style.opacity = 1; setTimeout(() => { h.style.opacity = 0; setTimeout(() => { h.style.background = ''; }, 200); }, 90); }
-// v1.2.26 tournament: effects from other arenas are not shown or heard (their text, like the kill feed, still is)
-const FX_FNS = ['burst', 'addShake', 'ring', 'line', 'holyBeam', 'punch', 'gunKick', 'deathPop', 'toxicCloud', 'slashFx', 'shotKick', 'shockArea', 'portal', 'poisonBlotch', 'napalmSplat', 'muzzleFlash', 'meteorWarn', 'lockFlash', 'healPulse', 'healField', 'cutFx', 'coreBlast', 'aoeFlash', 'angelAscend'];
+// v1.2.26 tournament: effects from other arenas are not shown or heard (the kill feed still lists them). v1.2.37: nor
+// toasted, and they no longer pause the game or move where the kill cam / round-end zoom looks; the host tags every event
+// with its arena (sim.js emit e.ar), so this no longer guesses from who it names
+const FX_FNS = ['burst', 'addShake', 'ring', 'line', 'holyBeam', 'punch', 'gunKick', 'deathPop', 'toxicCloud', 'slashFx', 'shotKick', 'shockArea', 'portal', 'poisonBlotch', 'napalmSplat', 'muzzleFlash', 'meteorWarn', 'lockFlash', 'healPulse', 'healField', 'cutFx', 'coreBlast', 'aoeFlash', 'angelAscend', 'reviveHold'];
 const noop = () => {};
 function handleEvent(e) {
-  if (S && S.tn && e.t !== 'tMove' && (e.x != null || e.p != null) && (e.ar != null ? e.ar !== viewArena() : !inMyArena(e.p ?? e.by ?? e.o ?? e.src ?? e.k))) {   // (v1.2.36 ar: a prop's arena)
-    const saved = FX_FNS.map(f => renderer[f]), sp = sound.play;
-    FX_FNS.forEach(f => { if (renderer[f]) renderer[f] = noop; }); sound.play = noop;
-    try { handleEvent0(e); } finally { FX_FNS.forEach((f, i) => { if (saved[i]) renderer[f] = saved[i]; }); sound.play = sp; }
+  if (S && S.tn && e.t !== 'tMove' && (e.ar != null ? e.ar !== viewArena() : (e.x != null || e.p != null) && !inMyArena(e.p ?? e.by ?? e.o ?? e.src ?? e.k))) {
+    const saved = FX_FNS.map(f => renderer[f]), sp = sound.play, ld = S.lastDeath, kd = KC.death;
+    FX_FNS.forEach(f => { if (renderer[f]) renderer[f] = noop; }); sound.play = noop; evMuted = true;
+    try { handleEvent0(e); } finally { FX_FNS.forEach((f, i) => { if (saved[i]) renderer[f] = saved[i]; }); sound.play = sp; evMuted = false; S.lastDeath = ld; KC.death = kd; }
     return;
   }
   handleEvent0(e);

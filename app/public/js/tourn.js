@@ -12,6 +12,12 @@ export const TOURN = {
 // v1.2.28: what the 'round' event carries for the matchup screen
 export const tournIntroInfo = g => tournOn(g) && g.tArenas ? { ti: TOURN.intro, tA: g.tArenas.map(A => A.ids) } : null;
 
+// v1.2.37: events about the match as a whole (its flow, picks and cards, the unit roster, chat-like ones): never tied to one
+// arena (sim.js emit leaves them untagged), every screen gets them and shows them in full
+export const TOURN_FLOW = new Set(['round', 'roundEnd', 'tArena', 'tKO', 'tMove', 'tGo', 'over', 'extend', 'count', 'fight', 'overtime', 'suddenX',
+  'cards', 'cardsAll', 'picking', 'picked', 'pick', 'combo', 'comboAsk', 'comboChoice', 'breakAsk', 'breakChoice', 'units', 'split',
+  'gift', 'giftOffer', 'giftAccept', 'giftDecline', 'giftDone', 'giftFail', 'giftGone', 'giftNo', 'emote', 'bet', 'note', 'lossToken',
+  'setColor', 'setCos', 'setName', 'setTeam', 'left']);
 export const tournOn = g => !!g && g.settings.mode === 'tourn';
 export const tournTeams = g => tournOn(g) && !!g.settings.tTeams;
 export const livesOf = g => Math.max(1, Math.min(99, Math.round(g.settings.tLives || TOURN.lives)));   // (v1.2.29: up to 99 after extensions)
@@ -63,7 +69,8 @@ export function tournStart(g, heroes) {
   const arenas = tournPair(g, heroes);
   g._ap = null;
   g.tArenas = arenas.map((A, i) => { for (const p of A) p.arena = i; return { ids: A.map(p => p.id), done: false, winner: null }; });
-  for (const p of g.players) if (p.kind === 'hero' && !heroes.includes(p)) p.arena = null;   // knocked out: watching
+  const inPlay = new Set(heroes);   // (v1.2.37: a set: includes() over 6000 heroes for each of 6000 was a long pause at every round start)
+  for (const p of g.players) if (p.kind === 'hero' && !inPlay.has(p)) p.arena = null;   // knocked out: watching
   g.tQuietT = null;
   return arenas;
 }
@@ -82,6 +89,8 @@ const ARENA_UNITS = new Set(['turret', 'blockTurret', 'mount', 'critter', 'clone
 
 // checkRoundEnd for tournaments: arenas finish one by one; the round ends when they all have.
 export function tournCheck(g) {
+  // v1.2.37: with the arenas in shards (shard.js) they report when one is done (ShardSet.onDone); here the round just ends
+  if (g.sharded) { if (g.tArenas.every(A => A.done)) { const o = tournOutcome(g); g.endRound(null, { tw: [...o.won], tl: [...o.lost] }); } return; }
   let fighting = 0;
   const pools = g.arenaPools();   // (v1.2.35: each arena's own list, not every player for every arena)
   g.tArenas.forEach((A, i) => {
@@ -108,7 +117,7 @@ export function tournCheck(g) {
     g.emit({ t: 'tArena', a: i, w, left: g.tArenas.filter(x => !x.done).length });
     if (tournTeams(g) && w != null) for (const p of ps) helpAlly(g, p, i);
   });
-  if (!fighting && g.tArenas.every(A => A.done)) {
+  if (!fighting && !g.shard && g.tArenas.every(A => A.done)) {   // (a shard's arenas being done isn't the round's end)
     // v1.2.29 (Devin): the round end says who won and who lost a life (it used to read "Draw" every time)
     const o = tournOutcome(g);
     g.endRound(null, { tw: [...o.won], tl: [...o.lost] });

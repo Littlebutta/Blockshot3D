@@ -2236,5 +2236,51 @@ function len3(v) { return Math.hypot(v.x, v.y, v.z); }
   for (let i = 0; i < 60; i++) { rider.alive = true; rider.ground = fs[0]; g.updateDynamics(1 / 60); }   // (just the props: a round ending would rebuild them)
   check('tournament: floats are per arena, a rider sinks only their arena\'s copy', fs.length === g.tArenas.length && fs[0].pos.y < fy - 0.01 && Math.abs(fs[1].pos.y - fy) < 1e-6 && fs[1].sleep, [fs.length, fs[0].pos.y, fs[1].pos.y, fy]);
 }
+{ // v1.2.37 (Devin: other arenas' effects still showed): every tournament event carries its arena, and the host's own
+  // screen only gets its arena's (other arenas' come only for the kill feed and the few every screen needs, and are muted)
+  const { HostSim } = await J('hostsim.js'), { TOURN_FLOW } = await J('tourn.js');
+  const r = roster(16).map((x, i) => ({ ...x, isBot: i > 0 }));
+  const untagged = new Set(), other = new Set(); let mine = 0;
+  const hs = new HostSim({ roster: r, settings: { pickTime: 1, mode: 'tourn', startPick: false }, cards, localId: 'p0', host: true, inline: true }, (k, v) => {
+    if (k === 'ui' && v.k === 'offer') hs.cmd({ t: 'pick', from: 'p0', card: v.offer[0] });
+    if (k === 'frame') { const a = hs.g.player('p0').arena; for (const e of v.evs) { if (TOURN_FLOW.has(e.t)) continue; if (e.ar == null) untagged.add(e.t); else if (a != null && e.ar !== a) other.add(e.t); else mine++; } }
+  });
+  hs.start(); const g = hs.g;
+  for (const p of g.players) { for (let k = 0; k < 6; k++) p.cards.push(cards[(k * 37 + p.id.length * 11 + +p.id.slice(1) * 7) % cards.length].id); g.recompute(p); }
+  let t = 1000;
+  for (let i = 0; i < 60 * 90; i++) { t += 1000 / 60; hs.cmd({ t: 'local', i: { mx: 0, mz: 0, ready: g.round } }); hs.cmd({ t: 'frame', dt: 1 / 60, ts: 1, paused: false, t0: t, hostFps: 60, peers: [], pz: [] }); if (g.phase === 'over') break; }
+  check('1.2.37: every arena event reaches the host\'s screen tagged with its arena', untagged.size === 0 && mine > 0, [...untagged].join(','));
+  check('1.2.37: other arenas\' events reach the host\'s screen only for the kill feed and the ones every screen needs', [...other].every(t => ['death', 'respawn', 'revive', 'revived', 'reviving', 'reviveStart', 'rewind', 'modBroken', 'cloneInherit'].includes(t)), [...other].join(','));
+}
+{ // v1.2.37 (Devin: 6000 bots, the match crawled): a big tournament's arenas run in shards (shard.js), here all on this
+  // thread. The rounds carry on, kills come back, a joiner gets its own arena's shots only, unit ids stay unique
+  const { HostSim } = await J('hostsim.js'), NC = await J('netcodec.js');
+  const r = roster(100).map((x, i) => ({ ...x, isBot: i > 1 }));
+  const dec = new NC.AckDecoder(); let evOther = 0, evMine = 0, unitIds = null, last = null, hostView = null;
+  const hs = new HostSim({ roster: r, settings: { pickTime: 1, mode: 'tourn', tLives: 2, startPick: true }, cards, localId: 'p0', host: true, inline: true, shards: 3 }, (k, v) => {
+    if (k === 'ui' && v.k === 'offer') hs.cmd({ t: 'pick', from: 'p0', card: v.offer[0] });
+    if (k === 'net' && v.msg && v.msg.k === 'offer') hs.cmd({ t: 'pick', from: v.id, card: v.msg.offer[0] });
+    if (k === 'net' && v.msg && v.msg.k === 'snap') { const o = dec.decode(JSON.parse(JSON.stringify(v.msg.s))); if (o) { last = o; const p1 = hs.g.player('p1'); for (const e of o.ev) if (e.t === 'shoot' || e.t === 'hit') { if (e.ar != null && e.ar !== p1.arena && p1.alive) evOther++; else evMine++; } } }
+    if (k === 'frame') { for (const e of v.evs) if (e.t === 'units') unitIds = e.units.map(u => u.id); if (hs.g.sharded && hs.g.phase === 'play') hostView = v.view; }
+  });
+  hs.start(); const g = hs.g;
+  let t = 1000, q = 0, sharded = new Set(), scored = 0;
+  for (let i = 0; i < 60 * 240 && g.round < 3; i++) {
+    t += 1000 / 60;
+    hs.cmd({ t: 'local', i: { mx: Math.sin(i / 50), mz: 0, shoot: i % 20 < 10, ready: g.round } });
+    hs.cmd({ t: 'input', from: 'p1', i: { q: ++q, mx: Math.cos(i / 40), mz: 0, shoot: true, ready: g.round, t: t - 40, a: dec.ack() || undefined, wa: -1 }, now: t });
+    hs.cmd({ t: 'frame', dt: 1 / 60, ts: 1, paused: false, t0: t, hostFps: 60, peers: [['p1', 80]], pz: [] });
+    if (g.sharded && hs.shards && hs.shards.tok) sharded.add(g.round);
+    if (i === 60 * 30) hs.cmd({ t: 'leave', id: 'p7', token: 'x' });
+  }
+  for (const k in g.scores) scored += g.scores[k];
+  const tk = g.heroes().reduce((k, p) => k + p.tally.kills, 0);
+  check('shards: big tournament rounds run in arena shards and carry on', sharded.size >= 2 && g.round >= 3, [...sharded].join(',') + ' round ' + g.round);
+  check('shards: finished arenas and kills come back to the match', scored >= 40 && tk >= 40, [scored, tk]);
+  check('shards: the host\'s screen shows its arena from its shard', hostView && hostView.players.length >= 2 && hostView.players.some(p => p.id === 'p0'), hostView && hostView.players.length);
+  check('shards: a joiner gets only its own arena\'s shots and hits', evOther === 0 && evMine > 10, [evOther, evMine]);
+  check('shards: the joiner\'s snapshot has its arena\'s fighters', last && last.pl && last.pl.some(x => x[0] === 'p1'), last && last.pl && last.pl.length);
+  check('shards: unit ids stay unique across shards', unitIds && new Set(unitIds).size === unitIds.length, unitIds && unitIds.length);
+}
 console.log(`baseline: ${passes} passed, ${fails} failed, ${(Date.now() - t0) / 1000}s`);
 if (fails) process.exitCode = 1;
