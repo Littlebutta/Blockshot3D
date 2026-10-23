@@ -36,6 +36,13 @@ export function buildGrid(solids, cell) {
 // v1.2.26 tournament arenas: while PA.a is set, deployed solids (walls) from another arena (s.arena) are skipped.
 export const PA = { a: null };
 const inArenaS = s => PA.a === null || s.arena === undefined || s.arena === null || s.arena === PA.a;
+// v1.2.35: in the tournament the deployed solids come split by arena (sim.js refreshSolids: S.extraBy, key -1 = every arena),
+// so a fighter only goes through its own arena's walls, not every arena's
+function pushExtra(S, out) {
+  const by = S.extraBy;
+  if (by && PA.a !== null) { const a = by.get(PA.a), c = by.get(-1); if (a) for (const s of a) out.push(s); if (c) for (const s of c) out.push(s); return; }
+  for (const s of S.extra) if (inArenaS(s)) out.push(s);
+}
 // The solids that may touch the x/z rectangle (all of S when it has no grid).
 export function solidsNear(S, x0, z0, x1, z1) {
   const g = S.grid;
@@ -46,7 +53,7 @@ export function solidsNear(S, x0, z0, x1, z1) {
       const a = g.cells.get(i * 4096 + j); if (!a) continue;
       for (const s of a) if (s._st !== st) { s._st = st; out.push(s); }
     }
-  if (S.extra) for (const s of S.extra) if (inArenaS(s)) out.push(s);
+  if (S.extra) pushExtra(S, out);
   return out;
 }
 // v1.2.25: the solids in the grid cells a straight x/z line passes through (cell walk), for long sight lines / shots
@@ -68,7 +75,7 @@ export function solidsAlong(S, ax, az, bx, bz) {
     if (tx < tz) { i += si; tx += tdx; } else { j += sj; tz += tdz; }
     if (tx > 1.0001 && tz > 1.0001 && (i !== i1 || j !== j1)) { const b = g.cells.get(i1 * 4096 + j1); if (b) for (const s of b) if (s._st !== st) { s._st = st; out.push(s); } break; }
   }
-  if (S.extra) for (const s of S.extra) if (inArenaS(s)) out.push(s);
+  if (S.extra) pushExtra(S, out);
   return out;
 }
 // Ground height under (x,z): the open world's hills, 0 everywhere else.

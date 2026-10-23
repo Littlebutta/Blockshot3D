@@ -156,7 +156,7 @@ function planNav(g, p, A, t, D, force) {
       const eye = { x: (n.x0 + n.x1) / 2, y: n.top + RULES.chest * (p.size || 1), z: (n.z0 + n.z1) / 2 };
       if (!segBlocked(g.level.solids, eye, tc)) sc += 3;
     }
-    for (const q of g.players) if (q !== p && q.alive && !q.flying && inside(q.pos.x, q.pos.z, n, -0.2) && Math.abs(q.pos.y - n.top) < 0.4) sc -= g.isEnemy(p, q) ? 1.5 : 2.5;
+    for (const q of g.pool(p)) if (q !== p && q.alive && !q.flying && inside(q.pos.x, q.pos.z, n, -0.2) && Math.abs(q.pos.y - n.top) < 0.4) sc -= g.isEnemy(p, q) ? 1.5 : 2.5;
     return sc;
   };
   const cands = [];
@@ -356,7 +356,7 @@ export function botThink(g, p, dt) {
     A.retarget = 0.6;
     let best = null, bd = Infinity;
     const far = g.ow ? g.ow.sight || 34 : Infinity;   // open world: bots only notice what's near them
-    for (const q of g.players) {
+    for (const q of g.pool(p)) {   // (v1.2.35: the tournament: only their own arena)
       if (!q.alive) continue;
       let d = Math.hypot(q.pos.x - from.x, q.pos.z - from.z);
       // v1.2.6: no closer than the best so far: it can't win even in plain sight, so skip isEnemy and the line-of-sight test
@@ -482,7 +482,7 @@ export function botThink(g, p, dt) {
   const stationary = p.stats.moveSpeed <= 0.01;
   // keep away from walls and teammates
   { const e = edgePush(g.level, p.pos.x, p.pos.z, 2.8); mx += e.x * 1.2; mz += e.z * 1.2; }   // rectangles and polygon arenas
-  for (const q of g.players) {
+  for (const q of g.pool(p)) {
     if (q === p || !q.alive || g.isEnemy(p, q)) continue;
     const ox = p.pos.x - q.pos.x, oz = p.pos.z - q.pos.z, od = Math.hypot(ox, oz);
     if (od < 2.5 && od > 0.01) { mx += ox / od * 0.8; mz += oz / od * 0.8; }
@@ -615,7 +615,7 @@ export function botThink(g, p, dt) {
     if (want && Math.random() < dt * 2.5) inp.blockSeq = (inp.blockSeq | 0) + 1;
   }
   if (p.blockCdT <= 0) {
-    for (const b of g.bullets) {
+    for (const b of g.bulletPool(p)) {
       if (b.aiSeen[p.id] || (b.owner === p.id && !b.bounced)) continue;
       if (!g.canHurt(b.ownerRef, p)) continue;
       const rx = from.x - b.pos.x, ry = from.y - b.pos.y, rz = from.z - b.pos.z, d = Math.hypot(rx, ry, rz);

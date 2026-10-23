@@ -1138,19 +1138,22 @@ function renderLobby() {
     $('lobbyInfo').innerHTML = `Friends open ${addrs.length ? addrs.map(a => `<b>${esc(a)}</b>`).join(' or ') : 'this server\'s address'} in their browser, choose Multiplayer and join room <b>${esc(S.code || '…')}</b>.`;
   } else $('lobbyInfo').textContent = 'The host controls the match settings. You can pick your own team and color.';
   const colors = assignColors(L.players, teamPlay(L.settings) ? 'tdm' : mode);
-  const teamOpts = ART.teamNames.map((n, i) => `<option value="${i}">${esc(n)}</option>`).join('');
-  const diffOpts = Object.entries(DIFFICULTY).map(([k, d]) => `<option value="${k}">${d.label}</option>`).join('');
+  // (v1.2.35: each select is written with its value already chosen; setting them afterwards searched the page once per
+  // player, which took over a minute to fill a 1000-player lobby)
+  const teamOpts = v => ART.teamNames.map((n, i) => `<option value="${i}"${i === (v || 0) ? ' selected' : ''}>${esc(n)}</option>`).join('');
+  const diffOpts = v => Object.entries(DIFFICULTY).map(([k, d]) => `<option value="${k}"${k === (v || 'normal') ? ' selected' : ''}>${d.label}</option>`).join('');
   const rowOf = (p, i) => {
     const me = p.id === S.localId;
     const tag = me ? 'You' : p.isBot ? 'Bot' : p.id === 'host' ? 'Host' : 'Player';
-    const diff = p.isBot ? (host ? `<select data-diff="${p.id}">${diffOpts}</select>` : `<span class="tag">${DIFFICULTY[p.difficulty]?.label || ''}</span>`) : '<span></span>';
-    const team = tdm ? ((host || me) ? `<select data-team="${p.id}">${teamOpts}</select>` : `<span class="tag">${esc(ART.teamNames[p.team || 0])}</span>`) : '<span></span>';
+    const diff = p.isBot ? (host ? `<select data-diff="${p.id}">${diffOpts(p.difficulty)}</select>` : `<span class="tag">${DIFFICULTY[p.difficulty]?.label || ''}</span>`) : '<span></span>';
+    const team = tdm ? ((host || me) ? `<select data-team="${p.id}">${teamOpts(p.team)}</select>` : `<span class="tag">${esc(ART.teamNames[p.team || 0])}</span>`) : '<span></span>';
     const rm = host && !me && (p.isBot || S.role === 'host') ? `<button data-rm="${p.id}">${p.isBot ? 'Remove' : 'Kick'}</button>` : '<span></span>';
     // Your own swatch opens the color picker (free-for-all; teams use team shades).
     const sw = (me || (p.isBot && host)) && !tdm ? `<button class="sw pickable" data-color="${esc(p.id)}" style="background:${colors[i]}" title="${me ? 'Pick your color' : 'Pick this bot\'s color'}"></button>` : `<span class="sw" style="background:${colors[i]}"></span>`;
     const drag = tdm && (host || me) ? ` draggable="true" data-drag="${esc(p.id)}" title="Drag onto a team to move ${me ? 'yourself' : 'this player'}"` : '';
     // v1.2.32 RTS: each player's faction (yours, or a bot's when you host)
-    const fac = L.settings.mode !== 'rts' ? '' : (me || (p.isBot && host)) ? ` <select data-fac="${esc(p.id)}" title="Faction">${p.isBot ? '<option value="random">Random faction</option>' : ''}<option value="steel">Steelborne</option><option value="hive">Hive</option></select>` : ` <span class="tag">${p.fac === 'hive' ? 'Hive' : p.fac === 'random' || (p.isBot && !p.fac) ? 'Random' : 'Steelborne'}</span>`;
+    const fv = p.fac || (p.isBot ? 'random' : 'steel'), fo = (v, l) => `<option value="${v}"${v === fv ? ' selected' : ''}>${l}</option>`;
+    const fac = L.settings.mode !== 'rts' ? '' : (me || (p.isBot && host)) ? ` <select data-fac="${esc(p.id)}" title="Faction">${p.isBot ? fo('random', 'Random faction') : ''}${fo('steel', 'Steelborne')}${fo('hive', 'Hive')}</select>` : ` <span class="tag">${p.fac === 'hive' ? 'Hive' : p.fac === 'random' || (p.isBot && !p.fac) ? 'Random' : 'Steelborne'}</span>`;
     return `<div class="prow${drag ? ' dragrow' : ''}"${drag}>${sw}<span><span data-noi18n>${esc(p.name)}</span> <span class="tag">${tag}</span>${fac}</span>${diff}${team}${rm}</div>`;
   };
   // v1.2.27 (Devin): people first, then bots, so friends joining a room are easy to spot
@@ -1162,11 +1165,6 @@ function renderLobby() {
       return `<div class="teambox${rows.length ? '' : ' empty'}" data-teambox="${t}" style="--tc:${ART.teamColors[t]}"><div class="teamhd"><span class="sw" style="background:${ART.teamColors[t]}"></span>${esc(n)} team <span class="tag">${rows.length || 'drop players here'}</span></div>${rows.map(([p, i]) => rowOf(p, i)).join('')}</div>`;
     }).join('');
   } else $('playerList').innerHTML = ordered.map(([p, i]) => rowOf(p, i)).join('');
-  for (const p of L.players) {
-    const d = document.querySelector(`[data-diff="${p.id}"]`); if (d) d.value = p.difficulty || 'normal';
-    const tt = document.querySelector(`[data-team="${p.id}"]`); if (tt) tt.value = p.team || 0;
-    const ff = document.querySelector(`[data-fac="${p.id}"]`); if (ff) ff.value = p.fac || (p.isBot ? 'random' : 'steel');
-  }
   // Your color: 20 swatches (taken ones greyed out). Team deathmatch uses team shades instead.
   {
     const mineIdx = L.players.findIndex(p => p.id === S.localId), taken = new Set(colors.filter((_, i) => i !== mineIdx && !L.players[i].isBot));
@@ -1920,7 +1918,8 @@ function simFrame(f) {
   for (const e of f.evs) { handleEvent(e); if (!S || !S.game) return; }
   const v = f.view;
   v.mines = v.mines.filter(m => !m.snare || friendOf(m.o));   // (enemies' Snare Plates stay hidden)
-  S.view = v; S.tn = f.tn; S.brawlRows = f.brawlRows; S.brawlT = f.brawlT;
+  S.view = v; if (f.tn !== undefined) S.tn = f.tn; S.brawlRows = f.brawlRows; S.brawlT = f.brawlT;   // (v1.2.35: the tournament table comes only when it changed)
+  if (S.tn) { const a = viewArena(); if (a !== S.wa) { S.wa = a; S.game.cmd({ t: 'watch', a }); } }   // v1.2.35: the host's match only sends this screen the arena it shows
 }
 // main-thread events (emotes, bets) for joiners: they go out with the match's next snapshot
 function hostEv(e) { if (S && S.game) S.game.cmd({ t: 'ev', e }); }
@@ -2022,7 +2021,7 @@ function applySnap(s) {
   if (s.ow) { if (s.ow.lt) S.owTaken = new Set(s.ow.lt); s.ow.taken = S.owTaken || new Set(); }
   S.view.ow = s.ow || null;
   for (const [id, pct, stocks, fighter] of s.bw || []) { const v = S.pmap.get(id); if (v) { v.pct = pct; v.stocks = stocks; v.fighter = fighter; } }
-  S.brawlRows = s.bw || null; S.brawlT = s.bwt ?? null; S.view.bitems = s.bi || null; S.view.bud = s.bud || null; S.snapHz = s.hz || 30; S.tn = s.tn || null;
+  S.brawlRows = s.bw || null; S.brawlT = s.bwt ?? null; S.view.bitems = s.bi || null; S.view.bud = s.bud || null; S.snapHz = s.hz || 30; S.tn = s.tn ? tnJoin(s.tn, s.tq) : null;
   S.view.telegraphs = s.tg || null; S.view.shocks = s.sw || null; S.view.boss = s.bo || null; S.view.rituals = s.rt || null; S.view.relics = s.rl || null;
   S.view.barricades = (s.bc || []).map(([id, x, y0, z, len, h, th, hp, o, ang, kind]) => ({ id, x, y0, z, len, h, th, ang: ang || 0, kind: ['sandbag', 'concrete', 'pillar', 'block', 'cube', 'plank', 'slab', 'steel', 'spikes'][kind || 0] || 'sandbag', hp, color: col(o), o }));
   S.view.core = s.co || null;
@@ -2095,6 +2094,7 @@ function peerFrame(dt) {
     if (inp.aim) w.aim = { x: r(inp.aim.x, 1000), y: r(inp.aim.y, 1000), z: r(inp.aim.z, 1000) };
     if (inp.aimPoint) w.aimPoint = { x: r(inp.aimPoint.x, 100), y: r(inp.aimPoint.y, 100), z: r(inp.aimPoint.z, 100) };
     if (S.dec) { const k = S.dec.ack(); if (k) { if (k[0] !== S.ackE) { S.ackE = k[0]; S.ackEn = 0; } w.a = S.ackEn++ >= 10 && inp.q % 30 ? k[1] : k; if (typeof w.a === 'number' && inp.q % 3 === 0 && k[2] !== S.ackK) { w.ak = S.ackK = k[2]; } } }   // (v1.2.12: ak / a[2] = events applied: on every 3rd input when it has changed, and in the full form)   // which snapshot we have, so the host sends only what changed since (v1.2.9: the match id only every 30th time, and the first 10 times after it changes)
+    if (S.tn) w.wa = viewArena() ?? -1;   // v1.2.35: the tournament arena on screen (the host sends only that one)
     w.t = Math.round(performance.now());   // v1.2.9: when it was sent (host: queueInput)
     S.net.send({ t: 'toHostU', msg: { k: 'input', i: w } });
     (S.inHist ||= []).push({ q: inp.q, t: performance.now(), mx: inp.mx, mz: inp.mz, jump: inp.jump, js: inp.jumpSeq });
@@ -2792,7 +2792,7 @@ function handleEvent0(e) {
       S.betOpen = false; settleBet(e.w);
       if (e.tw || e.tl) {   // v1.2.29 tournament: your side's result for the round (not "Draw" every time)
         const mk = myKey(), won = (e.tw || []).includes(mk), lost = (e.tl || []).includes(mk), team = teamPlay();
-        const out = S.tn && S.tn.p.some(r => r[0] === me && r[3]);
+        const out = S.tn && (tnRow(me) || [])[3];
         if (out && !lost) banner(t('Round over'), '#cfd6e4', 1.8);
         else banner(lost ? (team ? t('Your team loses a life') : t('You lose a life')) : won ? (team ? t('Your team takes the round') : t('You won the round')) : t('Draw — nobody loses a life'), lost ? '#ff6a6a' : won ? '#6aff9a' : '#cfd6e4', 1.8);
         sound.play(lost ? 'roundLose' : 'roundWin');
@@ -2848,7 +2848,7 @@ function handleEvent0(e) {
     case 'tArena': {
       const a = tnArenaOf(me), w = e.w, mine = a === e.a;
       if (mine) { const won = w != null && w === myKey(); banner(w == null ? t('Draw') : won ? t('You won your arena') : t('You lost your arena'), w == null ? '#cfd6e4' : won ? '#6aff9a' : '#ff6a6a', 1.6); }
-      else if (e.left > 0 && !(S.tn && S.tn.p.some(r => r[0] === me && r[3]))) toast(t('{n} arenas still fighting', { n: e.left }));
+      else if (e.left > 0 && !(S.tn && (tnRow(me) || [])[3])) toast(t('{n} arenas still fighting', { n: e.left }));
       break;
     }
     case 'tKO': toast(e.p === me ? t("You're knocked out of the tournament") : t('{name} is knocked out', { name: rosterOf(e.p).name })); if (e.p === me) sound.play('death'); break;
@@ -3259,7 +3259,7 @@ function peekWinsOf(r, sc) {
 // v1.2.29 tournament: [losses, lives] for a player (teams share one count), or null outside a tournament
 function tournLossOf(id) {
   const T = S && S.tn; if (!T || S.matchSettings.mode !== 'tourn') return null;
-  const r = T.p.find(x => x[0] === id); if (!r) return null;
+  const r = tnRow(id, T); if (!r) return null;
   return [Math.max(0, T.L - r[2]), T.L];
 }
 function peekHeroes() { return [...S.roster.values()].filter(r => !r.transient && !r.ownerId && r.kind !== 'hazardTurret'); }
@@ -3524,7 +3524,7 @@ function scCardsHtml(r) {
 // ("vs"), then the rest by losses left. Hover still shows cards.
 function renderTournBoard() {
   const T = S.tn, L = T.L, mine = tnArenaOf(S.localId), me = S.localId;
-  const rowOf = id => T.p.find(r => r[0] === id);
+  const rowOf = id => tnRow(id, T);
   const lost = r => Math.max(0, L - r[2]);
   const foes = T.p.filter(r => r[0] !== me && mine != null && mine >= 0 && r[1] === mine && !r[3]);
   const others = T.p.filter(r => r[0] !== me && !foes.includes(r)).sort((a, b) => a[3] - b[3] || b[2] - a[2]);
@@ -3672,9 +3672,17 @@ function updateWallWarn() {
 }
 // ---------------------------------------------------------------- v1.2.26 tournament (client side)
 // Every arena is the same map in the same place; the view only keeps what's in the arena you're in (or watching).
+// v1.2.35: rows looked up by id through an index made once per table (1000-player tables were searched row by row)
+const tnIdx = new WeakMap(), tnTl = new WeakMap(), tnSigs = new WeakMap();
+let scoreKeyT = 0;
+function tnSig(T) { let k = tnSigs.get(T.p); if (k == null) tnSigs.set(T.p, k = JSON.stringify(T.p)); return k; }
+function tnRow(id, T = S && S.tn) { if (!T) return null; let m = tnIdx.get(T.p); if (!m) tnIdx.set(T.p, m = new Map(T.p.map(r => [r[0], r]))); return m.get(id) || null; }
+// a joiner's table from the snapshot's two halves (arenas, player rows), the same object while neither changed
+let tnLast = null;
+function tnJoin(tn, tp) { if (tnLast && tnLast.src === tn && tnLast.p === tp) return tnLast; tnLast = { ...tn, p: tp || [] }; Object.defineProperty(tnLast, 'src', { value: tn, enumerable: false }); return tnLast; }
 function tnArenaOf(id, n = 0) {
   const T = S && S.tn; if (!T || id == null) return null;
-  const row = T.p.find(r => r[0] === id); if (row) return row[1];
+  const row = tnRow(id, T); if (row) return row[1];
   const r = S.roster.get(id);
   return r && r.ownerId != null && r.ownerId !== id && n < 4 ? tnArenaOf(r.ownerId, n + 1) : null;
 }
@@ -3701,7 +3709,7 @@ function tournView(v) {
   const okP = p => { const a = tnArenaOf(p.id); return a == null ? true : a === A; };
   if (tvCache && tvCache.v === v && tvCache.n === v.players.length && tvCache.A === A && tvCache.b === v.bullets) return tvCache.out;
   // v1.2.28: red loss pips under each name (v.tl = [losses, lives])
-  const tl = new Map(S.tn.p.map(r => [r[0], [Math.max(0, S.tn.L - r[2]), S.tn.L]]));
+  let tl = tnTl.get(S.tn.p); if (!tl) tnTl.set(S.tn.p, tl = new Map(S.tn.p.map(r => [r[0], [Math.max(0, S.tn.L - r[2]), S.tn.L]])));   // (v1.2.35: once per table, not per frame)
   const out = { ...v, players: v.players.filter(okP).map(p => tl.has(p.id) ? { ...p, tl: tl.get(p.id) } : p), bullets: (v.bullets || []).filter(b => ok(b.o)), shields: (v.shields || []).filter(x => ok(x.o)), mines: (v.mines || []).filter(x => ok(x.o)), barricades: (v.barricades || []).filter(x => ok(x.o)) };
   tvCache = { v, n: v.players.length, A, b: v.bullets, out };
   return out;
@@ -3718,7 +3726,7 @@ function tournIntro(e) {
   if (!foes.length) return;
   let el = $('tIntro');
   if (!el) { el = document.createElement('div'); el.id = 'tIntro'; document.body.appendChild(el); }
-  const row = id => S.tn && S.tn.p.find(r => r[0] === id), L = S.tn ? S.tn.L : 4;
+  const row = id => tnRow(id), L = S.tn ? S.tn.L : 4;
   const pips = id => { const r = row(id), lost = r ? Math.max(0, L - r[2]) : 0; return L <= 10 ? Array.from({ length: L }, (_, i) => `<span class="${i < lost ? 'loss' : ''}"></span>`).join('') : `<b>${lost}</b>`; };
   const cardsOf = r => (r.cards || []).map(id => cardById.get(id)).filter(Boolean);
   el.innerHTML = `<div class="tiL"><canvas id="tiModel" width="460" height="560"></canvas>
@@ -3791,7 +3799,7 @@ function updateTournHud() {
   const T = S.tn, on = !!T && S.inGame && currentScreen === 'none';
   if (!el) { if (!on) return; el = document.createElement('div'); el.id = 'tournHud'; $('hud').appendChild(el); }
   el.classList.toggle('hidden', !on); if (!on) return;
-  const row = T.p.find(r => r[0] === S.localId), A = viewArena(), mine = row ? row[1] : -1;
+  const row = tnRow(S.localId, T), A = viewArena(), mine = row ? row[1] : -1;
   const hearts = row ? (row[3] ? t('Knocked out') : '❤'.repeat(row[2]) + '<span class="lost">' + '❤'.repeat(Math.max(0, T.L - row[2])) + '</span>') : '';
   const alive = T.p.filter(r => !r[3]).length;
   const watch = A !== mine && A != null ? ` · ${t('Watching arena {n}', { n: A + 1 })} (${codeLabel(BINDS.use[0])}: ${t('next')})` : '';
@@ -3877,8 +3885,13 @@ function updateHud() {
     if (mh) { mh.classList.toggle('hidden', !txt); if (txt && mh.textContent !== txt) mh.textContent = txt; }
   }
   const sc = v.scores || {};
-  const key = JSON.stringify(sc) + S.matchSettings.roundsToWin + [...S.roster.values()].map(r => r.cards.length).join(',') + (S.tn ? JSON.stringify(S.tn.p) : '');
-  if (key !== scoreKeyCache) { scoreKeyCache = key; renderScoreboard(sc); }
+  // (v1.2.35: big lobbies check for scoreboard changes 4 times a second, not every frame: the check alone walked every player)
+  const big = S.roster.size > 60, nowS = performance.now();
+  if (!big || !(nowS - (scoreKeyT || 0) < 250)) {
+    scoreKeyT = nowS;
+    const key = JSON.stringify(sc) + S.matchSettings.roundsToWin + [...S.roster.values()].map(r => r.cards.length).join(',') + (S.tn ? (S.tn.p.length > 60 ? tnSig(S.tn) : JSON.stringify(S.tn.p)) : '');
+    if (key !== scoreKeyCache) { scoreKeyCache = key; renderScoreboard(sc); }
+  }
   if (me) {
     $('myHp').style.width = Math.max(0, me.hp / (me.maxHp || 1) * 100) + '%';
     $('myHp').style.background = me.color;

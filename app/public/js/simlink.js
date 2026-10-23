@@ -33,7 +33,7 @@ export class SimLink {
   }
   out(k, v) {
     if (this.closed) return;
-    if (k === 'frame') { if (v.view && v.view.pk) (this.unpacker || (this.unpacker = new ViewUnpacker())).unpack(v.view); this.mirror = v.mirror; this.h.frame(v); }
+    if (k === 'frame') { if (v.view && v.view.pk) (this.unpacker || (this.unpacker = new ViewUnpacker())).unpack(v.view); if (v.mirror && v.mirror.heroes === undefined) v.mirror.heroes = this.mirror ? this.mirror.heroes : []; this.mirror = v.mirror; this.h.frame(v); }   // (v1.2.35: the hero list comes only when it changed)
     else if (this.h[k]) this.h[k](v);
   }
   onMsg(m) {

@@ -1,6 +1,6 @@
 {
- "version": "1.2.33",
- "built": "2026-10-22T21:21:52.582Z",
+ "version": "1.2.35",
+ "built": "2026-10-22T23:18:16.304Z",
  "files": {
   ".gitignore": [
    "0068ba7ed54e738118cfb5244ca651fe18f44c4ef3e5236241677de513dfaa9d",
@@ -2119,7 +2119,7 @@
    554
   ],
   "package.json": [
-   "258d36d9fbf36449abb5a0192fef1d64a892dd116ae1c259eff227e472a4c0b2",
+   "dda2cf7772650416ae46e0646db2eeb4a7070f4355de7a588fe4bbd1d7be4593",
    749
   ],
   "public/css/style.css": [
@@ -2135,8 +2135,8 @@
    2575
   ],
   "public/js/ai.js": [
-   "e22063f17b88d3efcdbbfd8d145f8d8c51389ea7b826d1b86932422428560570",
-   37834
+   "817710e96e3a5ac6c1ad03e84b03fa6363078c4ee0299c6a424fddb34e1ef636",
+   37893
   ],
   "public/js/amon.js": [
    "5314db52104b5f04677f31ca57cffecc5cfeab3530308e630a0afcd955fadc5c",
@@ -2215,8 +2215,8 @@
    1650
   ],
   "public/js/hostsim.js": [
-   "3c0d7c596dad9123d1a3ae10af5163dca1800216dbb5eafa61aafd38cf4d82b0",
-   18679
+   "5f89a606be80cf6a68363492549918af8dd46958a9b893a0a8630b6444e17b52",
+   21822
   ],
   "public/js/i18n.js": [
    "b19b0ac560aea9052c23347084008dd35382771ee513edc81ced11c1f59f5bcf",
@@ -2227,20 +2227,20 @@
    11605
   ],
   "public/js/levelgen.js": [
-   "c4bd2701e9f28f8ee1e9bc4fd226bb6a0f0660ee7c4c779b33c8c29e109b278f",
-   43307
+   "9ef55f60fa6a84d5e5ead2a01d9c486000e1b1060df3fdcb363c8be0b1a2914e",
+   45294
   ],
   "public/js/main.js": [
-   "b410df97bdbe7b553613f9d01880a497a3baf3f2ac0310fbe72f3eab701d4054",
-   342417
+   "8bd66775eebb267cac44616edbf7146b2fb55be31912de789c8c1358684135c9",
+   343969
   ],
   "public/js/net.js": [
    "d415f683a93c1c3320d56977ba98fe00506efc8dacc6d989f8826a6d8c86a2de",
    4824
   ],
   "public/js/netcodec.js": [
-   "f6407f7f0ae5ff64fa6ead7f60f4b50dd9cf267a045710829f84e9fa983ade18",
-   22035
+   "3f1077e1b150365c40ae83465e6dfb6825b99280a6c22910650d07b78c279f44",
+   23907
   ],
   "public/js/netstats.js": [
    "609607ab78726897551858e1c5be9b8ec575a85fe198453ce2a5746c835d6621",
@@ -2255,12 +2255,12 @@
    27697
   ],
   "public/js/patchnotes.js": [
-   "dbac3c6430c56cf92d2cdbf7547516ecd22dbe660e4af54d5d56d9cdb4621e5d",
-   27751
+   "defecf4863864b30c88652197f93be84be85c8d6c8b251a28aa27a7e75a4af38",
+   29266
   ],
   "public/js/physics.js": [
-   "349c6151380f842e12e4a1aae299634bce6d4a913dc0af8eb47914864e5d8086",
-   19651
+   "b5043b31dc42914961ea0aead777cfda817ceb3504d49ae579e310ce11338896",
+   20050
   ],
   "public/js/post.js": [
    "26dbbdae1d4875239c72b3442cd57208336d4926aba58c4b6781d63e91bb74a6",
@@ -2335,12 +2335,12 @@
    17528
   ],
   "public/js/sim.js": [
-   "38563a63b5a204668d05c6b6c433a4405bbe557d1452a461cb7bb1a004ed8c43",
-   285295
+   "bb9bb279bdaeb66dac045cf94c688869a994042428f32c88e160b9420644fef5",
+   289747
   ],
   "public/js/simlink.js": [
-   "5341ae796e0bc99388bdda239a25bf117c1f23312e7a611d2a46af411d2083b7",
-   4889
+   "d8e54d16d97fb441031a5dadc0c8781607edfa38561ea4c60366b17b6b8f0853",
+   5050
   ],
   "public/js/simworker.js": [
    "0be69d234a72d070561a65475ac887aea7536814a6b1e5bbb3f855c1ab3b66cf",
@@ -2359,8 +2359,8 @@
    2603
   ],
   "public/js/tourn.js": [
-   "5948da7b7e47eadd36debcb7b6f6dbaa55333bc5615ed6832a7991982baf5972",
-   12806
+   "e698b2d037ba4d4729a87afe8dc5eca5057703ed4ceba5f4fa240db2f6717304",
+   14217
   ],
   "public/js/traps.js": [
    "41cc1065c17c9f01bdb4ea5fc0d90bb4de466fd7c2767b8a760eac58e4c0fb96",
@@ -2423,8 +2423,8 @@
    2422
   ],
   "tools/simtest.mjs": [
-   "705fe7fd13904bd043aaa17c5bcd1292ae7daf33c8b7e72703a98460fa57c38b",
-   186260
+   "2e5df340f482fce56646fc8a212ec4c7bc1724625d66d018a00b9973fb1bf80e",
+   190305
   ],
   "tools/trim-build.cjs": [
    "f14cc62bb2ab8633c47b31e660b4a38c3774977e6e95d099f8a71b9b6c4d288d",

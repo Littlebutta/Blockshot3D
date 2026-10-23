@@ -85,6 +85,7 @@ export class HostSim {
     this.emit = emit; this.localId = o.localId; this.host = !!o.host; this.inline = !!o.inline;
     this.outEvents = []; this.sendT = 0; this.snapN = 0; this.acks = null; this.enc = null; this.peerE = new Map(); this.levelVersion = -1;
     this.nsRows = null; this.hf = null;
+    this.watch = undefined; this.peerWatch = new Map(); this.lastTn = undefined;   // (v1.2.35: the tournament arena each screen shows)
     this.packer = this.inline ? null : new ViewPacker();   // (v1.2.31: on its own thread, the view crosses packed: viewpack.js)
     const g = this.g = new Game({ roster: o.roster, settings: o.settings, cards: o.cards, onOffer: p => this.onOffer(p), onCombo: (p, C) => this.toPlayer(p, { k: 'comboAsk', combo: C.id }), onBreak: (p, opts) => this.toPlayer(p, { k: 'breakAsk', opts }) });
     this.practice = o.settings.mode === 'practice' ? o.practiceCards || null : null;
@@ -126,12 +127,14 @@ export class HostSim {
       case 'retry': g.retryRound(); break;
       case 'netRows': this.nsRows = c.ns; this.hf = c.hf; break;
       case 'dropAck': if (this.acks) this.acks.delete(c.id); break;
+      case 'watch': this.watch = c.a; break;   // v1.2.35: the tournament arena the host's screen shows (main.js viewArena)
     }
   }
   // v1.2.3: inputs travel unreliably and can arrive out of order: only the newest counts
   input(from, i, now) {
     const g = this.g, a = this.acks && this.acks.get(from);
     if (a && i.q != null) { if (a.inQ && i.q <= a.inQ && !(i.t > 0 && i.q > (a.appQ || 0))) return; if (!(i.q <= a.inQ)) a.inQ = i.q; }   // (v1.2.9: one that overtook another is still slotted in while it's held back)
+    if (i.wa !== undefined) this.peerWatch.set(from, i.wa);   // v1.2.35: the tournament arena that joiner is watching
     const pe = this.peerE; if (Array.isArray(i.a)) pe.set(from, i.a[0]);   // v1.2.9: [match id, seq], or just seq for the match id last given
     const aq = Array.isArray(i.a) ? i.a[1] : typeof i.a === 'number' ? i.a : 0;
     if (a && aq && this.enc && pe.get(from) === this.enc.e && aq > a.q && aq <= this.enc.n) a.q = aq;
@@ -162,12 +165,27 @@ export class HostSim {
     if (gp && token) this.emit('departed', { token, rec: { cards: gp.cards.slice(), tally: { ...gp.tally }, rerollsLeft: gp.rerollsLeft, team: gp.team, oldKey: g.scoreKey(gp), score: g.scores[g.scoreKey(gp)] || 0 } });
     g.removePlayer(id);
   }
+  // v1.2.35 (1000-player lobbies): what one screen needs in the tournament: the arena it shows (its own, or the one it
+  // watches once out), plus that player. Null outside the tournament: everything, as before. Before the first arenas are
+  // drawn (the opening card pick) a screen gets only its own player.
+  scopeFor(id, wa) {
+    const g = this.g; if (!g.tourn) return null;
+    const me = g.player(id), a = wa !== undefined && wa !== null && wa >= 0 ? wa : me ? me.arena : undefined;
+    if (a === undefined || a === null) return { ps: me ? [me] : [], a: -2, k: 'p:' + id };
+    const pool = g.pool({ arena: a }), ps = me && !pool.includes(me) ? [...pool, me] : pool;
+    return { ps, a, k: me && me.arena !== a ? 'w' + a + ':' + id : a };   // (watching from outside: their own player rides along)
+  }
   // what the page reads between frames (lobby seats, late joins, the practice panel)
+  // v1.2.35: the hero list only when something in it changed (simlink.js keeps the last one): 1000 of them every frame was
+  // a good part of what crossed to the page
   mirror() {
     const g = this.g, me = g.player(this.localId);
+    let h = 0, n = 0;
+    for (const p of g.players) if (p.kind === 'hero') { n++; h = (Math.imul(h, 16777619) ^ ((p.isBot ? 1 : 0) | (p.connected ? 2 : 0) | (p.retireNext ? 4 : 0) | ((p.team | 0) + 8) * 8)) | 0; }
+    const sig = n + ':' + h, same = sig === this.heroSig; this.heroSig = sig;
     return {
       phase: g.phase, round: g.round, time: g.time, ow: !!g.ow,
-      heroes: g.heroes().map(p => ({ id: p.id, isBot: !!p.isBot, connected: !!p.connected, retireNext: !!p.retireNext, color: p.color, team: p.team })),
+      heroes: same ? undefined : g.heroes().map(p => ({ id: p.id, isBot: !!p.isBot, connected: !!p.connected, retireNext: !!p.retireNext, color: p.color, team: p.team })),
       me: me ? { cards: me.cards.slice(), dmg: me.tally.damage } : null,
     };
   }
@@ -189,26 +207,28 @@ export class HostSim {
     }
     const evs = g.takeEvents();
     if (this.host) this.outEvents.push(...evs);
+    const sc = this.scopeFor(this.localId, this.watch), F = sc ? L => L.filter(x => g.seenIn(x, sc.a)) : L => L;
     const view = {
-      phase: g.phase, phaseT: g.phaseT, scores: g.scores, round: g.round,
+      phase: g.phase, phaseT: g.phaseT, scores: sc && g.players.length > 60 ? g.scopedScores(sc.ps) : g.scores, round: g.round,
       waiting: g.phase === 'picking' ? g.players.filter(p => !p.picked).length : 0,
-      players: g.players.filter(p => p.connected).map(p => viewOfPlayer(g, p)),
-      bullets: g.bullets.map(b => ({ id: b.id, pos: b.pos, vel: b.vel, ring: b.ring || 0, r: b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r, color: b.color, fx: b.fx, tgt: b.swarm === 'bee' && b.swTgt ? b.swTgt.id : 0, o: b.owner })),
+      players: (sc ? sc.ps : g.players).filter(p => p.connected).map(p => viewOfPlayer(g, p)),
+      bullets: F(g.bullets).map(b => ({ id: b.id, pos: b.pos, vel: b.vel, ring: b.ring || 0, r: b.hold ? b.r * (1 - b.hold.t / b.hold.dur) : b.r, color: b.color, fx: b.fx, tgt: b.swarm === 'bee' && b.swTgt ? b.swTgt.id : 0, o: b.owner })),
       dynamics: g.dyn.map(o => ({ id: o.id, x: o.pos.x, y: o.pos.y, z: o.pos.z, h: o.h, tip: o.tipped || 0, tx: o.tx || 0, tz: o.tz || 0 })),
-      shields: g.shields.map(sh => ({ id: sh.id, x: sh.x, y0: sh.y0, z: sh.z, w: sh.w, h: sh.h, d: sh.d, ang: sh.ang || 0, shock: !!sh.shock, leech: !!sh.leech, box: !!sh.box, hp: sh.box ? Math.max(0, sh.hp) / sh.maxHp : 1, color: (g.player(sh.owner) || {}).color || '#ffffff', o: sh.owner })),
-      mines: g.mines.map(m => ({ id: m.id, x: m.x, y: m.y, z: m.z, armed: m.armT <= 0, sz: m.sz || 1, snare: !!m.snare, color: (g.player(m.owner) || {}).color || '#ffffff', o: m.owner })),   // (the page hides enemies' Snare Plates: main.js friendOf)
+      shields: F(g.shields).map(sh => ({ id: sh.id, x: sh.x, y0: sh.y0, z: sh.z, w: sh.w, h: sh.h, d: sh.d, ang: sh.ang || 0, shock: !!sh.shock, leech: !!sh.leech, box: !!sh.box, hp: sh.box ? Math.max(0, sh.hp) / sh.maxHp : 1, color: (g.player(sh.owner) || {}).color || '#ffffff', o: sh.owner })),
+      mines: F(g.mines).map(m => ({ id: m.id, x: m.x, y: m.y, z: m.z, armed: m.armT <= 0, sz: m.sz || 1, snare: !!m.snare, color: (g.player(m.owner) || {}).color || '#ffffff', o: m.owner })),   // (the page hides enemies' Snare Plates: main.js friendOf)
       trapT: g.level && g.level.traps ? g.time : null,
       laser: g.hazard && g.hazard.type === 'laser' ? [g.hazard.pos, g.hazard.state === 'warn' ? 1 : g.hazard.state === 'on' ? 2 : 0] : null,
       telegraphs: g.telegraphs.length ? telegraphRows(g) : null, shocks: g.shockwaves.length ? shockRows(g) : null, boss: bossRow(g), final: g.isFinalRound(),
       rituals: g.rituals.length ? g.ritualRows() : null, relics: g.relics.length ? g.relicRows() : null,
       ow: g.ow ? { ...owView(g), taken: g.ow.taken } : null,
-      barricades: g.barricades.map(b => ({ id: b.id, kind: b.kind, x: b.x, y0: b.y0, z: b.z, len: b.len, h: b.h, th: b.th, ang: b.ang, hp: Math.max(0, b.hp) / b.maxHp, color: b.ownerRef.color, o: b.owner })),
+      barricades: F(g.barricades).map(b => ({ id: b.id, kind: b.kind, x: b.x, y0: b.y0, z: b.z, len: b.len, h: b.h, th: b.th, ang: b.ang, hp: Math.max(0, b.hp) / b.maxHp, color: b.ownerRef.color, o: b.owner })),
       core: g.settings.core ? coreRows(g) : null,
       bitems: g.isBrawl() ? bItemRows(g) : null, bud: budgetRow(g),
     };
     const sent = this.host ? this.send(c, dt, ts, t0) : 0;
     if (this.packer) this.packer.pack(view);
-    this.emit('frame', { view, evs, level, levelObj: level && this.inline ? g.level : null, tn: tournRows(g), brawlRows: g.isBrawl() ? g.brawlRows() : null, brawlT: g.isBrawl() ? Math.max(0, Math.ceil(BRAWL.suddenT - g.time)) : null, mirror: this.mirror(), sent });
+    const tn = tournRows(g), tnOut = tn !== this.lastTn ? tn : undefined; this.lastTn = tn;   // (v1.2.35: the table only when it changed)
+    this.emit('frame', { view, evs, level, levelObj: level && this.inline ? g.level : null, tn: tnOut, brawlRows: g.isBrawl() ? g.brawlRows() : null, brawlT: g.isBrawl() ? Math.max(0, Math.ceil(BRAWL.suddenT - g.time)) : null, mirror: this.mirror(), sent });
   }
   // snapshots for joiners: returns how many went out this frame (0 or 1)
   send(c, dt, ts, t0) {
@@ -219,23 +239,38 @@ export class HostSim {
     // each joiner's stream and the host's upload in check (every joiner gets the whole match)
     const np = g.players.length, hz = np <= 30 ? 30 : np <= 60 ? 20 : 15;
     this.sendT = this.sendT < -0.05 ? 1 / hz : this.sendT + 1 / hz;   // v30: keep an even rate (was reset each send, so it drifted to the frame rate)
-    const s = g.snapshot(), ev = this.outEvents; this.outEvents = [];
-    if (hz !== 30) s.hz = hz;
-    s.pz = c.pz || [];
-    s.tm = Math.round(t0);   // v1.2.6: when this state was taken (host clock), so joiners place things by it, not by arrival
-    if (ts < 0.999) s.tk = Math.round(ts * 100) / 100;   // slow motion: joiners extrapolate slower too
+    const ev = this.outEvents; this.outEvents = [];
     this.snapN++;
-    if (this.nsRows && this.snapN % 30 === 0) { s.ns = this.nsRows; s.hf = this.hf; }   // everyone's connection, once a second (network window; v1.2.9 hf: host FPS, sim runs/s, updates/s)
+    if (!(c.peers && c.peers.length) && g.tourn) return 1;   // (v1.2.35: nobody to send a 1000-player tournament to: don't build it)
+    const ns = this.nsRows && this.snapN % 30 === 0;
+    const mk = sc => {
+      const s = g.snapshot(sc);
+      if (hz !== 30) s.hz = hz;
+      s.pz = c.pz || [];
+      s.tm = Math.round(t0);   // v1.2.6: when this state was taken (host clock), so joiners place things by it, not by arrival
+      if (ts < 0.999) s.tk = Math.round(ts * 100) / 100;   // slow motion: joiners extrapolate slower too
+      if (ns) { s.ns = this.nsRows; s.hf = this.hf; }   // everyone's connection, once a second (network window; v1.2.9 hf: host FPS, sim runs/s, updates/s)
+      return s;
+    };
+    // v1.2.35: in the tournament each joiner gets the arena they're in or watching (one snapshot per arena being watched)
+    const peers = c.peers || [], gkOf = new Map(), gaOf = new Map(), G = new Map();
+    for (const [id] of peers) {
+      const sc = this.scopeFor(id, this.peerWatch.get(id)), gk = sc ? sc.k : 0;
+      gkOf.set(id, gk); gaOf.set(id, sc ? sc.a : null); if (!G.has(gk)) G.set(gk, mk(sc));
+    }
+    if (!G.size) G.set(0, mk(null));   // (nobody connected yet: still number the tick and keep its events)
     // v1.2.3: each player gets the changes since the newest snapshot THEY confirmed, sent unreliably (a lost one
     // is skipped, never resent), with any events they haven't confirmed riding along (netcodec.js AckEncoder)
-    const enc = this.enc ||= new AckEncoder(), q = enc.push(s, ev);
+    // (v1.2.35: an event's arena by whoever it's about; deaths only in big lobbies, where the kill feed of 500 arenas is noise)
+    const big = g.players.length > 60, evA = g.tourn ? e => { if (e.t === 'death' && !big) return null; const id = e.p ?? e.by ?? e.o ?? e.src ?? e.k, p = id != null ? g.player(id) : null; return p && p.arena != null ? p.arena : null; } : null;
+    const enc = this.enc ||= new AckEncoder(), q = enc.push(G, ev, evA);
     this.acks ||= new Map();
     const same = new Map();   // v1.2.9: players who confirmed the same snapshot share one message (encodeFor), sent once to all of them
-    for (const [id, rtt0] of c.peers || []) {
+    for (const [id, rtt0] of peers) {
       let a = this.acks.get(id); if (!a) this.acks.set(id, a = { q: 0, since: q });
       // v1.2.12: unconfirmed events are resent about once a round trip (2-4 snapshots), not in every snapshot (netcodec.js)
       const rtt = rtt0 > 0 ? rtt0 : 150, rs = Math.min(4, Math.max(2, Math.ceil((rtt + 40) / 33)));
-      const m = enc.encodeFor(a.q, a.since, a.k || 0, rs);
+      const m = enc.encodeFor(a.q, a.since, a.k || 0, rs, gkOf.get(id), gaOf.get(id));
       if (m) { const l = same.get(m); if (l) l.push(id); else same.set(m, [id]); }
     }
     for (const [m, ids] of same) this.emit('net', ids.length > 1 ? { t: 'toPeerU', id: ids[0], ids, msg: { k: 'snap', s: m } } : { t: 'toPeerU', id: ids[0], msg: { k: 'snap', s: m } });
